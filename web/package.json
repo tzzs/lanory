@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Lanory web UI \u2014 home network topology and monitoring",
+  "description": "Lanory web UI — home network topology and monitoring",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -20,6 +20,7 @@
     "lucide-react": "^0.469.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-router-dom": "^7.18.4",
     "tailwind-merge": "^2.6.0",
     "zustand": "^5.0.2"
   },
