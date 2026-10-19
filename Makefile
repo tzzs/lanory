@@ -17,8 +17,8 @@ PKG_DIR     := packaging/openwrt
 
 all: build
 
-## build: build the Lanory binary (frontend must be built first for embed)
-build:
+## build: build the Lanory binary (embeds the frontend when present)
+build: web
 	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/$(BINARY) ./cmd/lanory
 
 ## test: run the Go test suite
@@ -53,6 +53,12 @@ check: fmt vet test
 web:
 	cd $(WEB_DIR) && npm run build
 
+## webapp: stage web/dist into internal/api/webapp for go:embed
+webapp: web
+	mkdir -p internal/api/webapp
+	cp -r $(WEB_DIR)/dist/. internal/api/webapp/
+	@echo "frontend staged into internal/api/webapp"'"'"'
+
 ## web-dev: run the frontend dev server (proxies /api to :8787)
 web-dev:
 	cd $(WEB_DIR) && npm run dev
@@ -73,6 +79,14 @@ demo: web build
 ## docker: build the docker image
 docker:
 	docker build -f packaging/docker/Dockerfile -t lanory:$(VERSION) .
+
+## release: cross-compile the release binaries for the supported targets
+release: webapp
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o dist/$(BINARY)-linux-amd64 ./cmd/lanory
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o dist/$(BINARY)-linux-arm64 ./cmd/lanory
+	CGO_ENABLED=0 GOOS=linux GOARCH=386 $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o dist/$(BINARY)-linux-386 ./cmd/lanory
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o dist/$(BINARY)-linux-armv7 ./cmd/lanory
+	@echo "release binaries in dist/"
 
 ## apk: build the OpenWrt APK through the SDK (see packaging/openwrt/README.md)
 apk:

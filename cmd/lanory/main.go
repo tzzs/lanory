@@ -33,6 +33,7 @@ import (
 	"github.com/lanory/lanory/internal/api"
 	"github.com/lanory/lanory/internal/config"
 	"github.com/lanory/lanory/internal/database"
+	"github.com/lanory/lanory/internal/demo"
 	"github.com/lanory/lanory/internal/events"
 	"github.com/lanory/lanory/internal/platform"
 )
@@ -289,9 +290,20 @@ func serve(cfg *config.Config, opts options, logger *slog.Logger, stdout io.Writ
 		return fmt.Errorf("build application: %w", err)
 	}
 
+	// Demo mode: load the sample network before wiring the schedulers so the UI
+	// is immediately populated. The sample data is clearly flagged as simulated
+	// both in the database (SourceDemo) and in the UI (demo banner).
+	demoProvider := demo.NewProvider(store, cfg.Demo.Enabled, cfg.Demo.Seed)
+	app.SetDemo(demoProvider)
+	if cfg.Demo.Enabled {
+		if err := demoProvider.Seed(context.Background(), cfg.Demo.Seed); err != nil {
+			logger.Warn("could not seed demo dataset", "error", err)
+		}
+	}
+
 	// Optional engines. They start only when wired, so the binary works with
 	// none of them present.
-	startEngines(cfg, host, store, bus, app, logger)
+	startEngines(cfg, host, store, bus, app, demoProvider, logger)
 
 	if cfg.Auth.Enabled && cfg.Auth.Token == "" {
 		// A default install must not be reachable with a guessable token, so a
@@ -363,24 +375,9 @@ func persistToken(cfg *config.Config, token string, logger *slog.Logger) error {
 // The engines are developed in parallel with this command, so each is guarded
 // by a nil check: when a constructor is unavailable the scheduler simply does
 // not start and the log says so, instead of the binary failing to boot.
-func startEngines(cfg *config.Config, host platform.Platform, store *database.Store, bus *events.Bus, app *api.App, logger *slog.Logger) {
-	if newSchedulers != nil {
-		newSchedulers(cfg, host, store, bus, app, logger)
-		return
-	}
-	if cfg.Discovery.Enabled {
-		logger.Info("discovery scheduler not started",
-			"reason", "the discovery engine is not wired into this build")
-	}
-	if cfg.Monitoring.Enabled {
-		logger.Info("monitoring scheduler not started",
-			"reason", "the monitoring engine is not wired into this build")
-	}
+func startEngines(cfg *config.Config, host platform.Platform, store *database.Store, bus *events.Bus, app *api.App, demoProvider *demo.Provider, logger *slog.Logger) {
+	newSchedulers(cfg, host, store, bus, app, demoProvider, logger)
 }
-
-// newSchedulers is the hook the scheduler wiring installs. It is nil in this
-// build, which keeps the binary startable while the engines are developed.
-var newSchedulers func(cfg *config.Config, host platform.Platform, store *database.Store, bus *events.Bus, app *api.App, logger *slog.Logger)
 
 // hostAdapter presents platform.Platform to the API layer through the narrow
 // interface it declares, so internal/api does not import internal/platform.

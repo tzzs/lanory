@@ -1,23 +1,37 @@
 import { describe, expect, it } from 'vitest'
 import { buildFlow, iconKeyForDeviceType } from '@/features/topology/graph'
-import type { Topology } from '@/types/api'
+import type { Topology, TopologyNode, DeviceType } from '@/types/api'
 
 const layout: Topology['layout'] = []
 const generated = new Date().toISOString()
 
-function deviceNode(id: string, name: string, type: string, ip?: string) {
+function deviceNode(id: string, name: string, type: DeviceType, ip?: string): TopologyNode {
+  const now = new Date().toISOString()
   return {
     id,
     kind: 'device' as const,
     device: {
       id,
       name,
+      hostname: '',
       type,
-      state: 'online' as const,
+      manufacturer: '',
+      model: '',
+      description: '',
       is_manual: false,
       is_locked: false,
+      is_hidden: false,
+      state: 'online',
+      last_state_change: now,
+      discovery_sources: ['bridge_fdb'],
+      is_gateway: false,
+      is_self: false,
+      first_seen: now,
+      last_seen: now,
+      created_at: now,
+      updated_at: now,
     },
-    state: 'online' as const,
+    state: 'online',
     // TopologyNode carries the primary address, per the API contract.
     primary_ip: ip,
   }
@@ -157,14 +171,7 @@ describe('buildFlow', () => {
 
   it('marks unresolved segments as dashed nodes', () => {
     const payload: Topology = {
-      nodes: [
-        {
-          id: 'seg-1',
-          kind: 'device',
-          state: 'unknown',
-          unresolved: true,
-        },
-      ],
+      nodes: [{ id: 'seg-1', kind: 'device', state: 'unknown', unresolved: true }],
       edges: [],
       layout,
       generated_at: generated,
