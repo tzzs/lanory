@@ -274,7 +274,9 @@ func TestKnownSwitchExplainsFanOut(t *testing.T) {
 	devices := []model.Device{routerDevice(t, router)}
 	var edges []model.TopologyEdge
 
-	// A switch, seen on eth1, and three devices behind it.
+	// A switch the bridge learned on eth1, and three devices behind it. The
+	// Label is the port evidence: without it the switch's location is unknown
+	// and it must not be used to explain a fan-out.
 	sw := model.Device{
 		ID:         "d-switch",
 		Name:       "Living room switch",
@@ -292,6 +294,7 @@ func TestKnownSwitchExplainsFanOut(t *testing.T) {
 		DiscoverySource: model.SourceBridgeFDB,
 		Confidence:      0.7,
 		Status:          model.EdgeStatusLinkUp,
+		Label:           "eth1",
 		LastObserved:    now,
 	})
 	for i, mac := range []string{"aa:bb:cc:00:00:11", "aa:bb:cc:00:00:12", "aa:bb:cc:00:00:13"} {
@@ -611,5 +614,191 @@ func TestDefaultOptions(t *testing.T) {
 	o := DefaultOptions()
 	if o.UnverifiedEdgeThreshold != 0.6 {
 		t.Errorf("threshold = %v", o.UnverifiedEdgeThreshold)
+	}
+}
+
+// TestSwitchOnDifferentPortDoesNotExplain is the regression test for a real
+// fabrication bug: the engine used to search the whole graph for "the only
+// switch-like device" and attribute one port's fan-out to it, even when that
+// switch was plugged into a different port.
+//
+// A switch known to be on eth2 says nothing about what is behind eth1. Using it
+// draws a cable that does not exist, which is exactly the class of invention the
+// unresolved segment exists to prevent.
+func TestSwitchOnDifferentPortDoesNotExplain(t *testing.T) {
+	const router = "router-1"
+	now := time.Now()
+
+	devices := []model.Device{routerDevice(t, router)}
+	var edges []model.TopologyEdge
+
+	// The switch is on eth2.
+	devices = append(devices, model.Device{
+		ID: "d-switch", Name: "Switch on eth2", Type: model.DeviceTypeSwitch,
+		State: model.StateOnline, PrimaryMAC: "aa:00:00:00:00:01",
+	})
+	edges = append(edges, model.TopologyEdge{
+		ID: "e-switch", SourceID: router, TargetID: "d-switch",
+		EdgeType: model.EdgeTypeObservedMACPort, DiscoverySource: model.SourceBridgeFDB,
+		Confidence: 0.7, Status: model.EdgeStatusLinkUp, Label: "eth2", LastObserved: now,
+	})
+
+	// An unrelated fan-out on eth1.
+	var eth1IDs []string
+	for i, mac := range []string{"bb:00:00:00:00:01", "bb:00:00:00:00:02", "bb:00:00:00:00:03"} {
+		id := "d-eth1-" + mac[len(mac)-2:]
+		eth1IDs = append(eth1IDs, id)
+		devices = append(devices, wireDevice(id, mac, "192.168.100."+string(rune('6'+i)), id, model.DeviceTypeUnknown))
+		edges = append(edges, model.TopologyEdge{
+			ID: "e-" + id, SourceID: router, TargetID: id,
+			EdgeType: model.EdgeTypeObservedMACPort, DiscoverySource: model.SourceBridgeFDB,
+			Confidence: 0.7, Status: model.EdgeStatusLinkUp, Label: "eth1", LastObserved: now,
+		})
+	}
+
+	store := &fakeStore{devices: devices, interfaces: routerInterfaces(router), edges: edges}
+	g, err := NewBuilder(store).Build()
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+
+	// The eth1 devices must hang under a segment, not under the eth2 switch.
+	var segments int
+	for _, n := range g.Nodes {
+		if n.Kind == NodeKindSegment {
+			segments++
+			if n.Port != "eth1" {
+				t.Errorf("segment on unexpected port %q", n.Port)
+			}
+		}
+	}
+	if segments != 1 {
+		t.Fatalf("expected 1 segment for eth1, got %d", segments)
+	}
+	for _, id := range eth1IDs {
+		n := nodeByID(g, deviceNodeID(id))
+		if n == nil {
+			t.Fatalf("%s missing", id)
+		}
+		if n.Parent == deviceNodeID("d-switch") {
+			t.Fatalf("%s was attributed to the switch on eth2", id)
+		}
+		if n.Parent != segmentNodeID("br-lan", "eth1") {
+			t.Errorf("%s parent = %q, want the eth1 segment", id, n.Parent)
+		}
+	}
+
+	// The switch itself stays where its own evidence puts it: eth2.
+	if sw := nodeByID(g, deviceNodeID("d-switch")); sw == nil {
+		t.Fatal("switch node missing")
+	} else if sw.Parent != deviceNodeID(router) {
+		t.Errorf("switch parent = %q, want the router", sw.Parent)
+	}
+}
+
+// TestSwitchWithoutPortEvidenceDoesNotExplain covers a switch that the engine
+// knows about but cannot place: no port observation names where it sits. Without
+// that evidence it must not explain a fan-out anywhere.
+func TestSwitchWithoutPortEvidenceDoesNotExplain(t *testing.T) {
+	const router = "router-1"
+	now := time.Now()
+
+	devices := []model.Device{
+		routerDevice(t, router),
+		{
+			ID: "d-switch", Name: "Unplaced switch", Type: model.DeviceTypeSwitch,
+			State: model.StateUnknown, PrimaryMAC: "aa:00:00:00:00:09", IsManual: true,
+		},
+	}
+	var edges []model.TopologyEdge
+	var ids []string
+	for i, mac := range []string{"cc:00:00:00:00:01", "cc:00:00:00:00:02"} {
+		id := "d-a-" + mac[len(mac)-2:]
+		ids = append(ids, id)
+		devices = append(devices, wireDevice(id, mac, "192.168.100."+string(rune('7'+i)), id, model.DeviceTypeUnknown))
+		edges = append(edges, model.TopologyEdge{
+			ID: "e-" + id, SourceID: router, TargetID: id,
+			EdgeType: model.EdgeTypeObservedMACPort, DiscoverySource: model.SourceBridgeFDB,
+			Confidence: 0.7, Status: model.EdgeStatusLinkUp, Label: "eth1", LastObserved: now,
+		})
+	}
+
+	store := &fakeStore{devices: devices, interfaces: routerInterfaces(router), edges: edges}
+	g, err := NewBuilder(store).Build()
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+
+	for _, id := range ids {
+		n := nodeByID(g, deviceNodeID(id))
+		if n == nil {
+			t.Fatalf("%s missing", id)
+		}
+		if n.Parent == deviceNodeID("d-switch") {
+			t.Errorf("%s was attributed to a switch with no port evidence", id)
+		}
+	}
+	var segments int
+	for _, n := range g.Nodes {
+		if n.Kind == NodeKindSegment {
+			segments++
+		}
+	}
+	if segments != 1 {
+		t.Errorf("expected 1 segment, got %d", segments)
+	}
+}
+
+// TestTwoSwitchesOnOnePortDoNotGuess pins the "cannot tell which one" rule: two
+// switch-like devices on the same port mean the engine does not know which hosts
+// the others, so it must not pick one at random.
+func TestTwoSwitchesOnOnePortDoNotGuess(t *testing.T) {
+	const router = "router-1"
+	now := time.Now()
+
+	devices := []model.Device{routerDevice(t, router)}
+	var edges []model.TopologyEdge
+	var leaves []string
+
+	for i, mac := range []string{"dd:00:00:00:00:01", "dd:00:00:00:00:02"} {
+		id := "d-sw-" + mac[len(mac)-2:]
+		devices = append(devices, model.Device{
+			ID: id, Name: id, Type: model.DeviceTypeSwitch, State: model.StateOnline,
+			PrimaryMAC: mac, IsManual: true,
+		})
+		edges = append(edges, model.TopologyEdge{
+			ID: "e-" + id, SourceID: router, TargetID: id,
+			EdgeType: model.EdgeTypeObservedMACPort, DiscoverySource: model.SourceBridgeFDB,
+			Confidence: 0.7, Status: model.EdgeStatusLinkUp, Label: "eth1", LastObserved: now,
+		})
+		_ = i
+	}
+	for _, mac := range []string{"dd:00:00:00:00:11", "dd:00:00:00:00:12"} {
+		id := "d-leaf-" + mac[len(mac)-2:]
+		leaves = append(leaves, id)
+		devices = append(devices, wireDevice(id, mac, "192.168.100.90", id, model.DeviceTypeUnknown))
+		edges = append(edges, model.TopologyEdge{
+			ID: "e-" + id, SourceID: router, TargetID: id,
+			EdgeType: model.EdgeTypeObservedMACPort, DiscoverySource: model.SourceBridgeFDB,
+			Confidence: 0.7, Status: model.EdgeStatusLinkUp, Label: "eth1", LastObserved: now,
+		})
+	}
+
+	store := &fakeStore{devices: devices, interfaces: routerInterfaces(router), edges: edges}
+	g, err := NewBuilder(store).Build()
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+
+	// With two candidate switches the engine cannot substantiate either claim,
+	// so the leaves stay unplaced-behind-a-segment rather than being guessed.
+	for _, id := range leaves {
+		n := nodeByID(g, deviceNodeID(id))
+		if n == nil {
+			t.Fatalf("%s missing", id)
+		}
+		if n.Parent == deviceNodeID("d-sw-01") || n.Parent == deviceNodeID("d-sw-02") {
+			t.Errorf("%s was attributed to one of two indistinguishable switches", id)
+		}
 	}
 }

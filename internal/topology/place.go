@@ -267,23 +267,18 @@ func groupUnresolved(
 		if len(devIDs) < 2 {
 			continue
 		}
-		// A switch-like device explains the fan-out only when it is itself
-		// known to sit on this port (it is one of devIDs) or when it is the
-		// only switch-like device among the devices placed behind the bridge
-		// owner. The second case covers a switch whose own FDB entry carried
-		// no port name, which happens when the switch's MAC was learned on the
-		// bridge rather than on a member port.
-		var known []string
-		for _, id := range devIDs {
-			if d := byID[id]; d != nil && isSwitchLike(d) {
-				known = append(known, id)
-			}
-		}
-		if len(known) == 0 {
-			known = switchLikeBehindBridge(byID, bridgeOwner, key, devIDs)
-		}
+		// A switch-like device explains the fan-out only when there is positive
+		// evidence that it sits on THIS port: the bridge learned its MAC here,
+		// so it is one of devIDs. A switch known to exist elsewhere says
+		// nothing about this port.
+		//
+		// When more than one switch-like device is on the port the engine
+		// cannot tell which one hosts the others, so it declines to guess and
+		// the segment stands. There is exactly one place that decides this,
+		// switchOnPort, so the rule cannot drift between call sites.
+		known := switchOnPort(byID, byPort, key)
 		if len(known) > 0 {
-			// A known switch or AP explains the fan-out.
+			// A known switch or AP on this port explains the fan-out.
 			for _, id := range devIDs {
 				if id == known[0] {
 					continue
@@ -345,25 +340,25 @@ func groupUnresolved(
 	return out
 }
 
-// switchLikeBehindBridge finds a switch-like device that is known to sit behind
-// the same bridge, used when the switch's own FDB entry did not carry a port.
+// switchOnPort finds a switch-like device whose OWN port observation names the
+// same port as the fan-out being explained.
 //
-// It deliberately returns at most one candidate: two known switches behind one
-// bridge do not tell us which one hosts the other devices, so the engine falls
-// back to an unresolved segment rather than guessing.
-func switchLikeBehindBridge(byID map[string]*model.Device, bridgeOwner map[string]string, key string, devIDs []string) []string {
-	bridge, _ := splitPortKey(key)
-	owner := bridgeOwner[bridge]
-	onPort := map[string]bool{}
-	for _, id := range devIDs {
-		onPort[id] = true
-	}
+// This is the only acceptable form of "the switch must be in there somewhere":
+// the bridge learned the switch's MAC on this very port. A switch known to sit on
+// a DIFFERENT port says nothing about this one, and using it would draw a cable
+// that does not exist. When there is no such device the caller falls back to an
+// unresolved segment, which is the honest answer.
+//
+// The search is confined to the devices already known to be on this port, so it
+// can never reach across the network for a convenient explanation.
+func switchOnPort(byID map[string]*model.Device, byPort map[string][]string, key string) []string {
+	// More than one switch-like device on the port means we cannot tell which
+	// one hosts the others, so no candidate is returned and the segment stands.
 	var candidates []string
-	for id, d := range byID {
-		if id == owner || onPort[id] || !isSwitchLike(d) {
-			continue
+	for _, id := range byPort[key] {
+		if d := byID[id]; d != nil && isSwitchLike(d) {
+			candidates = append(candidates, id)
 		}
-		candidates = append(candidates, id)
 	}
 	if len(candidates) == 1 {
 		return candidates
