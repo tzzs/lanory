@@ -1,0 +1,10 @@
+192.168.1.1 dev eth0 lladdr 03:11:22:33:44:55 REACHABLE
+192.168.100.116 dev eth2 lladdr b0:82:e2:61:3e:b7 REACHABLE
+192.168.100.151 dev eth1 lladdr 0c:6f:8b:4a:3d:d2 STALE
+192.168.100.222 dev eth1 lladdr 86:7b:1c:3f:06:5e REACHABLE
+192.168.100.197 dev eth1 lladdr 46:3f:36:89:42:e3 STALE
+192.168.100.159 dev eth1 lladdr 52:e5:8f:5b:c5:2d REACHABLE
+192.168.100.228 dev eth1 lladdr 04:67:61:77:7f:24 DELAY
+192.168.100.231 dev eth1 lladdr cc:b5:d1:05:70:20 PROBE
+192.168.100.253 dev eth1  INCOMPLETE
+192.168.100.4 dev eth1 FAILED

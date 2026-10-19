@@ -1,0 +1,98 @@
+# Expected results derived from the EASEPi R1 fixtures.
+#
+# These assertions are the acceptance criteria for the discovery and topology
+# engines. Tests must derive their expectations from this file so the fixtures
+# and the expectations cannot drift apart.
+
+interfaces:
+  - name: eth0
+    role: wan
+    carrier: true
+    speed_mbps: 100
+    oper_state: up
+  - name: eth1
+    role: lan
+    carrier: true
+    speed_mbps: 1000
+    oper_state: up
+    bridge: br-lan
+  - name: eth2
+    role: lan
+    carrier: true
+    speed_mbps: 2500
+    oper_state: up
+    bridge: br-lan
+  - name: eth3
+    role: lan
+    carrier: false
+    speed_mbps: 0
+    oper_state: no-carrier
+    bridge: br-lan
+  - name: br-lan
+    role: lan
+    carrier: true
+    type: bridge
+    ipv4: 192.168.100.1/24
+    members: [eth1, eth2, eth3]
+
+devices:
+  - mac: b0:82:e2:61:3e:b7
+    ipv4: 192.168.100.116
+    hostname: WindowsPC
+    interface: eth2
+    type_hint: desktop
+    name_contains: Windows
+  - mac: 0c:6f:8b:4a:3d:d2
+    ipv4: 192.168.100.151
+    hostname: iPhone
+    interface: eth1
+    type_hint: smartphone
+    name_contains: iPhone
+  - mac: 86:7b:1c:3f:06:5e
+    ipv4: 192.168.100.222
+    hostname: Mac-Studio
+    interface: eth1
+    type_hint: desktop
+    name_contains: Mac
+  - mac: 46:3f:36:89:42:e3
+    ipv4: 192.168.100.197
+    hostname: Watch
+    interface: eth1
+    type_hint: smartwatch
+    name_contains: Watch
+  - mac: 52:e5:8f:5b:c5:2d
+    ipv4: 192.168.100.159
+    hostname: desk-lamp
+    interface: eth1
+    type_hint: iot
+  - mac: 04:67:61:77:7f:24
+    ipv4: 192.168.100.228
+    interface: eth1
+  - mac: cc:b5:d1:05:70:20
+    ipv4: 192.168.100.231
+    hostname: esp32-sensor
+    interface: eth1
+  - mac: b4:fa:48:10:16:13
+    ipv6: fe80::1a2b:3c4d:5e6f:7012
+    interface: eth1
+    # identity unknown; must still become exactly one device
+
+not_devices:
+  - 33:33:00:00:00:01     # multicast
+  - 01:00:5e:00:00:01     # IPv4 multicast
+  - b0:1b:cd:a2:33:11     # bridge self / permanent local
+  - b0:1b:cd:a2:33:12     # permanent local
+  - b0:1b:cd:a2:33:13     # permanent local (no carrier port)
+  - 00:00:00:00:00:00     # zero mac
+  - 02:42:9c:1e:5f:7a     # docker0 virtual interface
+  - 2e:4a:66:11:22:33     # dummy0 virtual interface
+
+expectations:
+  total_devices: 8
+  # eth1 has several learned MACs; that alone must NOT be reported as a
+  # confirmed wireless association.
+  eth1_wifi_assumption_allowed: false
+  # The Windows PC must be linked to eth2, not eth1.
+  windows_pc_interface: eth2
+  # Unknown-identity device still appears, exactly once.
+  unknown_device_count: 1

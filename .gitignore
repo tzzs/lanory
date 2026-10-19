@@ -1,0 +1,39 @@
+# Binaries
+/lanory
+/lanory-*
+/dist/
+
+# Build output
+/web/dist/
+/web/node_modules/
+*.test
+*.out
+
+# Local data
+*.db
+*.db-wal
+*.db-shm
+/var/
+/tmp/
+
+# Source prompt / product spec — intentionally not tracked (user request)
+docs/lanory.md
+
+# Real network snapshots contain private MAC/IP/hostname data.
+# Kept locally for development; sanitized copies live in fixtures/easepi-r1/.
+fixtures/private/
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
+*.swp
+
+# Go
+/bin/
+/coverage/
+
+# OpenWrt build artifacts
+/packaging/openwrt/*.apk
+/packaging/openwrt/build_dir/
+/packaging/openwrt/staging_dir/

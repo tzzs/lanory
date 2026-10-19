@@ -1,0 +1,72 @@
+{
+  "lo": {
+    "up": true,
+    "link": false,
+    "mtu": 65536,
+    "macaddr": "00:00:00:00:00:00",
+    "type": "loopback",
+    "stats": {"rx_bytes": 184322, "tx_bytes": 184322, "rx_packets": 1234, "tx_packets": 1234, "rx_errors": 0, "tx_errors": 0, "rx_dropped": 0, "tx_dropped": 0}
+  },
+  "eth0": {
+    "up": true,
+    "link": true,
+    "mtu": 1500,
+    "macaddr": "02:00:00:00:00:10",
+    "speed": 100,
+    "type": "ethernet",
+    "stats": {"rx_bytes": 987654321, "tx_bytes": 123456789, "rx_packets": 998231, "tx_packets": 512331, "rx_errors": 0, "tx_errors": 0, "rx_dropped": 12, "tx_dropped": 0}
+  },
+  "eth1": {
+    "up": true,
+    "link": true,
+    "mtu": 1500,
+    "macaddr": "02:00:00:00:00:11",
+    "speed": 1000,
+    "type": "ethernet",
+    "stats": {"rx_bytes": 4512345678, "tx_bytes": 9876543210, "rx_packets": 4123991, "tx_packets": 8123455, "rx_errors": 0, "tx_errors": 0, "rx_dropped": 4, "tx_dropped": 0}
+  },
+  "eth2": {
+    "up": true,
+    "link": true,
+    "mtu": 1500,
+    "macaddr": "02:00:00:00:00:12",
+    "speed": 2500,
+    "type": "ethernet",
+    "stats": {"rx_bytes": 12345678901, "tx_bytes": 23456789012, "rx_packets": 9912345, "tx_packets": 12345678, "rx_errors": 0, "tx_errors": 0, "rx_dropped": 0, "tx_dropped": 3}
+  },
+  "eth3": {
+    "up": true,
+    "link": false,
+    "mtu": 1500,
+    "macaddr": "02:00:00:00:00:13",
+    "speed": 0,
+    "type": "ethernet",
+    "stats": {"rx_bytes": 0, "tx_bytes": 0, "rx_packets": 0, "tx_packets": 0, "rx_errors": 0, "tx_errors": 0, "rx_dropped": 0, "tx_dropped": 0}
+  },
+  "br-lan": {
+    "up": true,
+    "link": true,
+    "mtu": 1500,
+    "macaddr": "02:00:00:00:00:11",
+    "type": "bridge",
+    "bridge-members": ["eth1", "eth2", "eth3"],
+    "stats": {"rx_bytes": 16858134779, "tx_bytes": 33344352322, "rx_packets": 14036336, "tx_packets": 20469133, "rx_errors": 0, "tx_errors": 0, "rx_dropped": 16, "tx_dropped": 3}
+  },
+  "docker0": {
+    "up": true,
+    "link": false,
+    "mtu": 1500,
+    "macaddr": "02:42:ac:12:00:02",
+    "type": "bridge",
+    "bridge-members": [],
+    "stats": {"rx_bytes": 0, "tx_bytes": 0, "rx_packets": 0, "tx_packets": 0, "rx_errors": 0, "tx_errors": 0, "rx_dropped": 0, "tx_dropped": 0}
+  },
+  "dummy0": {
+    "up": false,
+    "link": false,
+    "mtu": 1500,
+    "macaddr": "02:11:22:33:44:55",
+    "type": "dummy",
+    "stats": {"rx_bytes": 0, "tx_bytes": 0, "rx_packets": 0, "tx_packets": 0, "rx_errors": 0, "tx_errors": 0, "rx_dropped": 0, "tx_dropped": 0}
+  }
+}

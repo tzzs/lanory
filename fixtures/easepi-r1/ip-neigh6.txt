@@ -1,0 +1,7 @@
+fe80::6f8b:4aff:fe4a:3dd2 dev eth1 lladdr 0c:6f:8b:4a:3d:d2 router REACHABLE
+fe80::847b:1cff:fe3f:65e dev eth1 lladdr 86:7b:1c:3f:06:5e REACHABLE
+fe80::463f:36ff:fe89:42e3 dev eth1 lladdr 46:3f:36:89:42:e3 STALE
+fe80::1a2b:3c4d:5e6f:7012 dev eth1 lladdr b4:fa:48:10:16:13 STALE
+fe80::9f8e:7d6c:5b4a:3928 dev eth1 lladdr 52:e5:8f:5b:c5:2d REACHABLE
+2001:db8:100::151 dev eth1 lladdr 0c:6f:8b:4a:3d:d2 STALE
+2001:db8:100::222 dev eth1 lladdr 86:7b:1c:3f:06:5e REACHABLE

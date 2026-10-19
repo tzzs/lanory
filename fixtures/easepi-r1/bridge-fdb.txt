@@ -1,0 +1,19 @@
+b0:82:e2:61:3e:b7 dev eth2 master br-lan permanent
+0c:6f:8b:4a:3d:d2 dev eth1 master br-lan
+86:7b:1c:3f:06:5e dev eth1 master br-lan
+46:3f:36:89:42:e3 dev eth1 master br-lan
+52:e5:8f:5b:c5:2d dev eth1 master br-lan
+04:67:61:77:7f:24 dev eth1 master br-lan
+cc:b5:d1:05:70:20 dev eth1 master br-lan
+b4:fa:48:10:16:13 dev eth1 master br-lan
+02:00:00:00:00:11 dev br-lan master br-lan permanent
+02:00:00:00:00:11 dev eth1 master br-lan permanent
+02:00:00:00:00:12 dev eth2 master br-lan permanent
+02:00:00:00:00:13 dev eth3 master br-lan permanent
+33:33:00:00:00:01 dev eth1 self permanent
+33:33:ff:4a:3d:d2 dev eth1 self permanent
+01:00:5e:00:00:01 dev eth2 self permanent
+33:33:ff:10:16:13 dev eth1 self permanent
+02:42:ac:12:00:02 dev docker0 master docker0 permanent
+02:11:22:33:44:55 dev dummy0 master dummy0 permanent
+00:00:00:00:00:00 dev br-lan master br-lan permanent
