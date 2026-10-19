@@ -96,3 +96,12 @@ expectations:
   windows_pc_interface: eth2
   # Unknown-identity device still appears, exactly once.
   unknown_device_count: 1
+
+  # Several devices behind eth1 with no known intermediate must be grouped
+  # under a single unresolved-segment node. The engine must NOT invent a switch
+  # or an access point to explain the fan-out.
+  unresolved_segments_expected: 1
+  invented_switches_allowed: false
+  # Static-IP devices are absent from the DHCP lease file. Their absence must
+  # never be read as "offline".
+  absence_implies_offline: false
