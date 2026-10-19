@@ -1,0 +1,87 @@
+# Lanory configuration (/etc/lanory/config.yaml)
+#
+# This is the file the binary reads. On an OpenWrt install it is GENERATED from
+# /etc/config/lanory on every start; edit that file instead, or set
+# lanory.main.generate_config=0 and maintain this one by hand.
+#
+# Every value below can also be set with a LANORY_* environment variable, which
+# wins over the file; and the Web UI writes a third layer (app_settings in the
+# database) that wins over both. See docs/deployment.md.
+
+server:
+  # Bind to the LAN only by default. Change to 127.0.0.1 behind a reverse proxy.
+  host: "0.0.0.0"
+  port: 8787
+  base_path: ""
+  # Leave empty to serve the frontend embedded in the binary.
+  web_dir: ""
+
+database:
+  path: "/var/lib/lanory/lanory.db"
+  # Events, probe results and raw evidence older than this are pruned.
+  retention_days: 30
+
+discovery:
+  enabled: true
+  interval: "10m"
+  # Derive scan targets from the configured LAN subnets. No scan is run unless
+  # collectors.scan is also enabled.
+  auto_detect_subnets: true
+  max_concurrency: 16
+  # Authorised extra CIDRs for active scanning. Empty by default: Lanory only
+  # scans what it can see, and active scanning is opt-in.
+  subnets: []
+  scan_timeout: "500ms"
+  rate_limit: 64
+
+collectors:
+  # All passive collectors are on by default: they read the router's own state.
+  openwrt: true
+  arp: true
+  ndp: true
+  dhcp: true
+  fdb: true
+  # Active / multicast collectors are opt-in because they generate traffic.
+  lldp: false
+  mdns: false
+  ssdp: false
+  snmp: false
+  scan: false
+
+monitoring:
+  enabled: true
+  interval: "60s"
+  timeout: "3s"
+  # A device is declared offline only after this many consecutive failures.
+  failure_threshold: 3
+  recover_confirm: 1
+  interface_refresh: "30s"
+  device_refresh: "60s"
+
+topology:
+  auto_layout: true
+  preserve_manual_layout: true
+  prefer_confirmed_edges: true
+  # Edges below this confidence are drawn dashed and are marked unverified.
+  unverified_edge_threshold: 0.6
+
+auth:
+  # Lanory shows sensitive network information. It is designed to be reachable
+  # from the LAN only; enable the token if the UI is exposed further.
+  enabled: false
+  allow_lan: true
+  # Prefer /etc/lanory/token (mode 0600, read through LANORY_AUTH_TOKEN) over
+  # putting a secret in this file.
+  token: ""
+  token_file: "/etc/lanory/token"
+
+logging:
+  level: "info"
+  file: ""
+  pretty: true
+
+demo:
+  # Demo Mode loads a simulated sample network. It is always labelled as
+  # simulated in the UI and must never be mistaken for a real scan.
+  enabled: false
+  seed: "easepi-r1"

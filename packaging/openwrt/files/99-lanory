@@ -1,0 +1,29 @@
+#!/bin/sh
+# /etc/uci-defaults/99-lanory
+#
+# First-install defaults. uci-defaults scripts run once, at the end of the
+# package install, and are removed by the OpenWrt image builder afterwards.
+#
+# This script must be idempotent: it can also be run by hand after a restore.
+
+[ -n "$IPKG_INSTROOT" ] && exit 0
+
+. /lib/functions.sh
+
+# Ensure the section exists without clobbering a user edit.
+if ! uci -q get lanory.main >/dev/null 2>&1; then
+	uci -q batch <<-EOF
+		set lanory.main=lanory
+		set lanory.main.enabled='1'
+		set lanory.main.listen='0.0.0.0'
+		set lanory.main.port='8787'
+		set lanory.main.data_dir='/var/lib/lanory'
+		set lanory.main.generate_config='1'
+		commit lanory
+	EOF
+fi
+
+mkdir -p /var/lib/lanory
+chmod 750 /var/lib/lanory
+
+exit 0

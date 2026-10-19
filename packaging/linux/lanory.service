@@ -1,0 +1,73 @@
+[Unit]
+Description=Lanory — home network topology and monitoring
+Documentation=https://github.com/lanory/lanory
+# Lanory reads the router/host network state, so it must start after the network
+# is configured. It does not need to be ordered before network-online: it
+# tolerates interfaces that are not up yet and rediscovers on its own schedule.
+After=network-pre.target network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# The binary is a single static Go executable: API, SSE and the embedded
+# frontend in one process.
+ExecStart=/usr/bin/lanory --config /etc/lanory/config.yaml
+WorkingDirectory=/var/lib/lanory
+
+# Reload regenerates nothing: the same behaviour as `systemctl restart`, which is
+# what docs/deployment.md tells the user to run after editing the YAML.
+ExecReload=/bin/kill -HUP $MAINPID
+
+Restart=on-failure
+RestartSec=5
+# Never give up restarting: a router service that stopped after 5 crashes would
+# silently disappear from the UI.
+StartLimitIntervalSec=0
+
+# Graceful shutdown: the API stops accepting, SSE clients are closed, the SQLite
+# WAL is checkpointed.
+KillSignal=SIGTERM
+TimeoutStopSec=20
+
+# Logging: journald, no file. On a router this is the same choice the procd init
+# script makes (log to the system log).
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=lanory
+
+# --- hardening ------------------------------------------------------------
+# Lanory is read-only with respect to the host's network configuration. It needs
+# to read /proc and /sys for interface state, and it needs to open raw ICMP
+# sockets when monitoring is enabled.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=false
+ProtectSystem=strict
+ProtectHome=true
+# /var/lib/lanory is the only writable path.
+ReadWritePaths=/var/lib/lanory
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=false
+# ICMP probes need raw sockets; everything else is AF_INET/AF_INET6/AF_NETLINK
+# and the unix socket journald uses.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_NETLINK AF_UNIX
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+# Network capabilities: ICMP needs CAP_NET_RAW. Nothing else is required, and
+# CAP_NET_ADMIN is deliberately NOT granted: Lanory must never be able to change
+# interfaces.
+AmbientCapabilities=CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_RAW CAP_NET_BIND_SERVICE
+
+# Resource limits sized for a small router or an SBC.
+LimitNOFILE=4096
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target

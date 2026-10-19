@@ -1,0 +1,70 @@
+# Lanory configuration for a generic Linux host (/etc/lanory/config.yaml).
+#
+# Read by packaging/linux/lanory.service. Every value can be overridden with a
+# LANORY_* environment variable, which wins over this file (see
+# docs/deployment.md). On OpenWrt this file is generated from UCI instead; use
+# packaging/openwrt/files/config.yaml there.
+
+server:
+  host: "0.0.0.0"
+  port: 8787
+  base_path: ""
+
+database:
+  # Must match ReadWritePaths= in lanory.service.
+  path: "/var/lib/lanory/lanory.db"
+  retention_days: 30
+
+discovery:
+  enabled: true
+  interval: "10m"
+  auto_detect_subnets: true
+  max_concurrency: 16
+  # Authorised extra CIDRs. Usually left empty: passive discovery already sees
+  # the LAN. Only fill this in if you deliberately want active scanning.
+  subnets: []
+  scan_timeout: "500ms"
+  rate_limit: 64
+
+collectors:
+  openwrt: true
+  arp: true
+  ndp: true
+  dhcp: true
+  fdb: true
+  lldp: false
+  mdns: false
+  ssdp: false
+  snmp: false
+  scan: false
+
+monitoring:
+  enabled: true
+  interval: "60s"
+  timeout: "3s"
+  failure_threshold: 3
+  recover_confirm: 1
+  interface_refresh: "30s"
+  device_refresh: "60s"
+
+topology:
+  auto_layout: true
+  preserve_manual_layout: true
+  prefer_confirmed_edges: true
+  unverified_edge_threshold: 0.6
+
+auth:
+  enabled: false
+  allow_lan: true
+  token: ""
+  token_file: ""
+
+logging:
+  level: "info"
+  pretty: true
+
+demo:
+  # Enable (or LANORY_DEMO_MODE=true) to explore the UI with the built-in sample
+  # network instead of the host's real one.
+  enabled: false
+  seed: "easepi-r1"

@@ -1,0 +1,35 @@
+-- Licensed to the public under the MIT License.
+
+local fs = require "nixio.fs"
+local uci = require "luci.model.uci".cursor()
+local port = uci:get("lanory", "main", "port") or "8787"
+
+local running = luci.sys.exec("pidof lanory 2>/dev/null") or ""
+local is_running = running:match("%d") ~= nil
+
+local ll = require("luci.i18n").translate
+%>
+
+<h2 name="content"><%:Lanory%></h2>
+
+<div class="cbi-map">
+	<div class="cbi-section">
+		<h3><%:Service state%></h3>
+		<p>
+			<% if is_running then %>
+				<em class="ifacebadge"><%:Running%></em>
+			<% else %>
+				<em class="ifacebadge"><%:Stopped%></em>
+			<% end %>
+		</p>
+		<p>
+			<%:Open the Lanory web UI%>:
+			<a href="http://<%=luci.http.getenv("SERVER_NAME") or "192.168.100.1"%>:<%=port%>/" target="_blank">
+				http://<%=luci.http.getenv("SERVER_NAME") or "192.168.100.1"%>:<%=port%>/
+			</a>
+		</p>
+		<p class="cbi-section-descr">
+			<%:Lanory only reads the router's own state (interfaces, bridge FDB, ARP/NDP, DHCP leases). It never modifies WAN, LAN, DHCP, firewall, DNS or routes.%>
+		</p>
+	</div>
+</div>
