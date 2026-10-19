@@ -87,6 +87,16 @@ func TestGraphToModel(t *testing.T) {
 	if seg.State != model.StateUnknown {
 		t.Errorf("segment state = %q, want unknown", seg.State)
 	}
+	// The API contract admits only "device" and "network" (docs/api.md,
+	// web/src/types/api.ts). An unresolved segment is a network node flagged
+	// unresolved, never a third kind: a consumer that understands only the two
+	// documented kinds must still render it.
+	if seg.Kind != "network" {
+		t.Errorf("segment kind = %q, want network", seg.Kind)
+	}
+	if seg.Network == nil {
+		t.Error("a network node needs a network payload to be labelled")
+	}
 
 	// A network node carries its network payload.
 	net := got.Nodes[2]
@@ -117,6 +127,34 @@ func TestGraphToModel(t *testing.T) {
 	}
 	if e2.Confidence != 1.0 {
 		t.Errorf("confidence = %v", e2.Confidence)
+	}
+}
+
+// TestNodeKindsMatchTheContract pins the two-kind contract across every node the
+// engine can produce. If a future node kind is added to NodeKind, this fails and
+// forces a decision about the API surface rather than silently shipping a kind
+// the documented contract and the TypeScript mirror do not know about.
+func TestNodeKindsMatchTheContract(t *testing.T) {
+	g := &Graph{Nodes: []Node{
+		{ID: "dev-1", Kind: NodeKindDevice, Device: &model.Device{ID: "1", Name: "pc"}},
+		{ID: "net-1", Kind: NodeKindNetwork, Network: &model.NetworkStatus{Name: "br-lan"}},
+		{ID: "seg-1", Kind: NodeKindSegment, Unresolved: true,
+			Network: &model.NetworkStatus{Name: "segment"}},
+	}}
+	got := g.ToModel(nil)
+	for _, n := range got.Nodes {
+		if n.Kind != "device" && n.Kind != "network" {
+			t.Errorf("%s: kind = %q, want device or network", n.ID, n.Kind)
+		}
+		if n.Kind == "device" && n.Device == nil {
+			t.Errorf("%s: a device node must carry a device", n.ID)
+		}
+		if n.Kind == "network" && n.Network == nil {
+			t.Errorf("%s: a network node must carry a network", n.ID)
+		}
+		if n.Device != nil && n.Network != nil {
+			t.Errorf("%s: a node must not be both a device and a network", n.ID)
+		}
 	}
 }
 

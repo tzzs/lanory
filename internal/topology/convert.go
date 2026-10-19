@@ -50,10 +50,22 @@ func (g *Graph) ToModel(layout []model.TopologyLayout) *model.Topology {
 }
 
 // toModel renders one node.
+//
+// The API contract (docs/api.md, web/src/types/api.ts) admits exactly two node
+// kinds: "device" and "network". An unresolved segment is therefore emitted as a
+// network node with Unresolved set, not as a third kind. The UI decides how to
+// draw it from the Unresolved flag (web/src/features/topology/graph.ts checks it
+// before the kind), so a consumer that only understands the documented two kinds
+// still renders the graph correctly instead of silently dropping the node.
 func (n Node) toModel() model.TopologyNode {
+	kind := string(n.Kind)
+	unresolved := n.Unresolved || n.Kind == NodeKindSegment
+	if unresolved {
+		kind = string(NodeKindNetwork)
+	}
 	out := model.TopologyNode{
 		ID:          n.ID,
-		Kind:        string(n.Kind),
+		Kind:        kind,
 		Device:      n.Device,
 		Interface:   n.Interface,
 		Network:     n.Network,
@@ -62,13 +74,23 @@ func (n Node) toModel() model.TopologyNode {
 		PrimaryIP:   n.PrimaryIP,
 		PrimaryMAC:  n.PrimaryMAC,
 		Children:    n.Children,
-		Unresolved:  n.Unresolved || n.Kind == NodeKindSegment,
+		Unresolved:  unresolved,
 	}
 	// A segment node has no device, but the UI still needs a label. The reason
 	// already carries one; the state stays unknown on purpose: a segment is not
 	// online or offline, it is simply unaccounted for.
 	if out.State == "" {
 		out.State = model.StateUnknown
+	}
+	// A network node must carry a network payload, or the UI has nothing to
+	// label it with. Segments already set one; this is the safety net.
+	if out.Kind == string(NodeKindNetwork) && out.Network == nil {
+		out.Network = &model.NetworkStatus{
+			ID:          n.ID,
+			Name:        n.Reason,
+			Role:        model.InterfaceRoleUnknown,
+			InterfaceID: "",
+		}
 	}
 	return out
 }

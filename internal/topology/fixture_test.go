@@ -504,6 +504,7 @@ func TestFixtureUnresolvedSegment(t *testing.T) {
 		if !seg.Unresolved {
 			t.Errorf("segment %s is not flagged unresolved", seg.ID)
 		}
+
 		if !seg.Unverified {
 			t.Errorf("segment %s must be unverified", seg.ID)
 		}
@@ -516,6 +517,33 @@ func TestFixtureUnresolvedSegment(t *testing.T) {
 		if seg.Port != "eth1" && seg.Port != "eth2" {
 			t.Errorf("segment %s is on an unexpected port %q", seg.ID, seg.Port)
 		}
+	}
+
+	// The API payload has only two node kinds: a segment must reach the frontend
+	// as a network node flagged unresolved, never as an undefined third kind.
+	payload := g.ToModel(nil)
+	for _, n := range payload.Nodes {
+		if n.Kind != "device" && n.Kind != "network" {
+			t.Errorf("node %s: kind = %q, want device or network", n.ID, n.Kind)
+		}
+	}
+	var segmentNodes int
+	for _, n := range payload.Nodes {
+		if n.Unresolved {
+			segmentNodes++
+			if n.Kind != "network" {
+				t.Errorf("unresolved node %s: kind = %q, want network", n.ID, n.Kind)
+			}
+			if n.Network == nil {
+				t.Errorf("unresolved node %s has no network payload", n.ID)
+			}
+			if n.Device != nil {
+				t.Errorf("unresolved node %s carries a device", n.ID)
+			}
+		}
+	}
+	if segmentNodes != exp.Expectations.UnresolvedSegments {
+		t.Errorf("unresolved nodes in the payload = %d, want %d", segmentNodes, exp.Expectations.UnresolvedSegments)
 	}
 
 	// No device may be presented as a wireless association.
