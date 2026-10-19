@@ -330,14 +330,13 @@ type demoEdge struct {
 // -> eth0 -> LAN bridge -> eth1/eth2 -> devices.
 func demoEdges() []demoEdge {
 	wan := "iface-demo-eth0"
-	lan := "iface-demo-br-lan"
 	e1 := "iface-demo-eth1"
 	e2 := "iface-demo-eth2"
 	router := "dev-mac-020000000010"
 	return []demoEdge{
 		{
 			SourceID: "dev-mac-020000000020", TargetID: "dev-manual-modem",
-			Type: "physical_link", Confidence: 0.6, Status: "unverified",
+			Type: "physical_link", Confidence: 0.5, Status: "unverified",
 			Unverified: true,
 			Evidence:   "user described the physical cabling; no protocol confirms it",
 		},
@@ -407,18 +406,9 @@ func demoEdges() []demoEdge {
 			Unverified: true,
 			Evidence:   "both share the LAN subnet; no protocol confirms the hop",
 		},
-		{
-			SourceID: router, TargetID: router,
-			SourceIface: e1, TargetIface: lan,
-			Type: "bridge_membership", Confidence: 0.95, Status: "link_up",
-			Evidence: "eth1 is a member port of br-lan (UCI network.brlan.ports)",
-		},
-		{
-			SourceID: router, TargetID: router,
-			SourceIface: e2, TargetIface: lan,
-			Type: "bridge_membership", Confidence: 0.95, Status: "link_up",
-			Evidence: "eth2 is a member port of br-lan (UCI network.brlan.ports)",
-		},
+		// eth1 and eth2 are member ports of br-lan. That fact belongs to the
+		// interface rows (role + bridge_id) rather than to a device-to-device
+		// edge, so it is not duplicated here as a self relation.
 	}
 }
 

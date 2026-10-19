@@ -353,6 +353,8 @@ func Load(store *database.Store, opts Options) (*Demo, error) {
 			Status:            model.EdgeStatus(de.Status),
 			Label:             de.Label,
 			Unverified:        de.Unverified,
+			UserConfirmed:     de.Type == string(model.EdgeTypeUserDefined),
+			Locked:            de.Type == string(model.EdgeTypeUserDefined),
 			EvidenceCount:     1,
 			LastObserved:      now,
 			CreatedAt:         baseTime,

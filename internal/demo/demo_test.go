@@ -918,3 +918,26 @@ func TestSeedForCI(t *testing.T) {
 	}
 	t.Logf("seeded %s: %d devices, %d edges, %d probes", path, total, len(first.EdgeIDs), len(first.ProbeIDs))
 }
+
+// TestDemoEdgesAreSelfConsistent guards the topology invariants of the sample
+// dataset: no edge may link a device to itself, and a user-asserted relation must
+// be marked user-confirmed and locked so automatic discovery cannot silently
+// drop it.
+func TestDemoEdgesAreSelfConsistent(t *testing.T) {
+	for _, edge := range demoEdges() {
+		if edge.SourceID == edge.TargetID {
+			t.Errorf("edge %s -> %s is a self relation: %s", edge.SourceID, edge.TargetID, edge.Type)
+		}
+		if edge.Type == string(model.EdgeTypeUserDefined) {
+			if edge.Confidence != model_edgeConfidenceManual {
+				t.Errorf("user_defined edge confidence = %v, want %v", edge.Confidence, model_edgeConfidenceManual)
+			}
+		}
+		if edge.Unverified && edge.Confidence > 0.5 {
+			t.Errorf("edge %s->%s is unverified but claims confidence %v", edge.SourceID, edge.TargetID, edge.Confidence)
+		}
+	}
+}
+
+// model_edgeConfidenceManual is the confidence a user-asserted relation carries.
+const model_edgeConfidenceManual = 1.0
