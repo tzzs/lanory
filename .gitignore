@@ -43,3 +43,6 @@ web/dist/
 web/node_modules/
 web/.vite/
 web/tsconfig.tsbuildinfo
+
+# Build artifact copied into internal/api/web for go:embed (generated, not source)
+internal/api/web/dist/
