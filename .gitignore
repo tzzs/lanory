@@ -37,3 +37,8 @@ fixtures/private/
 /packaging/openwrt/*.apk
 /packaging/openwrt/build_dir/
 /packaging/openwrt/staging_dir/
+
+# Frontend
+web/dist/
+web/node_modules/
+web/.vite/

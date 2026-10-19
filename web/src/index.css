@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Design tokens. Values are duplicated in tailwind.config.ts as color aliases
+   so utility classes and raw CSS always agree. */
+:root {
+  --bg: #f7f8fa;
+  --surface: #ffffff;
+  --surface-2: #f1f3f6;
+  --border: #e4e7ec;
+  --fg: #101828;
+  --muted: #667085;
+  --accent: #2e6be6;
+  --success: #12a150;
+  --warning: #d9870b;
+  --danger: #e5484d;
+}
+
+.dark {
+  --bg: #0b0d10;
+  --surface: #13171c;
+  --surface-2: #1a1f26;
+  --border: #262c35;
+  --fg: #e8ecf1;
+  --muted: #8b95a5;
+  --accent: #5b9cff;
+  --success: #3ecf8e;
+  --warning: #f5a623;
+  --danger: #ff6b6f;
+}
+
+* {
+  border-color: var(--border);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: theme('fontFamily.sans');
+  -webkit-font-smoothing: antialiased;
+}
+
+/* React Flow surface: keep the canvas neutral in both themes. */
+.react-flow__background {
+  background: var(--bg);
+}
+
+.react-flow__edge-path {
+  stroke-width: 1.5;
+}
+
+.react-flow__handle {
+  opacity: 0;
+}
