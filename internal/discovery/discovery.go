@@ -84,27 +84,27 @@ const (
 
 // InterfaceObservation describes a network interface and its role.
 type InterfaceObservation struct {
-	Name      string
-	MAC       string
-	Type      model.InterfaceType
-	Role      model.InterfaceRole
+	Name       string
+	MAC        string
+	Type       model.InterfaceType
+	Role       model.InterfaceRole
 	AdminState model.AdminState
-	OperState model.OperState
-	Carrier   bool
-	SpeedMbps int
-	MTU       int
-	BridgeID  string
-	VLANID    int
+	OperState  model.OperState
+	Carrier    bool
+	SpeedMbps  int
+	MTU        int
+	BridgeID   string
+	VLANID     int
 	IsPhysical bool
 
 	// Addresses attached to the interface, if any.
 	Addresses []AddressObservation
 
 	// Stats are the interface counters.
-	RXBytes uint64
-	TXBytes uint64
-	RXErrors uint64
-	TXErrors uint64
+	RXBytes   uint64
+	TXBytes   uint64
+	RXErrors  uint64
+	TXErrors  uint64
 	RXDropped uint64
 	TXDropped uint64
 	RXPackets uint64
@@ -142,23 +142,23 @@ type NeighborObservation struct {
 
 // FDBObservation describes a bridge forwarding database entry.
 type FDBObservation struct {
-	MAC        string
-	Bridge     string
-	Port       string
-	VLANID     int
-	EntryType  model.FDBEntryType
+	MAC       string
+	Bridge    string
+	Port      string
+	VLANID    int
+	EntryType model.FDBEntryType
 	// Self marks the bridge's own address on one of its ports.
 	Self bool
 }
 
 // LeaseObservation describes a DHCP lease.
 type LeaseObservation struct {
-	MAC         string
-	Address     string
-	Hostname    string
-	ClientID    string
-	ExpiresAt   time.Time
-	Interface   string
+	MAC       string
+	Address   string
+	Hostname  string
+	ClientID  string
+	ExpiresAt time.Time
+	Interface string
 }
 
 // LinkObservation asserts a relation between two nodes.
