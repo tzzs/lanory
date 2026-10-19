@@ -39,14 +39,14 @@ type fakeIngestor struct {
 	// created counts how many devices were created.
 	created int
 	// calls records every ingest for assertion.
-	calls []deviceIngest
+	calls []Ingest
 }
 
 func newFakeIngestor(store *database.Store) *fakeIngestor {
 	return &fakeIngestor{store: store, devices: map[string]*model.Device{}}
 }
 
-func (f *fakeIngestor) Resolve(ing deviceIngest) (*model.Device, bool, error) {
+func (f *fakeIngestor) Resolve(ing Ingest) (*model.Device, bool, error) {
 	f.calls = append(f.calls, ing)
 	if f.err != nil {
 		return nil, false, f.err

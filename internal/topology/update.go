@@ -48,16 +48,16 @@ type UpdateEngine struct {
 // identity engine's implementation, and so tests can substitute a simple
 // resolver.
 type DeviceIngestor interface {
-	Resolve(ing deviceIngest) (*model.Device, bool, error)
+	Resolve(ing Ingest) (*model.Device, bool, error)
 }
 
-// deviceIngest mirrors device.Ingest without importing internal/device.
+// Ingest mirrors device.Ingest without importing internal/device.
 //
 // It duplicates the field set on purpose: internal/device imports
 // internal/discovery, and importing it here would create a dependency cycle the
 // moment discovery needs a topology type. The adapter in the wiring layer
 // converts one to the other.
-type deviceIngest struct {
+type Ingest struct {
 	MAC          string
 	Hostname     string
 	Vendor       string

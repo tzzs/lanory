@@ -123,7 +123,7 @@ type ingestorAdapter struct {
 	engine *device.Engine
 }
 
-func (a ingestorAdapter) Resolve(ing deviceIngest) (*model.Device, bool, error) {
+func (a ingestorAdapter) Resolve(ing Ingest) (*model.Device, bool, error) {
 	return a.engine.Resolve(device.Ingest{
 		MAC:          ing.MAC,
 		Hostname:     ing.Hostname,

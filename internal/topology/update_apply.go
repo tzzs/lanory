@@ -197,7 +197,7 @@ func (u *UpdateEngine) applyDevices(ctx context.Context, batch *observationBatch
 			// A MAC with nothing attached is not a device yet.
 			continue
 		}
-		ing := deviceIngest{
+		ing := Ingest{
 			MAC:        f.MAC,
 			Hostname:   f.Hostname,
 			Addresses:  f.Addresses,
