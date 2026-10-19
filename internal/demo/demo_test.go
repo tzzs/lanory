@@ -305,13 +305,13 @@ func TestDeviceInventory(t *testing.T) {
 		itype model.DeviceType
 		iface string
 	}{
-		"dev-mac-b082e2613eb7": {"192.168.100.116", model.StateOnline, model.DeviceTypeDesktop, "eth2"},
-		"dev-mac-0c6f8b4a3dd2": {"192.168.100.151", model.StateOnline, model.DeviceTypeSmartphone, "eth1"},
-		"dev-mac-867b1c3f065e": {"192.168.100.222", model.StateOnline, model.DeviceTypeDesktop, "eth1"},
-		"dev-mac-463f368942e3": {"192.168.100.197", model.StateSleeping, model.DeviceTypeSmartwatch, "eth1"},
-		"dev-mac-52e58f5bc52d": {"192.168.100.159", model.StateOnline, model.DeviceTypeIoT, "eth1"},
-		"dev-mac-0467617f7f24": {"192.168.100.228", model.StateOffline, model.DeviceTypeUnknown, "eth1"},
-		"dev-mac-ccb5d1057020": {"192.168.100.231", model.StateOnline, model.DeviceTypeIoT, "eth1"},
+		"dev-mac-b082e2613eb7": {"192.0.2.116", model.StateOnline, model.DeviceTypeDesktop, "eth2"},
+		"dev-mac-0c6f8b4a3dd2": {"192.0.2.151", model.StateOnline, model.DeviceTypeSmartphone, "eth1"},
+		"dev-mac-867b1c3f065e": {"192.0.2.222", model.StateOnline, model.DeviceTypeDesktop, "eth1"},
+		"dev-mac-463f368942e3": {"192.0.2.197", model.StateSleeping, model.DeviceTypeSmartwatch, "eth1"},
+		"dev-mac-52e58f5bc52d": {"192.0.2.159", model.StateOnline, model.DeviceTypeIoT, "eth1"},
+		"dev-mac-0467617f7f24": {"192.0.2.228", model.StateOffline, model.DeviceTypeUnknown, "eth1"},
+		"dev-mac-ccb5d1057020": {"192.0.2.231", model.StateOnline, model.DeviceTypeIoT, "eth1"},
 		"dev-mac-b4fa48101613": {"", model.StateUnknown, model.DeviceTypeUnknown, "eth1"},
 		"dev-mac-053344556677": {"192.168.100.2", model.StateOnline, model.DeviceTypeRouter, "eth1"},
 	}

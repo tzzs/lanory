@@ -92,7 +92,7 @@ func TestSameMACMultipleAddresses(t *testing.T) {
 		byMAC[n.MAC] = append(byMAC[n.MAC], n.Address)
 	}
 	// The iPhone has a link-local and a global address.
-	iphone := byMAC["0c:6f:8b:4a:3d:d2"]
+	iphone := byMAC["06:77:88:99:aa:d2"]
 	if len(iphone) != 2 {
 		t.Fatalf("expected 2 addresses for the iPhone MAC, got %v", iphone)
 	}
@@ -110,12 +110,12 @@ func TestSameMACMultipleAddresses(t *testing.T) {
 	}
 
 	// The Mac Studio likewise.
-	if got := len(byMAC["86:7b:1c:3f:06:5e"]); got != 2 {
+	if got := len(byMAC["07:88:99:aa:bb:5e"]); got != 2 {
 		t.Fatalf("expected 2 addresses for the Mac Studio MAC, got %d", got)
 	}
 	// Every other MAC has exactly one address.
 	for mac, addrs := range byMAC {
-		if mac == "0c:6f:8b:4a:3d:d2" || mac == "86:7b:1c:3f:06:5e" {
+		if mac == "06:77:88:99:aa:d2" || mac == "07:88:99:aa:bb:5e" {
 			continue
 		}
 		if len(addrs) != 1 {
@@ -134,7 +134,7 @@ func TestIPv6OnlyDevice(t *testing.T) {
 	var found bool
 	for i := range results {
 		n := results[i].Neighbor
-		if n.MAC != "b4:fa:48:10:16:13" {
+		if n.MAC != "b4:11:22:33:44:13" {
 			continue
 		}
 		found = true
@@ -168,7 +168,7 @@ func TestRouterFlag(t *testing.T) {
 	for i := range results {
 		if results[i].Neighbor.Router {
 			routers++
-			if results[i].Neighbor.MAC != "0c:6f:8b:4a:3d:d2" {
+			if results[i].Neighbor.MAC != "06:77:88:99:aa:d2" {
 				t.Errorf("unexpected router MAC %q", results[i].Neighbor.MAC)
 			}
 			if results[i].Attributes["router"] != "true" {
@@ -208,8 +208,8 @@ func TestStaleIsNotOffline(t *testing.T) {
 func TestDropsIPv4(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "neigh6")
-	content := "192.168.100.151 dev eth1 lladdr 0c:6f:8b:4a:3d:d2 REACHABLE\n" +
-		"fe80::1 dev eth1 lladdr 0c:6f:8b:4a:3d:d2 REACHABLE\n"
+	content := "192.0.2.151 dev eth1 lladdr 06:77:88:99:aa:d2 REACHABLE\n" +
+		"fe80::1 dev eth1 lladdr 06:77:88:99:aa:d2 REACHABLE\n"
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
@@ -230,8 +230,8 @@ func TestDropsIPv4(t *testing.T) {
 func TestDeduplicatesIdenticalEntries(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "neigh6")
-	content := "fe80::1 dev eth1 lladdr 0c:6f:8b:4a:3d:d2 REACHABLE\n" +
-		"fe80::1 dev eth1 lladdr 0c:6f:8b:4a:3d:d2 REACHABLE\n"
+	content := "fe80::1 dev eth1 lladdr 06:77:88:99:aa:d2 REACHABLE\n" +
+		"fe80::1 dev eth1 lladdr 06:77:88:99:aa:d2 REACHABLE\n"
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
 	}

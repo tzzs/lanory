@@ -68,7 +68,7 @@ describe('formatEdgeLabel', () => {
 
 describe('formatMac', () => {
   it('upper-cases for display', () => {
-    expect(formatMac('b0:82:e2:61:3e:b7')).toBe('B0:82:E2:61:3E:B7')
+    expect(formatMac('02:11:22:33:44:b7')).toBe('02:11:22:33:44:B7')
     expect(formatMac(undefined)).toBe('—')
   })
 })

@@ -39,7 +39,7 @@ Internet
        │  EASEPi R1（OpenWrt，br-lan .100.1/24）  │
        ├── eth0  WAN   192.168.1.4   100 Mbps  UP
        ├── eth1  LAN   1000 Mbps  ── 小米路由 ── iPhone · Mac Studio · Watch · 台灯 · ESP32
-       ├── eth2  LAN   2500 Mbps  ── Windows PC 192.168.100.116
+       ├── eth2  LAN   2500 Mbps  ── Windows PC 192.0.2.116
        └── eth3  LAN   NO-CARRIER
 ```
 

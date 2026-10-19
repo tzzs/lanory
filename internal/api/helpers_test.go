@@ -35,7 +35,7 @@ func testConfig(t *testing.T) *config.Config {
 	cfg := config.Default()
 	cfg.Database.Path = filepath.Join(t.TempDir(), "lanory-test.db")
 	cfg.Auth.Enabled = false
-	cfg.Discovery.Subnets = []string{"192.168.100.0/24"}
+	cfg.Discovery.Subnets = []string{"192.0.2.0/24", "192.168.100.0/24"}
 	cfg.Demo.Enabled = false
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("validate config: %v", err)
@@ -127,15 +127,15 @@ func seedTestNetwork(t *testing.T, store *database.Store, bus *events.Bus) {
 		state    model.DeviceState
 	}
 	devices := []device{
-		{"dev-win", "Windows PC", "WindowsPC", "b0:82:e2:61:3e:b7", "192.168.100.116", model.DeviceTypeDesktop, model.StateOnline},
-		{"dev-iphone", "iPhone", "iPhone", "0c:6f:8b:4a:3d:d2", "192.168.100.151", model.DeviceTypeSmartphone, model.StateOnline},
-		{"dev-mac", "Mac Studio", "Mac-Studio", "86:7b:1c:3f:06:5e", "192.168.100.222", model.DeviceTypeDesktop, model.StateOffline},
-		{"dev-watch", "Watch", "Watch", "46:3f:36:89:42:e3", "192.168.100.197", model.DeviceTypeSmartwatch, model.StateUnknown},
-		{"dev-lamp", "Desk Lamp", "desk-lamp", "52:e5:8f:5b:c5:2d", "192.168.100.159", model.DeviceTypeIoT, model.StateOnline},
-		{"dev-esp32", "ESP32 Sensor", "esp32-sensor", "cc:b5:d1:05:70:20", "192.168.100.231", model.DeviceTypeIoT, model.StateOnline},
+		{"dev-win", "Windows PC", "client-desktop", "02:11:22:33:44:b7", "192.0.2.116", model.DeviceTypeDesktop, model.StateOnline},
+		{"dev-iphone", "iPhone", "iPhone", "06:77:88:99:aa:d2", "192.0.2.151", model.DeviceTypeSmartphone, model.StateOnline},
+		{"dev-mac", "Mac Studio", "client-mac", "07:88:99:aa:bb:5e", "192.0.2.222", model.DeviceTypeDesktop, model.StateOffline},
+		{"dev-watch", "Watch", "Watch", "04:66:77:88:99:e3", "192.0.2.197", model.DeviceTypeSmartwatch, model.StateUnknown},
+		{"dev-lamp", "Desk Lamp", "smart-lamp", "05:22:33:44:55:2d", "192.0.2.159", model.DeviceTypeIoT, model.StateOnline},
+		{"dev-esp32", "ESP32 Sensor", "iot-sensor", "cc:11:22:33:44:20", "192.0.2.231", model.DeviceTypeIoT, model.StateOnline},
 		// The unknown-identity device from the fixture: IPv6-only, no hostname.
 		// It must still become exactly one device.
-		{"dev-ipv6only", "Unknown b4:fa:48:10:16:13", "", "b4:fa:48:10:16:13", "", model.DeviceTypeUnknown, model.StateUnknown},
+		{"dev-ipv6only", "Unknown b4:11:22:33:44:13", "", "b4:11:22:33:44:13", "", model.DeviceTypeUnknown, model.StateUnknown},
 		{"dev-modem", "Optical Modem", "", "", "192.168.1.2", model.DeviceTypeModemONT, model.StateUnknown},
 	}
 	for _, d := range devices {
@@ -219,7 +219,7 @@ func seedTestNetwork(t *testing.T, store *database.Store, bus *events.Bus) {
 
 	// A probe that has run, so monitoring status has real data.
 	probe := &model.ProbeTarget{
-		Name: "Windows PC", Kind: model.ProbeKindDevice, Target: "192.168.100.116",
+		Name: "Windows PC", Kind: model.ProbeKindDevice, Target: "192.0.2.116",
 		Protocol: model.ProbeICMP, Interval: 60, Timeout: 3, Enabled: true,
 		DeviceID: "dev-win", FailureThreshold: 3, RecoverConfirm: 1,
 		State: model.StateOnline, StateReason: "reachable",

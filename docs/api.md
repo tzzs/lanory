@@ -50,7 +50,7 @@ response shape without updating this file and the other side.
 ```json
 {
   "device": {...},
-  "addresses": [{"id":"addr-1","device_id":"dev-1","address":"192.168.100.116","family":"ipv4","interface_id":"if-eth2","source":"dhcp","prefix_length":24,"is_primary":true,"first_seen":"...","last_seen":"..."}],
+  "addresses": [{"id":"addr-1","device_id":"dev-1","address":"192.0.2.116","family":"ipv4","interface_id":"if-eth2","source":"dhcp","prefix_length":24,"is_primary":true,"first_seen":"...","last_seen":"..."}],
   "identities": [{"id":"idn-1","device_id":"dev-1","type":"mac","value":"b082e2613eb7","source":"dhcp","confidence":0.85,"first_seen":"...","last_seen":"..."}],
   "interfaces": [...],
   "edges": [TopologyEdge...],
@@ -92,7 +92,7 @@ and start in state `unknown` unless probed.
 
 ```json
 {
-  "nodes": [{"id":"dev-1","kind":"device","device":{...},"state":"online","state_reason":"","primary_ip":"192.168.100.116","primary_mac":"b0:82:e2:61:3e:b7","children":["dev-3"],"unresolved":false}],
+  "nodes": [{"id":"dev-1","kind":"device","device":{...},"state":"online","state_reason":"","primary_ip":"192.0.2.116","primary_mac":"02:11:22:33:44:b7","children":["dev-3"],"unresolved":false}],
   "edges": [TopologyEdge...],
   "layout": [{"id":"lay-1","node_id":"dev-1","x":120.5,"y":340,"pinned":false,"updated_at":"..."}],
   "generated_at": "..."

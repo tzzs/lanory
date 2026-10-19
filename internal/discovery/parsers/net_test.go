@@ -122,20 +122,20 @@ func TestParseIPNeighIPv4(t *testing.T) {
 	}
 
 	// Windows PC is on eth2, not eth1. This is the fixture's key assertion.
-	pc, ok := byAddr["192.168.100.116"]
+	pc, ok := byAddr["192.0.2.116"]
 	if !ok {
 		t.Fatal("Windows PC address missing")
 	}
-	if pc.MAC != "b0:82:e2:61:3e:b7" || pc.Interface != "eth2" {
+	if pc.MAC != "02:11:22:33:44:b7" || pc.Interface != "eth2" {
 		t.Fatalf("Windows PC must be on eth2: %+v", pc)
 	}
 
 	// STALE must be preserved verbatim, not upgraded to reachable.
-	stale, ok := byAddr["192.168.100.151"]
+	stale, ok := byAddr["192.0.2.151"]
 	if !ok {
 		t.Fatal("stale entry missing")
 	}
-	if stale.State != model.NeighborStale || stale.MAC != "0c:6f:8b:4a:3d:d2" {
+	if stale.State != model.NeighborStale || stale.MAC != "06:77:88:99:aa:d2" {
 		t.Fatalf("stale: %+v", stale)
 	}
 
@@ -144,11 +144,11 @@ func TestParseIPNeighIPv4(t *testing.T) {
 		addr  string
 		state model.NeighborState
 	}{
-		{"192.168.100.222", model.NeighborReachable},
-		{"192.168.100.197", model.NeighborStale},
-		{"192.168.100.159", model.NeighborReachable},
-		{"192.168.100.228", model.NeighborDelay},
-		{"192.168.100.231", model.NeighborProbe},
+		{"192.0.2.222", model.NeighborReachable},
+		{"192.0.2.197", model.NeighborStale},
+		{"192.0.2.159", model.NeighborReachable},
+		{"192.0.2.228", model.NeighborDelay},
+		{"192.0.2.231", model.NeighborProbe},
 	} {
 		got, ok := byAddr[tc.addr]
 		if !ok {
@@ -178,9 +178,9 @@ func TestParseIPNeighIPv6(t *testing.T) {
 		}
 		macCount[e.MAC]++
 	}
-	if macCount["0c:6f:8b:4a:3d:d2"] != 2 {
+	if macCount["06:77:88:99:aa:d2"] != 2 {
 		t.Fatalf("expected iPhone MAC on 2 addresses (link-local + global), got %d",
-			macCount["0c:6f:8b:4a:3d:d2"])
+			macCount["06:77:88:99:aa:d2"])
 	}
 
 	// The router flag must be captured.
@@ -194,11 +194,11 @@ func TestParseIPNeighIPv6(t *testing.T) {
 		t.Fatalf("expected exactly 1 router neighbour, got %d", routers)
 	}
 
-	// b4:fa:48:10:16:13 is only ever seen over IPv6: its single address is a
+	// b4:11:22:33:44:13 is only ever seen over IPv6: its single address is a
 	// link-local one, and the entry is STALE (which must not imply offline).
 	only6 := false
 	for _, e := range entries {
-		if e.MAC == "b4:fa:48:10:16:13" {
+		if e.MAC == "b4:11:22:33:44:13" {
 			only6 = true
 			if e.Address != "fe80::1a2b:3c4d:5e6f:7012" {
 				t.Fatalf("unexpected address for ipv6-only device: %s", e.Address)
@@ -231,7 +231,7 @@ func TestParseBridgeFDB(t *testing.T) {
 	}
 
 	// Learned station entries carry no flags, so they are dynamic.
-	pc, ok := byMAC["b0:82:e2:61:3e:b7"]
+	pc, ok := byMAC["02:11:22:33:44:b7"]
 	if !ok {
 		t.Fatal("Windows PC fdb entry missing")
 	}
@@ -295,23 +295,23 @@ func TestParseLeases(t *testing.T) {
 		byMAC[l.MAC] = l
 	}
 
-	// WindowsPC has an explicit client id.
-	pc, ok := byMAC["b0:82:e2:61:3e:b7"]
+	// client-desktop has an explicit client id.
+	pc, ok := byMAC["02:11:22:33:44:b7"]
 	if !ok {
-		t.Fatal("WindowsPC lease missing")
+		t.Fatal("client-desktop lease missing")
 	}
-	if pc.Address != "192.168.100.116" || pc.Hostname != "WindowsPC" {
-		t.Fatalf("WindowsPC lease: %+v", pc)
+	if pc.Address != "192.0.2.116" || pc.Hostname != "client-desktop" {
+		t.Fatalf("client-desktop lease: %+v", pc)
 	}
-	if pc.ClientID != "01:b0:82:e2:61:3e:b7" {
+	if pc.ClientID != "01:02:11:22:33:44:b7" {
 		t.Fatalf("client id: %+v", pc)
 	}
 
 	// The '*' wildcard client id must be preserved as "*" so the identity
 	// engine can decide whether to fall back to the MAC.
 	for _, mac := range []string{
-		"0c:6f:8b:4a:3d:d2", "86:7b:1c:3f:06:5e", "46:3f:36:89:42:e3",
-		"52:e5:8f:5b:c5:2d", "04:67:61:77:7f:24", "cc:b5:d1:05:70:20",
+		"06:77:88:99:aa:d2", "07:88:99:aa:bb:5e", "04:66:77:88:99:e3",
+		"05:22:33:44:55:2d", "04:11:22:33:44:24", "cc:11:22:33:44:20",
 	} {
 		l, ok := byMAC[mac]
 		if !ok {
@@ -323,11 +323,11 @@ func TestParseLeases(t *testing.T) {
 	}
 
 	// A '*' hostname normalises to empty.
-	lamp := byMAC["52:e5:8f:5b:c5:2d"]
-	if lamp.Hostname != "desk-lamp" {
-		t.Fatalf("desk-lamp hostname: %+v", lamp)
+	lamp := byMAC["05:22:33:44:55:2d"]
+	if lamp.Hostname != "smart-lamp" {
+		t.Fatalf("smart-lamp hostname: %+v", lamp)
 	}
-	anon := byMAC["04:67:61:77:7f:24"]
+	anon := byMAC["04:11:22:33:44:24"]
 	if anon.Hostname != "" {
 		t.Fatalf("expected empty hostname for '*', got %q", anon.Hostname)
 	}
@@ -442,8 +442,8 @@ func TestMulticastClassification(t *testing.T) {
 		}
 	}
 	unicast := []string{
-		"b0:82:e2:61:3e:b7", "0c:6f:8b:4a:3d:d2", "00:00:00:00:00:00",
-		"02:00:00:00:00:11", "b4:fa:48:10:16:13",
+		"02:11:22:33:44:b7", "06:77:88:99:aa:d2", "00:00:00:00:00:00",
+		"02:00:00:00:00:11", "b4:11:22:33:44:13",
 	}
 	for _, m := range unicast {
 		if IsMulticastMAC(CanonicalMAC(m)) {

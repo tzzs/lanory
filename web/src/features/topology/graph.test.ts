@@ -59,7 +59,7 @@ describe('iconKeyForDeviceType', () => {
 describe('buildFlow', () => {
   it('produces one node per topology node', () => {
     const payload: Topology = {
-      nodes: [deviceNode('dev-1', 'Router', 'router'), deviceNode('dev-2', 'PC', 'desktop', '192.168.100.116')],
+      nodes: [deviceNode('dev-1', 'Router', 'router'), deviceNode('dev-2', 'PC', 'desktop', '192.0.2.116')],
       edges: [],
       layout,
       generated_at: generated,
@@ -67,7 +67,7 @@ describe('buildFlow', () => {
     const { nodes, edges } = buildFlow(payload, { unverifiedThreshold: 0.6 })
     expect(nodes).toHaveLength(2)
     expect(edges).toHaveLength(0)
-    expect(nodes[1].data.primaryIp).toBe('192.168.100.116')
+    expect(nodes[1].data.primaryIp).toBe('192.0.2.116')
   })
 
   it('draws unverified edges dashed', () => {

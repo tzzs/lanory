@@ -142,7 +142,7 @@ Internet
        │   EASEPi R1   br-lan 192.168.100.1/24    │
        │                                          │
        ├── eth1  1000 Mbps  UP  ── Xiaomi Router ── 7 MACs
-       ├── eth2  2500 Mbps  UP  ── Windows PC 192.168.100.116
+       ├── eth2  2500 Mbps  UP  ── Windows PC 192.0.2.116
        └── eth3  NO-CARRIER      (cable unplugged)
 ```
 
@@ -160,14 +160,14 @@ FDB entries:
 
 | MAC | Port | Becomes a device? |
 | --- | --- | --- |
-| `b0:82:e2:61:3e:b7` | `eth2` | yes — Windows PC |
-| `0c:6f:8b:4a:3d:d2` | `eth1` | yes — iPhone |
-| `86:7b:1c:3f:06:5e` | `eth1` | yes — Mac Studio |
-| `46:3f:36:89:42:e3` | `eth1` | yes — Watch |
-| `52:e5:8f:5b:c5:2d` | `eth1` | yes — desk lamp |
-| `04:67:61:77:7f:24` | `eth1` | yes — static IP, no DHCP lease |
-| `cc:b5:d1:05:70:20` | `eth1` | yes — ESP32 |
-| `b4:fa:48:10:16:13` | `eth1` | yes — IPv6-only, identity unknown |
+| `02:11:22:33:44:b7` | `eth2` | yes — Windows PC |
+| `06:77:88:99:aa:d2` | `eth1` | yes — iPhone |
+| `07:88:99:aa:bb:5e` | `eth1` | yes — Mac Studio |
+| `04:66:77:88:99:e3` | `eth1` | yes — Watch |
+| `05:22:33:44:55:2d` | `eth1` | yes — desk lamp |
+| `04:11:22:33:44:24` | `eth1` | yes — static IP, no DHCP lease |
+| `cc:11:22:33:44:20` | `eth1` | yes — ESP32 |
+| `b4:11:22:33:44:13` | `eth1` | yes — IPv6-only, identity unknown |
 
 Expected totals: **8 discovered devices**, exactly one unknown-identity device,
 and the Windows PC attached to `eth2` — not `eth1`.
@@ -256,7 +256,7 @@ address→MAC relation) and gets liveness exclusively from the probe engine.
 
 ### A probe from the router does not prove two endpoints can reach each other
 
-If the router can `ping 192.168.100.116`, it does not follow that the phone can.
+If the router can `ping 192.0.2.116`, it does not follow that the phone can.
 Client isolation, AP VLANs and firewall rules between clients all break that
 inference while leaving the router's own view intact.
 

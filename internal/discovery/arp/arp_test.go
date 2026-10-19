@@ -82,11 +82,11 @@ func TestCollectIPv4Neighbours(t *testing.T) {
 	}
 
 	// Windows PC is on eth2, not eth1: the fixture's key assertion.
-	if ifaceByAddr["192.168.100.116"] != "eth2" {
-		t.Errorf("windows pc interface = %q, want eth2", ifaceByAddr["192.168.100.116"])
+	if ifaceByAddr["192.0.2.116"] != "eth2" {
+		t.Errorf("windows pc interface = %q, want eth2", ifaceByAddr["192.0.2.116"])
 	}
-	if macByAddr["192.168.100.116"] != "b0:82:e2:61:3e:b7" {
-		t.Errorf("windows pc mac = %q", macByAddr["192.168.100.116"])
+	if macByAddr["192.0.2.116"] != "02:11:22:33:44:b7" {
+		t.Errorf("windows pc mac = %q", macByAddr["192.0.2.116"])
 	}
 
 	// Every state in the fixture is preserved verbatim. STALE and FAILED must
@@ -96,13 +96,13 @@ func TestCollectIPv4Neighbours(t *testing.T) {
 		state model.NeighborState
 	}{
 		{"192.168.1.1", model.NeighborReachable},
-		{"192.168.100.116", model.NeighborReachable},
-		{"192.168.100.151", model.NeighborStale},
-		{"192.168.100.222", model.NeighborReachable},
-		{"192.168.100.197", model.NeighborStale},
-		{"192.168.100.159", model.NeighborReachable},
-		{"192.168.100.228", model.NeighborDelay},
-		{"192.168.100.231", model.NeighborProbe},
+		{"192.0.2.116", model.NeighborReachable},
+		{"192.0.2.151", model.NeighborStale},
+		{"192.0.2.222", model.NeighborReachable},
+		{"192.0.2.197", model.NeighborStale},
+		{"192.0.2.159", model.NeighborReachable},
+		{"192.0.2.228", model.NeighborDelay},
+		{"192.0.2.231", model.NeighborProbe},
 	} {
 		got, ok := byAddr[tc.addr]
 		if !ok {
@@ -129,7 +129,7 @@ func TestCollectUnresolvedEntries(t *testing.T) {
 			continue
 		}
 		switch n.Address {
-		case "192.168.100.253":
+		case "192.0.2.253":
 			incomplete = n
 		case "192.168.100.4":
 			failed = n
@@ -153,7 +153,7 @@ func TestCollectUnresolvedEntries(t *testing.T) {
 func TestCollectDropsIPv6(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "neigh")
-	writeFile(t, path, "fe80::1 dev eth1 lladdr 0c:6f:8b:4a:3d:d2 REACHABLE\n192.168.100.151 dev eth1 lladdr 0c:6f:8b:4a:3d:d2 REACHABLE\n")
+	writeFile(t, path, "fe80::1 dev eth1 lladdr 06:77:88:99:aa:d2 REACHABLE\n192.0.2.151 dev eth1 lladdr 06:77:88:99:aa:d2 REACHABLE\n")
 	c := NewWithPath(path)
 	c.now = time.Now
 	results, err := c.Collect(context.Background())
@@ -163,7 +163,7 @@ func TestCollectDropsIPv6(t *testing.T) {
 	if len(results) != 1 {
 		t.Fatalf("expected 1 ipv4 neighbour, got %d", len(results))
 	}
-	if results[0].Neighbor.Address != "192.168.100.151" {
+	if results[0].Neighbor.Address != "192.0.2.151" {
 		t.Fatalf("unexpected neighbour %q", results[0].Neighbor.Address)
 	}
 	if results[0].Neighbor.Family != model.AddressFamilyIPv4 {

@@ -205,7 +205,7 @@ type Record struct {
 // The format is line oriented with a leading marker:
 //
 //	=;eth0;IPv4;hostname;_http._tcp;local
-//	hostname;192.168.100.151;80
+//	hostname;192.0.2.151;80
 //	 txt key=value
 //
 // The first line is the service discovery record; the following lines are the

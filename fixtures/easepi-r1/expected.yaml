@@ -36,43 +36,43 @@ interfaces:
     members: [eth1, eth2, eth3]
 
 devices:
-  - mac: b0:82:e2:61:3e:b7
-    ipv4: 192.168.100.116
-    hostname: WindowsPC
+  - mac: 02:11:22:33:44:b7
+    ipv4: 192.0.2.116
+    hostname: client-desktop
     interface: eth2
     type_hint: desktop
-    name_contains: Windows
-  - mac: 0c:6f:8b:4a:3d:d2
-    ipv4: 192.168.100.151
+    name_contains: desktop
+  - mac: 06:77:88:99:aa:d2
+    ipv4: 192.0.2.151
     hostname: iPhone
     interface: eth1
     type_hint: smartphone
     name_contains: iPhone
-  - mac: 86:7b:1c:3f:06:5e
-    ipv4: 192.168.100.222
-    hostname: Mac-Studio
+  - mac: 07:88:99:aa:bb:5e
+    ipv4: 192.0.2.222
+    hostname: client-mac
     interface: eth1
     type_hint: desktop
     name_contains: Mac
-  - mac: 46:3f:36:89:42:e3
-    ipv4: 192.168.100.197
+  - mac: 04:66:77:88:99:e3
+    ipv4: 192.0.2.197
     hostname: Watch
     interface: eth1
     type_hint: smartwatch
     name_contains: Watch
-  - mac: 52:e5:8f:5b:c5:2d
-    ipv4: 192.168.100.159
-    hostname: desk-lamp
+  - mac: 05:22:33:44:55:2d
+    ipv4: 192.0.2.159
+    hostname: smart-lamp
     interface: eth1
     type_hint: iot
-  - mac: 04:67:61:77:7f:24
-    ipv4: 192.168.100.228
+  - mac: 04:11:22:33:44:24
+    ipv4: 192.0.2.228
     interface: eth1
-  - mac: cc:b5:d1:05:70:20
-    ipv4: 192.168.100.231
-    hostname: esp32-sensor
+  - mac: cc:11:22:33:44:20
+    ipv4: 192.0.2.231
+    hostname: iot-sensor
     interface: eth1
-  - mac: b4:fa:48:10:16:13
+  - mac: b4:11:22:33:44:13
     ipv6: fe80::1a2b:3c4d:5e6f:7012
     interface: eth1
     # identity unknown; must still become exactly one device

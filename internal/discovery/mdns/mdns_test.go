@@ -16,14 +16,14 @@ import (
 const avahiOutput = `+;eth1;IPv4;iPhone;_airplay._tcp;local
 +;eth1;IPv4;iPhone;_raop._tcp;local
 =;eth1;IPv4;iPhone;_airplay._tcp;local
-iPhone;192.168.100.151;7000
+iPhone;192.0.2.151;7000
  txtver=1
 =;eth1;IPv4;iPhone;_raop._tcp;local
-iPhone;192.168.100.151;5000
-=;eth2;IPv4;WindowsPC;_smb._tcp;local
-WindowsPC;192.168.100.116;445
-=;eth1;IPv4;desk-lamp;_esphomelib._tcp;local
-desk-lamp;192.168.100.159;6053
+iPhone;192.0.2.151;5000
+=;eth2;IPv4;client-desktop;_smb._tcp;local
+client-desktop;192.0.2.116;445
+=;eth1;IPv4;smart-lamp;_esphomelib._tcp;local
+smart-lamp;192.0.2.159;6053
 `
 
 func writeTemp(t *testing.T, content string) string {
@@ -101,7 +101,7 @@ func TestCollectAnnouncements(t *testing.T) {
 			t.Errorf("announcement without a service: %v", a)
 		}
 	}
-	for _, want := range []string{"iPhone", "WindowsPC", "desk-lamp"} {
+	for _, want := range []string{"iPhone", "client-desktop", "smart-lamp"} {
 		if !hosts[want] {
 			t.Errorf("hostname %q missing from %v", want, hosts)
 		}
@@ -161,11 +161,11 @@ func TestParseAvahiBrowse(t *testing.T) {
 	for _, r := range recs {
 		byHost[r.Hostname] = r
 	}
-	pc, ok := byHost["WindowsPC"]
+	pc, ok := byHost["client-desktop"]
 	if !ok {
-		t.Fatal("WindowsPC record missing")
+		t.Fatal("client-desktop record missing")
 	}
-	if pc.Address != "192.168.100.116" {
+	if pc.Address != "192.0.2.116" {
 		t.Errorf("address = %q", pc.Address)
 	}
 	if pc.Port != 445 {

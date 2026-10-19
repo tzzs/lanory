@@ -51,8 +51,8 @@ func TestServiceBuildWithData(t *testing.T) {
 		t.Fatalf("seed router: %v", err)
 	}
 	pc := &model.Device{
-		ID: "pc-1", Name: "WindowsPC", Type: model.DeviceTypeDesktop,
-		State: model.StateOnline, PrimaryMAC: "b0:82:e2:61:3e:b7",
+		ID: "pc-1", Name: "client-desktop", Type: model.DeviceTypeDesktop,
+		State: model.StateOnline, PrimaryMAC: "02:11:22:33:44:b7",
 	}
 	if err := store.UpsertDevice(pc); err != nil {
 		t.Fatalf("seed pc: %v", err)

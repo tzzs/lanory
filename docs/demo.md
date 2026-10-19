@@ -98,15 +98,15 @@ administered.
 | Upstream Router | router | 192.168.1.1 | eth0 | online |
 | ISP Optical Modem | modem_ont | 192.168.1.2 | — | unknown (manual) |
 | Xiaomi Router | router | 192.168.100.2 | eth1 | online |
-| WindowsPC | desktop | 192.168.100.116 | eth2 | online |
-| iPhone | smartphone | 192.168.100.151 | eth1 | online |
-| Mac-Studio | desktop | 192.168.100.222 | eth1 | online |
-| Watch | smartwatch | 192.168.100.197 | eth1 | sleeping |
-| desk-lamp | iot | 192.168.100.159 | eth1 | online |
-| Unknown 04:67:61 | unknown | 192.168.100.228 | eth1 | offline |
-| esp32-sensor | iot | 192.168.100.231 | eth1 | online |
+| client-desktop | desktop | 192.0.2.116 | eth2 | online |
+| iPhone | smartphone | 192.0.2.151 | eth1 | online |
+| client-mac | desktop | 192.0.2.222 | eth1 | online |
+| Watch | smartwatch | 192.0.2.197 | eth1 | sleeping |
+| smart-lamp | iot | 192.0.2.159 | eth1 | online |
+| Unknown 04:67:61 | unknown | 192.0.2.228 | eth1 | offline |
+| iot-sensor | iot | 192.0.2.231 | eth1 | online |
 | Unknown b4:fa:48 | unknown | link-local IPv6 only | eth1 | unknown |
-| NAS | nas | 192.168.100.50 | eth2 | online (manual) |
+| NAS | nas | 192.0.2.50 | eth2 | online (manual) |
 
 Three states are represented on purpose, because they exercise different UI:
 
@@ -135,10 +135,10 @@ Internet ─ upstream router ─ optical modem ─ [eth0] EASEPi R1
                               ┌────────────────────┼────────────────────┐
                             [eth1]              [eth2]              [eth3]
                               │                    │                   │
-                        Xiaomi Router          WindowsPC            (empty)
+                        Xiaomi Router          client-desktop            (empty)
                               │                    │
         ┌──────────┬──────────┼───────┐            NAS (user-defined, 1.0)
-      iPhone   Mac-Studio   Watch  lamp/ESP32/unknown
+      iPhone   client-mac   Watch  lamp/ESP32/unknown
 ```
 
 - `observed_mac_port` at 0.70 for devices the FDB saw on a port;

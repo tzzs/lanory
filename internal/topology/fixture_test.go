@@ -286,7 +286,7 @@ func TestFixtureDevices(t *testing.T) {
 	}
 
 	// The Windows PC is the fixture's headline assertion: eth2, never eth1.
-	pcMAC := database.CanonicalizeMAC("b0:82:e2:61:3e:b7")
+	pcMAC := database.CanonicalizeMAC("02:11:22:33:44:b7")
 	if got := portByMAC[pcMAC]; got != exp.Expectations.WindowsPCInterface {
 		t.Errorf("Windows PC is on %q, want %q", got, exp.Expectations.WindowsPCInterface)
 	}

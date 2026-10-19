@@ -84,8 +84,8 @@ func TestWiringWithRealEngines(t *testing.T) {
 
 	// A device created through the real identity engine appears in the graph.
 	dev, created, err := identity.Resolve(device.Ingest{
-		MAC:      "b0:82:e2:61:3e:b7",
-		Hostname: "WindowsPC",
+		MAC:      "02:11:22:33:44:b7",
+		Hostname: "client-desktop",
 		Source:   model.SourceDHCP,
 	})
 	if err != nil {
@@ -102,7 +102,7 @@ func TestWiringWithRealEngines(t *testing.T) {
 	for _, n := range topo.Nodes {
 		if n.ID == deviceNodeID(dev.ID) {
 			found = true
-			if n.Device == nil || n.Device.Name != "WindowsPC" {
+			if n.Device == nil || n.Device.Name != "client-desktop" {
 				t.Errorf("node = %+v", n)
 			}
 		}

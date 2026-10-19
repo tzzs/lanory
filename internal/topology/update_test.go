@@ -231,11 +231,11 @@ func TestUpdateCreatesOneDevicePerMAC(t *testing.T) {
 	seedRouter(t, store)
 	eng, ing, _ := newUpdateEngine(t, store)
 
-	const mac = "b0:82:e2:61:3e:b7"
+	const mac = "02:11:22:33:44:b7"
 	res, err := eng.Update(context.Background(), summary(
-		neighResult("192.168.100.116", mac, "eth2", model.NeighborReachable),
+		neighResult("192.0.2.116", mac, "eth2", model.NeighborReachable),
 		fdbResult(mac, "br-lan", "eth2"),
-		leaseResult(mac, "192.168.100.116", "WindowsPC"),
+		leaseResult(mac, "192.0.2.116", "client-desktop"),
 	))
 	if err != nil {
 		t.Fatalf("Update: %v", err)
@@ -262,12 +262,12 @@ func TestUpdateIsIdempotent(t *testing.T) {
 	seedRouter(t, store)
 	eng, ing, _ := newUpdateEngine(t, store)
 
-	const mac = "0c:6f:8b:4a:3d:d2"
+	const mac = "06:77:88:99:aa:d2"
 	run := func() *UpdateResult {
 		res, err := eng.Update(context.Background(), summary(
-			neighResult("192.168.100.151", mac, "eth1", model.NeighborStale),
+			neighResult("192.0.2.151", mac, "eth1", model.NeighborStale),
 			fdbResult(mac, "br-lan", "eth1"),
-			leaseResult(mac, "192.168.100.151", "iPhone"),
+			leaseResult(mac, "192.0.2.151", "iPhone"),
 		))
 		if err != nil {
 			t.Fatalf("Update: %v", err)
@@ -310,10 +310,10 @@ func TestUpdateDistinctMACsStayDistinct(t *testing.T) {
 	eng, ing, _ := newUpdateEngine(t, store)
 
 	_, err := eng.Update(context.Background(), summary(
-		neighResult("192.168.100.151", "0c:6f:8b:4a:3d:d2", "eth1", model.NeighborStale),
-		neighResult("192.168.100.222", "86:7b:1c:3f:06:5e", "eth1", model.NeighborReachable),
-		fdbResult("0c:6f:8b:4a:3d:d2", "br-lan", "eth1"),
-		fdbResult("86:7b:1c:3f:06:5e", "br-lan", "eth1"),
+		neighResult("192.0.2.151", "06:77:88:99:aa:d2", "eth1", model.NeighborStale),
+		neighResult("192.0.2.222", "07:88:99:aa:bb:5e", "eth1", model.NeighborReachable),
+		fdbResult("06:77:88:99:aa:d2", "br-lan", "eth1"),
+		fdbResult("07:88:99:aa:bb:5e", "br-lan", "eth1"),
 	))
 	if err != nil {
 		t.Fatalf("Update: %v", err)
@@ -334,7 +334,7 @@ func TestUpdateSavesEdgeEvidence(t *testing.T) {
 	seedRouter(t, store)
 	eng, _, _ := newUpdateEngine(t, store)
 
-	const mac = "b0:82:e2:61:3e:b7"
+	const mac = "02:11:22:33:44:b7"
 	if _, err := eng.Update(context.Background(), summary(
 		fdbResult(mac, "br-lan", "eth2"),
 	)); err != nil {
@@ -395,7 +395,7 @@ func TestUpdateConfidenceGrowsWithSources(t *testing.T) {
 	if _, err := eng.Update(context.Background(), summary(
 		fdbResult(fdbOnly, "br-lan", "eth1"),
 		fdbResult(both, "br-lan", "eth1"),
-		leaseResult(both, "192.168.100.50", "multi-source"),
+		leaseResult(both, "192.0.2.50", "multi-source"),
 	)); err != nil {
 		t.Fatalf("Update: %v", err)
 	}
@@ -469,7 +469,7 @@ func TestUpdateKeepsUserConfirmedEdge(t *testing.T) {
 
 	// Run a discovery that does not mention the AP at all.
 	if _, err := eng.Update(context.Background(), summary(
-		neighResult("192.168.100.151", "0c:6f:8b:4a:3d:d2", "eth1", model.NeighborStale),
+		neighResult("192.0.2.151", "06:77:88:99:aa:d2", "eth1", model.NeighborStale),
 	)); err != nil {
 		t.Fatalf("Update: %v", err)
 	}
@@ -501,11 +501,11 @@ func TestUpdateMarksDisappearedDeviceUnverified(t *testing.T) {
 	seedRouter(t, store)
 	eng, _, _ := newUpdateEngine(t, store)
 
-	const mac = "b0:82:e2:61:3e:b7"
+	const mac = "02:11:22:33:44:b7"
 	// First run: the device is present.
 	if _, err := eng.Update(context.Background(), summary(
 		fdbResult(mac, "br-lan", "eth2"),
-		neighResult("192.168.100.116", mac, "eth2", model.NeighborReachable),
+		neighResult("192.0.2.116", mac, "eth2", model.NeighborReachable),
 	)); err != nil {
 		t.Fatalf("first update: %v", err)
 	}
@@ -523,7 +523,7 @@ func TestUpdateMarksDisappearedDeviceUnverified(t *testing.T) {
 	// the stale check fires.
 	eng.Now = func() time.Time { return time.Unix(1771009999, 0).UTC() }
 	res, err := eng.Update(context.Background(), summary(
-		neighResult("192.168.100.222", "86:7b:1c:3f:06:5e", "eth1", model.NeighborReachable),
+		neighResult("192.0.2.222", "07:88:99:aa:bb:5e", "eth1", model.NeighborReachable),
 	))
 	if err != nil {
 		t.Fatalf("second update: %v", err)
@@ -555,7 +555,7 @@ func TestUpdateReVerifiesReturningDevice(t *testing.T) {
 	seedRouter(t, store)
 	eng, _, _ := newUpdateEngine(t, store)
 
-	const mac = "b0:82:e2:61:3e:b7"
+	const mac = "02:11:22:33:44:b7"
 	if _, err := eng.Update(context.Background(), summary(fdbResult(mac, "br-lan", "eth2"))); err != nil {
 		t.Fatalf("first: %v", err)
 	}
@@ -592,7 +592,7 @@ func TestUpdateEdgeFollowsPortChange(t *testing.T) {
 	seedRouter(t, store)
 	eng, _, _ := newUpdateEngine(t, store)
 
-	const mac = "b0:82:e2:61:3e:b7"
+	const mac = "02:11:22:33:44:b7"
 	if _, err := eng.Update(context.Background(), summary(fdbResult(mac, "br-lan", "eth1"))); err != nil {
 		t.Fatalf("first: %v", err)
 	}
@@ -709,7 +709,7 @@ func TestUpdateCarrierLossIsNotOffline(t *testing.T) {
 	store := newTestStore(t)
 	seedRouter(t, store)
 	eng, _, _ := newUpdateEngine(t, store)
-	const mac = "b0:82:e2:61:3e:b7"
+	const mac = "02:11:22:33:44:b7"
 	if _, err := eng.Update(context.Background(), summary(fdbResult(mac, "br-lan", "eth2"))); err != nil {
 		t.Fatalf("first: %v", err)
 	}
@@ -732,7 +732,7 @@ func TestUpdateCarrierLossIsNotOffline(t *testing.T) {
 		t.Fatalf("second: %v", err)
 	}
 
-	device, err := store.GetDevice("b0:82:e2:61:3e:b7")
+	device, err := store.GetDevice("02:11:22:33:44:b7")
 	if err != nil {
 		t.Fatalf("device missing: %v", err)
 	}
@@ -753,7 +753,7 @@ func TestUpdateSurvivesIngestorFailure(t *testing.T) {
 	ing.err = errors.New("identity engine down")
 
 	res, err := eng.Update(context.Background(), summary(
-		neighResult("192.168.100.151", "0c:6f:8b:4a:3d:d2", "eth1", model.NeighborStale),
+		neighResult("192.0.2.151", "06:77:88:99:aa:d2", "eth1", model.NeighborStale),
 	))
 	if err != nil {
 		t.Fatalf("Update must not fail the whole run: %v", err)
@@ -790,7 +790,7 @@ func TestUpdateHonoursCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if _, err := eng.Update(ctx, summary(
-		neighResult("192.168.100.151", "0c:6f:8b:4a:3d:d2", "eth1", model.NeighborStale),
+		neighResult("192.0.2.151", "06:77:88:99:aa:d2", "eth1", model.NeighborStale),
 	)); err == nil {
 		t.Fatal("expected a cancellation error")
 	}

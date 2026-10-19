@@ -248,11 +248,11 @@ func TestDeviceDetailRoute(t *testing.T) {
 	if got.Device == nil || got.Device.ID != "dev-win" {
 		t.Fatal("device must be present")
 	}
-	if got.Device.PrimaryIPv4 != "192.168.100.116" {
-		t.Errorf("primary_ipv4 = %q, want 192.168.100.116", got.Device.PrimaryIPv4)
+	if got.Device.PrimaryIPv4 != "192.0.2.116" {
+		t.Errorf("primary_ipv4 = %q, want 192.0.2.116", got.Device.PrimaryIPv4)
 	}
-	if got.Device.PrimaryMAC != "b0:82:e2:61:3e:b7" {
-		t.Errorf("primary_mac = %q, want b0:82:e2:61:3e:b7", got.Device.PrimaryMAC)
+	if got.Device.PrimaryMAC != "02:11:22:33:44:b7" {
+		t.Errorf("primary_mac = %q, want 02:11:22:33:44:b7", got.Device.PrimaryMAC)
 	}
 	if len(got.Addresses) == 0 {
 		t.Error("addresses must not be empty")
@@ -335,8 +335,8 @@ func TestTopologyRoutes(t *testing.T) {
 	if win.ID == "" {
 		t.Fatal("the Windows PC node is missing")
 	}
-	if win.PrimaryIP != "192.168.100.116" {
-		t.Errorf("primary_ip = %q, want 192.168.100.116", win.PrimaryIP)
+	if win.PrimaryIP != "192.0.2.116" {
+		t.Errorf("primary_ip = %q, want 192.0.2.116", win.PrimaryIP)
 	}
 	if win.State != model.StateOnline {
 		t.Errorf("state = %q, want online", win.State)
@@ -525,8 +525,8 @@ func TestMonitoringRoutes(t *testing.T) {
 		t.Fatalf("len(probes) = %d, want 1", len(status.Probes))
 	}
 	p := status.Probes[0]
-	if p.Probe.Target != "192.168.100.116" {
-		t.Errorf("probe target = %q, want 192.168.100.116", p.Probe.Target)
+	if p.Probe.Target != "192.0.2.116" {
+		t.Errorf("probe target = %q, want 192.0.2.116", p.Probe.Target)
 	}
 	if len(p.Recent) != 2 {
 		t.Errorf("len(recent) = %d, want 2", len(p.Recent))
@@ -559,8 +559,8 @@ func TestMonitoringRoutes(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &probe); err != nil {
 		t.Fatalf("decode probe: %v", err)
 	}
-	if probe.Target != "192.168.100.222" {
-		t.Errorf("probe target = %q, want the device address 192.168.100.222", probe.Target)
+	if probe.Target != "192.0.2.222" {
+		t.Errorf("probe target = %q, want the device address 192.0.2.222", probe.Target)
 	}
 	if probe.DeviceID != "dev-mac" {
 		t.Errorf("device_id = %q, want dev-mac", probe.DeviceID)

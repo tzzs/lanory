@@ -9,14 +9,14 @@ import (
 
 func TestGraphToModel(t *testing.T) {
 	now := time.Unix(1771000000, 0).UTC()
-	dev := &model.Device{ID: "d1", Name: "WindowsPC", State: model.StateOnline}
+	dev := &model.Device{ID: "d1", Name: "client-desktop", State: model.StateOnline}
 	g := &Graph{
 		GeneratedAt: now,
 		Nodes: []Node{
 			{
 				ID: "dev-d1", Kind: NodeKindDevice, Device: dev,
-				State: model.StateOnline, PrimaryIP: "192.168.100.116",
-				PrimaryMAC: "b0:82:e2:61:3e:b7", Children: []string{"dev-d2"},
+				State: model.StateOnline, PrimaryIP: "192.0.2.116",
+				PrimaryMAC: "02:11:22:33:44:b7", Children: []string{"dev-d2"},
 			},
 			{
 				ID: "seg-br-lan-eth1", Kind: NodeKindSegment, Unresolved: true,
@@ -63,10 +63,10 @@ func TestGraphToModel(t *testing.T) {
 	if n.ID != "dev-d1" || n.Kind != "device" {
 		t.Errorf("node = %+v", n)
 	}
-	if n.Device == nil || n.Device.Name != "WindowsPC" {
+	if n.Device == nil || n.Device.Name != "client-desktop" {
 		t.Errorf("device payload: %+v", n.Device)
 	}
-	if n.PrimaryIP != "192.168.100.116" || n.PrimaryMAC != "b0:82:e2:61:3e:b7" {
+	if n.PrimaryIP != "192.0.2.116" || n.PrimaryMAC != "02:11:22:33:44:b7" {
 		t.Errorf("display fields: %+v", n)
 	}
 	if len(n.Children) != 1 || n.Children[0] != "dev-d2" {

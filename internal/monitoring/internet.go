@@ -123,7 +123,7 @@ func DefaultInternetTargets(source string) []InternetTarget {
 	}
 	return []InternetTarget{
 		{ID: "net-gateway", Name: "Gateway", Role: InternetRoleGateway, Target: "192.168.100.1", Protocol: model.ProbeICMP, Enabled: true, Source: source},
-		{ID: "net-lan-host", Name: "LAN host", Role: InternetRoleLAN, Target: "192.168.100.116", Protocol: model.ProbeICMP, Enabled: true, Source: source},
+		{ID: "net-lan-host", Name: "LAN host", Role: InternetRoleLAN, Target: "192.0.2.116", Protocol: model.ProbeICMP, Enabled: true, Source: source},
 		{ID: "net-dns", Name: "DNS", Role: InternetRoleDNS, Target: "lanory.invalid@192.168.100.1", Protocol: model.ProbeDNS, Enabled: true, Source: source},
 		{ID: "net-ext-tcp", Name: "External TCP/443", Role: InternetRoleExternal, Target: "one.one.one.one", Protocol: model.ProbeTCP, Port: 443, Enabled: true, Source: source},
 		{ID: "net-ext-dns", Name: "External DNS", Role: InternetRoleExternal, Target: "one.one.one.one", Protocol: model.ProbeDNS, Enabled: true, Source: source},

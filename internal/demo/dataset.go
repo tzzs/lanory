@@ -66,7 +66,7 @@ const (
 
 	// DeviceMACIPv6Only is the MAC of the device that was only ever observed
 	// through IPv6 neighbour discovery.
-	DeviceMACIPv6Only = "b4:fa:48:10:16:13"
+	DeviceMACIPv6Only = "b4:11:22:33:44:13"
 	// DeviceIPv6Only is that device's link-local address, exactly as captured
 	// in fixtures/easepi-r1/ip-neigh6.txt.
 	DeviceIPv6Only = "fe80::1a2b:3c4d:5e6f:7012"
@@ -163,57 +163,57 @@ var demoDevices = []demoDevice{
 		NeighborState: "reachable",
 	},
 	{
-		ID: "dev-mac-b082e2613eb7", Name: "WindowsPC", Hostname: "WindowsPC",
-		Type: "desktop", MAC: "b0:82:e2:61:3e:b7",
-		IPv4: "192.168.100.116", Iface: "eth2", State: "online",
+		ID: "dev-mac-b082e2613eb7", Name: "client-desktop", Hostname: "client-desktop",
+		Type: "desktop", MAC: "02:11:22:33:44:b7",
+		IPv4: "192.0.2.116", Iface: "eth2", State: "online",
 		StateReason:   "answered probe from the router",
-		ClientID:      "01:b0:82:e2:61:3e:b7",
+		ClientID:      "01:02:11:22:33:44:b7",
 		Description:   "Desktop PC wired to eth2 (demo)",
 		NeighborState: "reachable",
 	},
 	{
 		ID: "dev-mac-0c6f8b4a3dd2", Name: "iPhone", Hostname: "iPhone",
-		Type: "smartphone", MAC: "0c:6f:8b:4a:3d:d2",
-		IPv4: "192.168.100.151", IPv6: "2001:db8:100::151", Iface: "eth1",
+		Type: "smartphone", MAC: "06:77:88:99:aa:d2",
+		IPv4: "192.0.2.151", IPv6: "2001:db8:100::151", Iface: "eth1",
 		State: "online", StateReason: "answered probe from the router",
 		Description:   "Phone behind the Xiaomi router (demo)",
 		NeighborState: "stale",
 	},
 	{
-		ID: "dev-mac-867b1c3f065e", Name: "Mac-Studio", Hostname: "Mac-Studio",
-		Type: "desktop", MAC: "86:7b:1c:3f:06:5e",
-		IPv4: "192.168.100.222", IPv6: "2001:db8:100::222", Iface: "eth1",
+		ID: "dev-mac-867b1c3f065e", Name: "client-mac", Hostname: "client-mac",
+		Type: "desktop", MAC: "07:88:99:aa:bb:5e",
+		IPv4: "192.0.2.222", IPv6: "2001:db8:100::222", Iface: "eth1",
 		State: "online", StateReason: "answered probe from the router",
 		Description:   "Desktop behind the Xiaomi router (demo)",
 		NeighborState: "reachable",
 	},
 	{
 		ID: "dev-mac-463f368942e3", Name: "Watch", Hostname: "Watch",
-		Type: "smartwatch", MAC: "46:3f:36:89:42:e3",
-		IPv4: "192.168.100.197", Iface: "eth1", State: "sleeping",
+		Type: "smartwatch", MAC: "04:66:77:88:99:e3",
+		IPv4: "192.0.2.197", Iface: "eth1", State: "sleeping",
 		StateReason:   "no answer for 3 consecutive probes, wrist worn",
 		Description:   "Smartwatch, currently asleep (demo)",
 		NeighborState: "stale",
 	},
 	{
-		ID: "dev-mac-52e58f5bc52d", Name: "desk-lamp", Hostname: "desk-lamp",
-		Type: "iot", MAC: "52:e5:8f:5b:c5:2d",
-		IPv4: "192.168.100.159", Iface: "eth1", State: "online",
+		ID: "dev-mac-52e58f5bc52d", Name: "smart-lamp", Hostname: "smart-lamp",
+		Type: "iot", MAC: "05:22:33:44:55:2d",
+		IPv4: "192.0.2.159", Iface: "eth1", State: "online",
 		StateReason:   "answered probe from the router",
 		Description:   "Smart lamp (demo)",
 		NeighborState: "reachable",
 	},
 	{
 		ID: "dev-mac-0467617f7f24", Name: "Unknown 04:67:61",
-		MAC: "04:67:61:77:7f:24", IPv4: "192.168.100.228", Iface: "eth1",
+		MAC: "04:11:22:33:44:24", IPv4: "192.0.2.228", Iface: "eth1",
 		State: "offline", StateReason: "3 consecutive failed probes",
 		Description:   "Static IP device missing from the DHCP lease file (demo)",
 		NeighborState: "delay",
 	},
 	{
-		ID: "dev-mac-ccb5d1057020", Name: "esp32-sensor", Hostname: "esp32-sensor",
-		Type: "iot", MAC: "cc:b5:d1:05:70:20",
-		IPv4: "192.168.100.231", Iface: "eth1", State: "online",
+		ID: "dev-mac-ccb5d1057020", Name: "iot-sensor", Hostname: "iot-sensor",
+		Type: "iot", MAC: "cc:11:22:33:44:20",
+		IPv4: "192.0.2.231", Iface: "eth1", State: "online",
 		StateReason:   "answered probe from the router",
 		Description:   "ESP32 sensor (demo)",
 		NeighborState: "probe",
@@ -228,7 +228,7 @@ var demoDevices = []demoDevice{
 	{
 		ID: "dev-mac-0f1122334455", Name: "NAS",
 		Type: "nas", MAC: "0f:11:22:33:44:55",
-		IPv4: "192.168.100.50", Iface: "eth2", State: "online",
+		IPv4: "192.0.2.50", Iface: "eth2", State: "online",
 		StateReason: "answered probe from the router",
 		Description: "Manually added NAS wired to eth2 (demo)",
 		IsManual:    true, NeighborState: "reachable",
@@ -598,7 +598,7 @@ func demoEvents() []demoEvent {
 		{
 			Type: "device.ip_changed", DeviceID: "dev-mac-0c6f8b4a3dd2",
 			EdgeRef:  [2]string{"dev-mac-053344556677", "dev-mac-0c6f8b4a3dd2"},
-			OldValue: "192.168.100.150", NewValue: "192.168.100.151", MinutesAgo: 2880,
+			OldValue: "192.168.100.150", NewValue: "192.0.2.151", MinutesAgo: 2880,
 			Message: "DHCP lease renewed with a new address",
 		},
 		{

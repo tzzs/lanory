@@ -54,22 +54,22 @@ func TestCollectLeases(t *testing.T) {
 	}
 
 	// The Windows PC has an explicit client id, which is a strong identity.
-	pc, ok := byMAC["b0:82:e2:61:3e:b7"]
+	pc, ok := byMAC["02:11:22:33:44:b7"]
 	if !ok {
-		t.Fatal("WindowsPC lease missing")
+		t.Fatal("client-desktop lease missing")
 	}
-	if pc.address != "192.168.100.116" || pc.hostname != "WindowsPC" {
-		t.Errorf("WindowsPC lease: %+v", pc)
+	if pc.address != "192.0.2.116" || pc.hostname != "client-desktop" {
+		t.Errorf("client-desktop lease: %+v", pc)
 	}
-	if pc.clientID != "01:b0:82:e2:61:3e:b7" {
-		t.Errorf("WindowsPC client id = %q", pc.clientID)
+	if pc.clientID != "01:02:11:22:33:44:b7" {
+		t.Errorf("client-desktop client id = %q", pc.clientID)
 	}
 
 	// A "*" client id is not an identity: it must be normalised to empty so
 	// the identity engine does not treat it as a shared strong identifier.
 	for _, mac := range []string{
-		"0c:6f:8b:4a:3d:d2", "86:7b:1c:3f:06:5e", "46:3f:36:89:42:e3",
-		"52:e5:8f:5b:c5:2d", "04:67:61:77:7f:24", "cc:b5:d1:05:70:20",
+		"06:77:88:99:aa:d2", "07:88:99:aa:bb:5e", "04:66:77:88:99:e3",
+		"05:22:33:44:55:2d", "04:11:22:33:44:24", "cc:11:22:33:44:20",
 	} {
 		l, ok := byMAC[mac]
 		if !ok {
@@ -82,11 +82,11 @@ func TestCollectLeases(t *testing.T) {
 
 	// The fixture's leases expired long ago; the collector still reports them
 	// and marks them expired rather than dropping them.
-	lamp := byMAC["52:e5:8f:5b:c5:2d"]
-	if lamp.hostname != "desk-lamp" {
-		t.Errorf("desk-lamp hostname = %q", lamp.hostname)
+	lamp := byMAC["05:22:33:44:55:2d"]
+	if lamp.hostname != "smart-lamp" {
+		t.Errorf("smart-lamp hostname = %q", lamp.hostname)
 	}
-	anon := byMAC["04:67:61:77:7f:24"]
+	anon := byMAC["04:11:22:33:44:24"]
 	if anon.hostname != "" {
 		t.Errorf("expected empty hostname for '*', got %q", anon.hostname)
 	}
@@ -155,7 +155,7 @@ func TestMalformedLeaseLine(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "leases")
 	content := "not-a-timestamp aa:bb:cc:dd:ee:ff 10.0.0.1 host *\n" +
-		"1771000000 b0:82:e2:61:3e:b7 192.168.100.116 WindowsPC 01:b0:82:e2:61:3e:b7\n"
+		"1771000000 02:11:22:33:44:b7 192.0.2.116 client-desktop 01:02:11:22:33:44:b7\n"
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
@@ -168,7 +168,7 @@ func TestMalformedLeaseLine(t *testing.T) {
 	if len(results) != 1 {
 		t.Fatalf("expected 1 valid lease, got %d", len(results))
 	}
-	if results[0].Lease.MAC != "b0:82:e2:61:3e:b7" {
+	if results[0].Lease.MAC != "02:11:22:33:44:b7" {
 		t.Fatalf("unexpected lease %q", results[0].Lease.MAC)
 	}
 }

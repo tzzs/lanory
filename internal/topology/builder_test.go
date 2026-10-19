@@ -105,9 +105,9 @@ func TestBuildDeviceNodes(t *testing.T) {
 	store := &fakeStore{
 		devices: []model.Device{
 			routerDevice(t, router),
-			wireDevice("d-win", "b0:82:e2:61:3e:b7", "192.168.100.116", "WindowsPC", model.DeviceTypeDesktop),
-			wireDevice("d-iphone", "0c:6f:8b:4a:3d:d2", "192.168.100.151", "iPhone", model.DeviceTypeSmartphone),
-			wireDevice("d-mac", "86:7b:1c:3f:06:5e", "192.168.100.222", "Mac-Studio", model.DeviceTypeDesktop),
+			wireDevice("d-win", "02:11:22:33:44:b7", "192.0.2.116", "client-desktop", model.DeviceTypeDesktop),
+			wireDevice("d-iphone", "06:77:88:99:aa:d2", "192.0.2.151", "iPhone", model.DeviceTypeSmartphone),
+			wireDevice("d-mac", "07:88:99:aa:bb:5e", "192.0.2.222", "client-mac", model.DeviceTypeDesktop),
 		},
 		interfaces: routerInterfaces(router),
 		addresses:  map[string][]model.DeviceAddress{},
@@ -142,11 +142,11 @@ func TestBuildDeviceNodes(t *testing.T) {
 		t.Fatal("router must be flagged is_self")
 	}
 
-	win := nodeByMAC(g, "b0:82:e2:61:3e:b7")
+	win := nodeByMAC(g, "02:11:22:33:44:b7")
 	if win == nil {
 		t.Fatal("Windows PC node missing")
 	}
-	if win.PrimaryIP != "192.168.100.116" {
+	if win.PrimaryIP != "192.0.2.116" {
 		t.Errorf("primary ip = %q", win.PrimaryIP)
 	}
 	if win.State != model.StateOnline {
@@ -186,9 +186,9 @@ func TestUnresolvedSegmentNotInventedSwitch(t *testing.T) {
 	// Eight devices all learned on eth1. Nothing among them is a switch.
 	devices := []model.Device{routerDevice(t, router)}
 	macs := []string{
-		"0c:6f:8b:4a:3d:d2", "86:7b:1c:3f:06:5e", "46:3f:36:89:42:e3",
-		"52:e5:8f:5b:c5:2d", "04:67:61:77:7f:24", "cc:b5:d1:05:70:20",
-		"b4:fa:48:10:16:13", "02:00:00:00:01:01",
+		"06:77:88:99:aa:d2", "07:88:99:aa:bb:5e", "04:66:77:88:99:e3",
+		"05:22:33:44:55:2d", "04:11:22:33:44:24", "cc:11:22:33:44:20",
+		"b4:11:22:33:44:13", "02:00:00:00:01:01",
 	}
 	var edges []model.TopologyEdge
 	for i, mac := range macs {
@@ -335,7 +335,7 @@ func TestSingleDeviceNoSegment(t *testing.T) {
 	store := &fakeStore{
 		devices: []model.Device{
 			routerDevice(t, router),
-			wireDevice("d-win", "b0:82:e2:61:3e:b7", "192.168.100.116", "WindowsPC", model.DeviceTypeDesktop),
+			wireDevice("d-win", "02:11:22:33:44:b7", "192.0.2.116", "client-desktop", model.DeviceTypeDesktop),
 		},
 		interfaces: routerInterfaces(router),
 		edges: []model.TopologyEdge{{
@@ -359,7 +359,7 @@ func TestSingleDeviceNoSegment(t *testing.T) {
 			t.Fatalf("no segment for a single device: %+v", n)
 		}
 	}
-	win := nodeByMAC(g, "b0:82:e2:61:3e:b7")
+	win := nodeByMAC(g, "02:11:22:33:44:b7")
 	if win == nil {
 		t.Fatal("Windows PC missing")
 	}

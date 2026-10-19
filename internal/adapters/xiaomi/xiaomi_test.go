@@ -205,8 +205,8 @@ func TestDetectsOnlyWhatTheDeviceExposes(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"list":[
-			{"mac":"0c:6f:8b:4a:3d:d2","name":"iPhone","wireless":true,"ssid":"home","band":"5","signal":-58},
-			{"mac":"b0:82:e2:61:3e:b7","name":"WindowsPC","wireless":false}
+			{"mac":"06:77:88:99:aa:d2","name":"iPhone","wireless":true,"ssid":"home","band":"5","signal":-58},
+			{"mac":"02:11:22:33:44:b7","name":"client-desktop","wireless":false}
 		]}`))
 	})
 	// Everything else 404s.

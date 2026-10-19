@@ -135,16 +135,15 @@ func TestParseCIDR(t *testing.T) {
 
 // TestNormalizeMAC covers MAC validation.
 func TestNormalizeMAC(t *testing.T) {
-	// Every common spelling of the Windows PC's MAC from the fixture must
-	// canonicalise to the same value.
-	const want = "b082e2613eb7"
+	// Every common spelling of the same MAC must canonicalise to one value.
+	const want = "0211223344b7"
 	for _, in := range []string{
-		"b0:82:e2:61:3e:b7",
-		"B0:82:E2:61:3E:B7",
-		"b0-82-e2-61-3e-b7",
-		"b082.e261.3eb7",
-		"b082e2613eb7",
-		" b0:82:e2:61:3e:b7 ",
+		"02:11:22:33:44:b7",
+		"02-11-22-33-44-B7",
+		"02-11-22-33-44-b7",
+		"0211.2233.44b7",
+		"0211223344b7",
+		" 02:11:22:33:44:b7 ",
 	} {
 		got, err := NormalizeMAC(in)
 		if err != nil {
@@ -179,7 +178,7 @@ func TestNormalizeMAC(t *testing.T) {
 
 // TestFormatMAC checks the display form round trip.
 func TestFormatMAC(t *testing.T) {
-	if got := FormatMAC("b082e2613eb7"); got != "b0:82:e2:61:3e:b7" {
+	if got := FormatMAC("0211223344b7"); got != "02:11:22:33:44:b7" {
 		t.Errorf("FormatMAC = %q", got)
 	}
 	// A value that is not canonical is returned unchanged rather than mangled.
@@ -196,8 +195,8 @@ func TestValidateHostname(t *testing.T) {
 		"router.lan":            "router.lan",
 		"Router.LAN":            "router.lan",
 		"a.b.c.d":               "a.b.c.d",
-		"esp32-sensor":          "esp32-sensor",
-		"WindowsPC":             "windowspc",
+		"iot-sensor":        "iot-sensor",
+		"client-desktop":    "client-desktop",
 		"host-1.example.com.":   "host-1.example.com",
 		strings.Repeat("a", 63): strings.Repeat("a", 63),
 	}

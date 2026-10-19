@@ -34,11 +34,11 @@ const lldpJSON = `{
     },
     "eth2": {
       "interface": {
-        "WindowsPC": {
+        "client-desktop": {
           "chassis": [
             {
-              "id": {"type": "local", "value": "WindowsPC"},
-              "name": "WindowsPC"
+              "id": {"type": "local", "value": "client-desktop"},
+              "name": "client-desktop"
             }
           ],
           "port": [

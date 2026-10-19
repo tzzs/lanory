@@ -20,7 +20,7 @@ func target(id, role, host string, proto model.ProbeProtocol, port int, enabled 
 func TestAggregateInternetAllHealthy(t *testing.T) {
 	targets := []InternetTarget{
 		target("gw", InternetRoleGateway, "192.168.100.1", model.ProbeICMP, 0, true),
-		target("lan", InternetRoleLAN, "192.168.100.116", model.ProbeICMP, 0, true),
+		target("lan", InternetRoleLAN, "192.0.2.116", model.ProbeICMP, 0, true),
 		target("dns", InternetRoleDNS, "example.com@192.168.100.1", model.ProbeDNS, 0, true),
 		target("ext", InternetRoleExternal, "one.one.one.one", model.ProbeTCP, 443, true),
 	}
@@ -55,7 +55,7 @@ func TestAggregateInternetAllHealthy(t *testing.T) {
 func TestAggregateInternetOneFailingIsDegraded(t *testing.T) {
 	targets := []InternetTarget{
 		target("gw", InternetRoleGateway, "192.168.100.1", model.ProbeICMP, 0, true),
-		target("lan", InternetRoleLAN, "192.168.100.116", model.ProbeICMP, 0, true),
+		target("lan", InternetRoleLAN, "192.0.2.116", model.ProbeICMP, 0, true),
 		target("ext-tcp", InternetRoleExternal, "one.one.one.one", model.ProbeTCP, 443, true),
 		target("ext-dns", InternetRoleExternal, "one.one.one.one", model.ProbeDNS, 0, true),
 	}
@@ -102,7 +102,7 @@ func TestAggregateInternetOneFailingIsDegraded(t *testing.T) {
 func TestAggregateInternetAllFailingIsDown(t *testing.T) {
 	targets := []InternetTarget{
 		target("gw", InternetRoleGateway, "192.168.100.1", model.ProbeICMP, 0, true),
-		target("lan", InternetRoleLAN, "192.168.100.116", model.ProbeICMP, 0, true),
+		target("lan", InternetRoleLAN, "192.0.2.116", model.ProbeICMP, 0, true),
 		target("ext", InternetRoleExternal, "one.one.one.one", model.ProbeTCP, 443, true),
 	}
 	for i := range targets {

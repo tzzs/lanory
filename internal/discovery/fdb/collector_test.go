@@ -114,14 +114,14 @@ func TestLearnedDevices(t *testing.T) {
 	}
 
 	want := map[string]obs{
-		"b0:82:e2:61:3e:b7": {port: "eth2", bridge: "br-lan", typ: model.FDBEntryPermanent},
-		"0c:6f:8b:4a:3d:d2": {port: "eth1", bridge: "br-lan", typ: model.FDBEntryDynamic},
-		"86:7b:1c:3f:06:5e": {port: "eth1", bridge: "br-lan", typ: model.FDBEntryDynamic},
-		"46:3f:36:89:42:e3": {port: "eth1", bridge: "br-lan", typ: model.FDBEntryDynamic},
-		"52:e5:8f:5b:c5:2d": {port: "eth1", bridge: "br-lan", typ: model.FDBEntryDynamic},
-		"04:67:61:77:7f:24": {port: "eth1", bridge: "br-lan", typ: model.FDBEntryDynamic},
-		"cc:b5:d1:05:70:20": {port: "eth1", bridge: "br-lan", typ: model.FDBEntryDynamic},
-		"b4:fa:48:10:16:13": {port: "eth1", bridge: "br-lan", typ: model.FDBEntryDynamic},
+		"02:11:22:33:44:b7": {port: "eth2", bridge: "br-lan", typ: model.FDBEntryPermanent},
+		"06:77:88:99:aa:d2": {port: "eth1", bridge: "br-lan", typ: model.FDBEntryDynamic},
+		"07:88:99:aa:bb:5e": {port: "eth1", bridge: "br-lan", typ: model.FDBEntryDynamic},
+		"04:66:77:88:99:e3": {port: "eth1", bridge: "br-lan", typ: model.FDBEntryDynamic},
+		"05:22:33:44:55:2d": {port: "eth1", bridge: "br-lan", typ: model.FDBEntryDynamic},
+		"04:11:22:33:44:24": {port: "eth1", bridge: "br-lan", typ: model.FDBEntryDynamic},
+		"cc:11:22:33:44:20": {port: "eth1", bridge: "br-lan", typ: model.FDBEntryDynamic},
+		"b4:11:22:33:44:13": {port: "eth1", bridge: "br-lan", typ: model.FDBEntryDynamic},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("expected %d device observations, got %d: %v", len(want), len(got), got)
@@ -145,8 +145,8 @@ func TestLearnedDevices(t *testing.T) {
 
 	// The Windows PC is on eth2, not eth1. This is the fixture's headline
 	// assertion and the easiest one to get wrong.
-	if got["b0:82:e2:61:3e:b7"].port != "eth2" {
-		t.Errorf("Windows PC must be linked to eth2, got %q", got["b0:82:e2:61:3e:b7"].port)
+	if got["02:11:22:33:44:b7"].port != "eth2" {
+		t.Errorf("Windows PC must be linked to eth2, got %q", got["02:11:22:33:44:b7"].port)
 	}
 
 	// One link per device observation.
