@@ -52,11 +52,11 @@ Internet
 | ✅ | Device Identity Engine: merges MAC / DHCP client id / hostname / vendor into one device | implemented |
 | ✅ | Interactive topology graph with confidence, evidence and dashed unverified edges | implemented |
 | ✅ | Manual devices, manual links, locked links, hide / merge devices | implemented |
-| ✅ | Reachability monitoring with failure thresholds (offline needs *N* consecutive failures) | implemented |
+| ✅ | Reachability monitoring with failure thresholds (offline needs *N* consecutive failures) | implemented; probes are created automatically for every discovered device |
 | ✅ | Probe history, device state history, network event log | implemented |
 | ✅ | Realtime updates over SSE | implemented |
 | ✅ | Cross-compiles for linux **amd64 / arm64 / 386 / armv7**, statically linked | built and verified |
-| ✅ | Installable `.ipk` + `.apk` for x86_64 / aarch64 / armv7 / i386 (**not MIPS**) | `make packages` builds all 8 without an SDK; archives format-verified. **Not yet installed on real hardware** |
+| ✅ | Installable `.ipk` + `.apk` for x86_64 / aarch64 / armv7 / i386 (**not MIPS**) | built and **installed on the reference router**; format-verified, signable (`make apk-sign`) |
 | ✅ | Demo Mode: the whole UI without a router | implemented |
 | ✅ | Chinese and English UI | implemented |
 | ⚠️ | LLDP, mDNS, SSDP collectors | implemented, opt-in, not exercised against a real multicast network yet |

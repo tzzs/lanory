@@ -90,7 +90,7 @@ hardware or a real build system — which, for packaging, it has not been.
 | Generic router adapter | `internal/adapters/generic` | implemented | HTTP test server |
 | Xiaomi router adapter | `internal/adapters/xiaomi` | implemented | fake device; **no real hardware** |
 | Adapter registry | `internal/adapters/registry` | implemented | isolation tests |
-| OpenWrt package | `packaging/openwrt` | **configured, unbuilt** | no SDK available |
+| OpenWrt package | `packaging/openwrt` | **built and installed** | signed APK verified on the reference router |
 | LuCI companion | `packaging/openwrt/luci-app-lanory` | **configured, unbuilt** | no LuCI SDK |
 | systemd unit | `packaging/linux` | **configured, unverified** | no Linux host |
 | CI | `.github/workflows/ci.yml` | configured, never run on GitHub | — |
