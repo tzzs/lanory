@@ -22,6 +22,7 @@ package openwrt
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -58,6 +59,12 @@ type Collector struct {
 	ubusDevicePath    string
 	ubusInterfacePath string
 
+	// boardPath, releasePath and hostnamePath point at the OpenWrt identity
+	// files. Empty means the standard locations.
+	boardPath    string
+	releasePath  string
+	hostnamePath string
+
 	// now returns the current time; overridden in tests.
 	now func() time.Time
 }
@@ -87,6 +94,115 @@ func NewWithPaths(uciPath, ipLinkPath, ubusDevicePath, ubusInterfacePath string)
 	c.ubusDevicePath = ubusDevicePath
 	c.ubusInterfacePath = ubusInterfacePath
 	return c
+}
+
+// WithHostInfoFiles points the collector at the OpenWrt identity files, so the
+// router device gets a real name, model and firmware version instead of
+// "Unknown 000011".
+func (c *Collector) WithHostInfoFiles(boardPath, releasePath, hostnamePath string) *Collector {
+	c.boardPath = boardPath
+	c.releasePath = releasePath
+	c.hostnamePath = hostnamePath
+	return c
+}
+
+// HostInfo describes the machine Lanory runs on.
+//
+// These values name the router device in the UI. They are read from local files
+// only; nothing is sent anywhere.
+type HostInfo struct {
+	// Hostname is /proc/sys/kernel/hostname (or uci system.@system[0].hostname).
+	Hostname string
+	// Model is the human readable board model, e.g. "EASEPi R1".
+	Model string
+	// Manufacturer is the board vendor, when the board database names one.
+	Manufacturer string
+	// Firmware is the OpenWrt release description, e.g. "iStoreOS 25.12.5".
+	Firmware string
+}
+
+// readHostInfo reads the local identity files. Every file is optional: a missing
+// one leaves the corresponding field empty rather than failing the collector,
+// because Lanory also runs on generic Linux during development.
+func (c *Collector) readHostInfo() HostInfo {
+	var info HostInfo
+
+	hostnamePath := c.hostnamePath
+	if hostnamePath == "" {
+		hostnamePath = "/proc/sys/kernel/hostname"
+	}
+	if data, supported, err := discovery.ReadFileCapped(hostnamePath, 256); err == nil && supported {
+		info.Hostname = strings.TrimSpace(string(data))
+	}
+
+	boardPath := c.boardPath
+	if boardPath == "" {
+		boardPath = "/etc/board.json"
+	}
+	if data, supported, err := discovery.ReadFileCapped(boardPath, 64*1024); err == nil && supported {
+		var board struct {
+			Model struct {
+				ID     string `json:"id"`
+				Name   string `json:"name"`
+				Vendor string `json:"vendor_name"`
+			} `json:"model"`
+			System struct {
+				Hostname string `json:"hostname"`
+			} `json:"system"`
+		}
+		if json.Unmarshal(data, &board) == nil {
+			if board.Model.Name != "" {
+				info.Model = board.Model.Name
+			} else if board.Model.ID != "" {
+				info.Model = board.Model.ID
+			}
+			info.Manufacturer = board.Model.Vendor
+			if info.Hostname == "" {
+				info.Hostname = board.System.Hostname
+			}
+		}
+	}
+
+	releasePath := c.releasePath
+	if releasePath == "" {
+		releasePath = "/etc/openwrt_release"
+	}
+	if data, supported, err := discovery.ReadFileCapped(releasePath, 8*1024); err == nil && supported {
+		info.Firmware = parseReleaseDescription(string(data))
+	}
+
+	return info
+}
+
+// parseReleaseDescription extracts a short firmware description from
+// /etc/openwrt_release, which is a shell fragment such as:
+//
+//	DISTRIB_ID='iStoreOS'
+//	DISTRIB_RELEASE='25.12.5'
+func parseReleaseDescription(raw string) string {
+	var id, release string
+	for _, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		value = strings.Trim(strings.TrimSpace(value), `'"`)
+		switch key {
+		case "DISTRIB_ID":
+			id = value
+		case "DISTRIB_RELEASE":
+			release = value
+		}
+	}
+	switch {
+	case id != "" && release != "":
+		return id + " " + release
+	case id != "":
+		return id
+	default:
+		return release
+	}
 }
 
 // Supported reports whether any input is available. The collector runs when
@@ -147,6 +263,13 @@ func (c *Collector) Collect(ctx context.Context) ([]discovery.Result, error) {
 	views := c.merge(uci, links, devDump, ifDump, now)
 
 	var out []discovery.Result
+
+	// Emit the host identity first so the topology engine can name the router
+	// device instead of rendering it as "Unknown 000011".
+	if host := c.hostResult(now); host != nil {
+		out = append(out, *host)
+	}
+
 	for _, v := range views {
 		out = append(out, *c.interfaceResult(v, now))
 		if v.Ignore {
@@ -163,6 +286,26 @@ func (c *Collector) Collect(ctx context.Context) ([]discovery.Result, error) {
 		}
 	}
 	return out, nil
+}
+
+// hostResult reports the identity of the machine Lanory runs on.
+//
+// It is a generic result carrying the router's hostname, model and firmware, so
+// the device that owns the switch ports can be displayed with a real name.
+func (c *Collector) hostResult(now time.Time) *discovery.Result {
+	info := c.readHostInfo()
+	if info.Hostname == "" && info.Model == "" && info.Firmware == "" {
+		return nil
+	}
+	r := discovery.NewResult(discovery.ResultGeneric, model.SourceOpenWRT, now)
+	r.Attributes = map[string]string{
+		"kind":         "host_identity",
+		"hostname":     info.Hostname,
+		"model":        info.Model,
+		"manufacturer": info.Manufacturer,
+		"firmware":     info.Firmware,
+	}
+	return r
 }
 
 // ---------------------------------------------------------------------------

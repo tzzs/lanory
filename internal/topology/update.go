@@ -212,6 +212,9 @@ type observationBatch struct {
 	// byMAC collects everything known about one MAC address.
 	byMAC map[string]*macFacts
 
+	// host is the local machine's self description, when a collector supplied one.
+	host *hostFacts
+
 	// byIP collects observations that identify a host only by address: an ICMP
 	// echo reply proves a host is there but carries no MAC. Without this bucket
 	// an active scan could report seven reachable hosts and the update engine
@@ -246,6 +249,50 @@ type macFacts struct {
 	Evidence []evidenceLine
 	// deviceID is filled in once the identity engine has resolved the MAC.
 	deviceID string
+}
+
+// hostFacts is the local machine's own identity, as reported by the OpenWrt
+// collector.
+type hostFacts struct {
+	Hostname     string
+	Model        string
+	Manufacturer string
+	Firmware     string
+}
+
+// apply applies the description to the router device, preserving anything the
+// user has already set.
+func (h *hostFacts) apply(dev *model.Device, store interface {
+	UpsertDevice(*model.Device) error
+}) {
+	if h == nil || dev == nil {
+		return
+	}
+	changed := false
+	// A manual name always wins: the user may have called it "Living room router".
+	if !dev.IsManual && h.Model != "" && (dev.Name == "" || strings.HasPrefix(dev.Name, "Unknown ")) {
+		dev.Name = h.Model
+		changed = true
+	}
+	if h.Hostname != "" && dev.Hostname == "" {
+		dev.Hostname = h.Hostname
+		changed = true
+	}
+	if h.Manufacturer != "" && dev.Manufacturer == "" {
+		dev.Manufacturer = h.Manufacturer
+		changed = true
+	}
+	if h.Model != "" && dev.Model == "" {
+		dev.Model = h.Model
+		changed = true
+	}
+	if h.Firmware != "" && dev.Description == "" {
+		dev.Description = h.Firmware
+		changed = true
+	}
+	if changed {
+		_ = store.UpsertDevice(dev)
+	}
 }
 
 // ipFacts is everything the run learned about a host that has an address but no
@@ -344,6 +391,15 @@ func newObservationBatch(results []discovery.Result, at time.Time) *observationB
 					Raw:          fmt.Sprintf("%s dev %s lladdr %s %s", r.Neighbor.Address, r.Neighbor.Interface, r.Neighbor.MAC, r.Neighbor.State),
 					ObservedAt:   nonzero(r.ObservedAt, at),
 				})
+			}
+		case r.Attributes["kind"] == "host_identity":
+			// The machine Lanory runs on described itself: hostname, board model
+			// and firmware. Used to name the router device.
+			b.host = &hostFacts{
+				Hostname:     r.Attributes["hostname"],
+				Model:        r.Attributes["model"],
+				Manufacturer: r.Attributes["manufacturer"],
+				Firmware:     r.Attributes["firmware"],
 			}
 		case r.FDBEntry != nil:
 			b.fdb = append(b.fdb, *r.FDBEntry)

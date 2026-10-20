@@ -25,7 +25,15 @@ func (u *UpdateEngine) applyInterfaces(ctx context.Context, batch *observationBa
 	if len(batch.interfaces) == 0 {
 		return nil
 	}
-	self, err := u.selfDevice()
+
+	// Identify the device Lanory runs on before anything else.
+	//
+	// Every interface observation comes from this host, so the first run that
+	// produces interfaces is also the run that establishes which device is
+	// "self". Without this, selfDevice() returned nil forever and the whole
+	// interface and edge pipeline was skipped: the service discovered devices but
+	// never drew a single link.
+	self, err := u.ensureSelfDevice(batch)
 	if err != nil {
 		return fmt.Errorf("topology: resolve local device: %w", err)
 	}
@@ -647,6 +655,128 @@ func (u *UpdateEngine) selfDevice() (*model.Device, error) {
 		}
 	}
 	return nil, nil
+}
+
+// ensureSelfDevice returns the device this host is, creating and flagging it if
+// necessary.
+//
+// The router is identified from the interface observations themselves: the MAC
+// of a physical interface that also appears as the bridge MAC, or failing that
+// the MAC of the WAN interface, belongs to the host. That device is then marked
+// is_self so the interface, edge and topology stages know which device owns the
+// ports. A device already flagged by the user or a previous run wins.
+func (u *UpdateEngine) ensureSelfDevice(batch *observationBatch) (*model.Device, error) {
+	if self, err := u.selfDevice(); err != nil {
+		return nil, err
+	} else if self != nil {
+		return self, nil
+	}
+
+	candidates := selfMACsFromInterfaces(batch.interfaces)
+	if len(candidates) == 0 {
+		return nil, nil
+	}
+
+	// Prefer a device whose identity already matches one of the host MACs.
+	for _, mac := range candidates {
+		if dev, err := u.store.FindDeviceByMAC(mac); err == nil && dev != nil {
+			return u.flagSelf(dev)
+		}
+	}
+
+	// No device yet: create it from the richest observation available.
+	mac := candidates[0]
+	hostname := hostnameForMAC(batch.interfaces, mac)
+	ing := Ingest{
+		MAC:        mac,
+		Hostname:   hostname,
+		Source:     model.SourceOpenWRT,
+		ObservedAt: batch.at,
+		TypeHint:   model.DeviceTypeRouter,
+	}
+	dev, _, err := u.ident.Resolve(ing)
+	if err != nil {
+		return nil, err
+	}
+	if dev == nil {
+		return nil, nil
+	}
+	dev, err = u.flagSelf(dev)
+	if err != nil {
+		return nil, err
+	}
+	// Name it from the board database and firmware file rather than leaving an
+	// "Unknown 000011" router at the centre of the graph.
+	batch.host.apply(dev, u.store)
+	if refreshed, gerr := u.store.GetDevice(dev.ID); gerr == nil {
+		dev = refreshed
+	}
+	return dev, nil
+}
+
+// flagSelf marks a device as the local host and persists the change.
+func (u *UpdateEngine) flagSelf(dev *model.Device) (*model.Device, error) {
+	if dev.IsSelf {
+		return dev, nil
+	}
+	dev.IsSelf = true
+	dev.IsGateway = true
+	if dev.Type == model.DeviceTypeUnknown || dev.Type == "" {
+		dev.Type = model.DeviceTypeRouter
+		dev.TypeSource = model.SourceOpenWRT
+	}
+	if err := u.store.UpsertDevice(dev); err != nil {
+		return nil, err
+	}
+	return u.store.GetDevice(dev.ID)
+}
+
+// selfMACsFromInterfaces derives the MAC addresses that belong to this host.
+//
+// Order matters: a bridge's MAC is normally the MAC of one of its member ports,
+// and the WAN interface is the other reliable marker. Taking the bridge MAC first
+// keeps the identity stable when a member port is added or removed.
+func selfMACsFromInterfaces(interfaces []discovery.InterfaceObservation) []string {
+	var bridges, wans, physical []string
+	for _, obs := range interfaces {
+		mac := database.CanonicalizeMAC(obs.MAC)
+		if mac == "" || database.IsZeroMAC(mac) || database.IsMulticastMAC(mac) {
+			continue
+		}
+		switch {
+		case obs.Type == model.InterfaceTypeBridge:
+			bridges = append(bridges, mac)
+		case obs.Role == model.InterfaceRoleWAN:
+			wans = append(wans, mac)
+		case obs.IsPhysical || obs.Type == model.InterfaceTypeEthernet:
+			physical = append(physical, mac)
+		}
+	}
+	out := make([]string, 0, len(bridges)+len(wans)+len(physical))
+	seen := map[string]bool{}
+	for _, group := range [][]string{bridges, wans, physical} {
+		for _, mac := range group {
+			if !seen[mac] {
+				seen[mac] = true
+				out = append(out, mac)
+			}
+		}
+	}
+	return out
+}
+
+// hostnameForMAC finds the hostname recorded for a MAC, if any.
+func hostnameForMAC(interfaces []discovery.InterfaceObservation, mac string) string {
+	for _, obs := range interfaces {
+		if database.CanonicalizeMAC(obs.MAC) == mac {
+			for _, a := range obs.Addresses {
+				if a.Hostname != "" {
+					return a.Hostname
+				}
+			}
+		}
+	}
+	return ""
 }
 
 // bridgePorts maps a port name to the local interface that owns it.

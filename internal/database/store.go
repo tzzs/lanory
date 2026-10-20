@@ -65,10 +65,16 @@ func parseDBTime(v any) time.Time {
 // Devices
 // ---------------------------------------------------------------------------
 
-const deviceColumns = `id, name, hostname, type, manufacturer, model, description,
-	is_manual, is_locked, is_hidden, type_source, state, state_reason, last_state_change,
-	primary_ipv4, primary_ipv6, primary_mac, is_gateway, is_self,
-	first_seen, last_seen, created_at, updated_at`
+// deviceColumns lists the device columns, always qualified with the alias "d".
+//
+// The qualification is not cosmetic: several queries join device_identities,
+// device_sources or device_addresses, and an unqualified "id" is ambiguous there
+// (both devices and device_identities have one). Every query that uses this
+// constant must therefore alias the devices table as "d".
+const deviceColumns = `d.id, d.name, d.hostname, d.type, d.manufacturer, d.model, d.description,
+	d.is_manual, d.is_locked, d.is_hidden, d.type_source, d.state, d.state_reason, d.last_state_change,
+	d.primary_ipv4, d.primary_ipv6, d.primary_mac, d.is_gateway, d.is_self,
+	d.first_seen, d.last_seen, d.created_at, d.updated_at`
 
 func (s *Store) scanDevice(sc interface{ Scan(...any) error }) (*model.Device, error) {
 	d := &model.Device{}
@@ -234,7 +240,7 @@ func placeholders(n int) (string, int) {
 
 // GetDevice returns a single device by ID.
 func (s *Store) GetDevice(id string) (*model.Device, error) {
-	row := s.db.QueryRow("SELECT "+deviceColumns+" FROM devices WHERE id = ?", id)
+	row := s.db.QueryRow("SELECT "+deviceColumns+" FROM devices d WHERE d.id = ?", id)
 	d, err := s.scanDevice(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -836,7 +842,7 @@ func (s *Store) AddDeviceSource(deviceID string, src model.DiscoverySource) erro
 // Interfaces
 // ---------------------------------------------------------------------------
 
-const interfaceColumns = `id, device_id, name, mac, type, role, admin_state, oper_state, carrier,
+const interfaceColumns = `SELECT id, device_id, name, mac, type, role, admin_state, oper_state, carrier,
 	speed_mbps, mtu, bridge_id, vlan_id, is_physical,
 	rx_bytes, tx_bytes, rx_errors, tx_errors, rx_packets, tx_packets, rx_dropped, tx_dropped,
 	last_speed_change, last_seen`

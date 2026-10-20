@@ -1,0 +1,11 @@
+{
+  "kernel": "6.6.104",
+  "model": {
+    "id": "easepi-r1",
+    "name": "EASEPi R1",
+    "vendor_name": "EASE"
+  },
+  "system": {
+    "hostname": "EASEPi-R1"
+  }
+}
