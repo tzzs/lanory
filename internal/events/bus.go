@@ -48,20 +48,20 @@ type ProbePayload struct {
 
 // DiscoveryPayload is the payload of discovery.* events.
 type DiscoveryPayload struct {
-	JobID   string `json:"job_id,omitempty"`
-	Status  string `json:"status,omitempty"`
-	Progress int   `json:"progress,omitempty"`
-	Message string `json:"message,omitempty"`
+	JobID    string `json:"job_id,omitempty"`
+	Status   string `json:"status,omitempty"`
+	Progress int    `json:"progress,omitempty"`
+	Message  string `json:"message,omitempty"`
 }
 
 // SSE event names. These strings are part of the API contract.
 const (
-	TypeDeviceUpdated  = "device.updated"
-	TypeDeviceOnline   = "device.online"
-	TypeDeviceOffline  = "device.offline"
-	TypeTopologyUpdated = "topology.updated"
-	TypeLinkUpdated    = "link.updated"
-	TypeProbeCompleted = "probe.completed"
+	TypeDeviceUpdated      = "device.updated"
+	TypeDeviceOnline       = "device.online"
+	TypeDeviceOffline      = "device.offline"
+	TypeTopologyUpdated    = "topology.updated"
+	TypeLinkUpdated        = "link.updated"
+	TypeProbeCompleted     = "probe.completed"
 	TypeDiscoveryStarted   = "discovery.started"
 	TypeDiscoveryCompleted = "discovery.completed"
 	TypeSettingsUpdated    = "settings.updated"

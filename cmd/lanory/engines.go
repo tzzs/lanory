@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"sync"
 	"time"
 
 	"github.com/lanory/lanory/internal/api"
@@ -20,6 +19,7 @@ import (
 	"github.com/lanory/lanory/internal/discovery/mdns"
 	"github.com/lanory/lanory/internal/discovery/ndp"
 	"github.com/lanory/lanory/internal/discovery/openwrt"
+	"github.com/lanory/lanory/internal/discovery/scan"
 	"github.com/lanory/lanory/internal/events"
 	"github.com/lanory/lanory/internal/model"
 	"github.com/lanory/lanory/internal/monitoring"
@@ -47,21 +47,15 @@ func newSchedulers(
 	// Device identity engine: shared by discovery ingestion and probe state.
 	identity := device.New(store, bus)
 
-	// Discovery registry with the platform-appropriate collectors.
-	registry := discovery.NewRegistry(cfg)
-	registry.RegisterAll(
-		openwrt.New(),
-		arp.New(),
-		ndp.New(),
-		dhcp.New(),
-		fdb.New(),
-		lldp.New(),
-		mdns.New(),
-	)
+	// Discovery service: owns the job lifecycle (start, progress, cancel) and
+	// the periodic schedule. The registry inside it holds the collectors.
+	discoverySvc := discovery.NewService(cfg, bus)
+	registerCollectors(discoverySvc.Registry(), cfg)
 
 	// Topology: reconcile observations into the graph, then build the API view.
 	updateEngine := topology.NewUpdateEngine(store, bus).WithIngestor(ingestorAdapter{identity})
 	topoService := topology.NewService(store, cfg)
+	discoverySvc.WithReconciler(reconcilerAdapter{engine: updateEngine})
 
 	// Monitoring: probe engine with a conservative worker pool.
 	monEngine := monitoring.NewEngine(
@@ -75,16 +69,19 @@ func newSchedulers(
 		logger.Warn("monitoring engine failed to start", "error", err)
 	}
 
-	jobs := newJobBook()
-
-	// Background discovery loop. Demo mode never scans the host.
+	// Background discovery schedule. Demo mode never scans the host.
 	if !cfg.Demo.Enabled && cfg.Discovery.Enabled {
-		startDiscoveryLoop(ctx, cfg, registry, updateEngine, bus, logger)
+		stop, err := discoverySvc.StartScheduler(ctx)
+		if err != nil {
+			logger.Warn("discovery scheduler failed to start", "error", err)
+		} else {
+			_ = stop // the scheduler lives for the lifetime of the process
+		}
 	}
 
 	// Expose the engines to the API through its narrow provider interfaces.
 	app.SetTopology(topologyProvider{svc: topoService})
-	app.SetDiscovery(discoveryProvider{reg: registry, update: updateEngine, jobs: jobs})
+	app.SetDiscovery(discoveryProvider{svc: discoverySvc})
 	app.SetMonitoring(monitoringProvider{engine: monEngine})
 	if demoProvider != nil {
 		app.SetDemo(demoProvider)
@@ -93,49 +90,42 @@ func newSchedulers(
 	if interval, err := cfg.DiscoveryInterval(); err == nil {
 		logger.Info("engines wired",
 			"platform", host.Kind,
-			"collectors", len(registry.Collectors()),
+			"collectors", len(discoverySvc.Registry().Collectors()),
 			"discovery_interval", interval.String(),
 			"demo", cfg.Demo.Enabled,
 		)
 	}
 }
 
-// startDiscoveryLoop runs discovery periodically in the background.
-func startDiscoveryLoop(
-	ctx context.Context,
-	cfg *config.Config,
-	reg *discovery.Registry,
-	update *topology.UpdateEngine,
-	bus *events.Bus,
-	logger *slog.Logger,
-) {
-	interval, err := cfg.DiscoveryInterval()
-	if err != nil || interval <= 0 {
-		interval = 10 * time.Minute
-	}
-
-	go func() {
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				summary := reg.Run(ctx)
-				if result, uerr := update.Update(ctx, summary); uerr != nil {
-					logger.Warn("discovery update failed", "error", uerr)
-				} else if result != nil {
-					logger.Debug("discovery run applied",
-						"observations", result.Observations,
-						"devices_created", result.DevicesCreated,
-						"edges_created", result.EdgesCreated,
-					)
-				}
-				bus.PublishTopologyUpdated("discovery run applied")
-			}
+// registerCollectors registers every collector available on this host. A
+// collector that is not supported here reports itself unsupported, so the
+// registry stays honest about what it can do on this platform.
+//
+// The active scanner is only registered when the operator enabled it and
+// authorised at least one subnet. Scanning is never on by default, and a
+// scanner with no authorised subnet would refuse every request anyway.
+func registerCollectors(reg *discovery.Registry, cfg *config.Config) {
+	reg.RegisterAll(
+		openwrt.New(),
+		arp.New(),
+		ndp.New(),
+		dhcp.New(),
+		fdb.New(),
+		lldp.New(),
+		mdns.New(),
+	)
+	if cfg != nil && cfg.Collectors.Scan && len(cfg.Discovery.Subnets) > 0 {
+		limit := scan.DefaultLimit()
+		limit.AuthorisedSubnets = cfg.Discovery.Subnets
+		limit.MaxHostsPerRun = 1024
+		limit.MaxHostsPerSubnet = 512
+		limit.Concurrency = cfg.Discovery.MaxConcurrency
+		limit.RatePerSecond = cfg.Discovery.RateLimit
+		if d, err := cfg.ScanTimeoutDuration(); err == nil {
+			limit.Timeout = d
 		}
-	}()
+		reg.Register(scan.New(limit))
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -152,43 +142,25 @@ func (p topologyProvider) AutoLayout(algorithm string) ([]model.TopologyLayout, 
 	return p.svc.AutoLayout(algorithm)
 }
 
-type discoveryProvider struct {
-	reg    *discovery.Registry
-	update *topology.UpdateEngine
-	jobs   *jobBook
-}
+type discoveryProvider struct{ svc *discovery.Service }
 
-func (p discoveryProvider) Status() (*model.DiscoveryStatus, error) {
-	return p.jobs.status(p.reg), nil
-}
+func (p discoveryProvider) Status() (*model.DiscoveryStatus, error) { return p.svc.Status() }
 
 func (p discoveryProvider) Collectors() ([]model.CollectorStatus, error) {
-	return p.reg.Status(), nil
+	return p.svc.Collectors()
 }
 
 func (p discoveryProvider) Scan(ctx context.Context, req api.ScanRequest) (*model.DiscoveryJob, error) {
-	summary := p.reg.Run(ctx, req.Collectors...)
-	result, err := p.update.Update(ctx, summary)
-	if err != nil {
-		return nil, err
-	}
-	job := jobFromSummary(summary, result, "manual")
-	p.jobs.put(job)
-	return job, nil
+	return p.svc.Scan(ctx, discovery.ScanRequest{
+		Collectors: req.Collectors,
+		Subnets:    req.Subnets,
+		Trigger:    "manual",
+	})
 }
 
-func (p discoveryProvider) Job(id string) (*model.DiscoveryJob, error) {
-	job := p.jobs.get(id)
-	if job == nil {
-		return nil, errors.New("discovery: job not found")
-	}
-	return job, nil
-}
+func (p discoveryProvider) Job(id string) (*model.DiscoveryJob, error) { return p.svc.Job(id) }
 
-func (p discoveryProvider) Cancel(id string) error {
-	p.jobs.cancel(id)
-	return nil
-}
+func (p discoveryProvider) Cancel(id string) error { return p.svc.Cancel(id) }
 
 type monitoringProvider struct{ engine *monitoring.Engine }
 
@@ -207,6 +179,27 @@ func (p monitoringProvider) Run(ctx context.Context, probeID string) (*model.Pro
 	}
 	result := rec.Result
 	return &result, nil
+}
+
+// reconcilerAdapter adapts the topology update engine to the discovery
+// service's Reconciler interface, converting the counter structs.
+type reconcilerAdapter struct{ engine *topology.UpdateEngine }
+
+func (a reconcilerAdapter) Reconcile(ctx context.Context, summary *discovery.RunSummary) (discovery.ReconcileStats, error) {
+	result, err := a.engine.Update(ctx, summary)
+	if err != nil {
+		return discovery.ReconcileStats{}, err
+	}
+	if result == nil {
+		return discovery.ReconcileStats{}, nil
+	}
+	return discovery.ReconcileStats{
+		DevicesCreated:    result.DevicesCreated,
+		DevicesUpdated:    result.DevicesUpdated,
+		InterfacesUpdated: result.InterfacesUpdated,
+		EdgesCreated:      result.EdgesCreated,
+		EdgesUpdated:      result.EdgesUpdated,
+	}, nil
 }
 
 // ingestorAdapter bridges the device.Engine to the topology update engine's
@@ -246,39 +239,7 @@ func monitoringEngineConfig(cfg *config.Config) monitoring.EngineConfig {
 	}
 }
 
-// jobFromSummary renders a discovery run as an API DiscoveryJob.
-func jobFromSummary(summary *discovery.RunSummary, result *topology.UpdateResult, trigger string) *model.DiscoveryJob {
-	job := &model.DiscoveryJob{
-		ID:         "job-" + time.Now().UTC().Format("20060102T150405.000000000"),
-		Status:     model.JobCompleted,
-		Trigger:    trigger,
-		StartedAt:  summary.StartedAt,
-		FinishedAt: summary.FinishedAt,
-		Progress:   100,
-		Collectors: make([]model.CollectorRun, 0, len(summary.Collectors)),
-	}
-	if summary.Cancelled {
-		job.Status = model.JobCancelled
-	}
-	for _, rc := range summary.Collectors {
-		job.Collectors = append(job.Collectors, model.CollectorRun{
-			Name:       rc.Name,
-			Status:     rc.Status,
-			DurationMS: int(rc.Duration.Milliseconds()),
-			Records:    len(rc.Results),
-			Error:      errString(rc.Err),
-		})
-	}
-	if result != nil {
-		job.DevicesFound = result.DevicesCreated + result.DevicesUpdated
-		job.DevicesNew = result.DevicesCreated
-		job.InterfacesFound = result.InterfacesUpdated
-		job.EdgesCreated = result.EdgesCreated + result.EdgesUpdated
-	}
-	return job
-}
-
-// interfaceRefresh returns how often the link observer polls /sys/class/net.
+// interfaceRefresh returns how often the link observer polls the interface state.
 func interfaceRefresh(cfg *config.Config) time.Duration {
 	if d, err := cfg.InterfaceRefreshInterval(); err == nil && d > 0 {
 		return d
@@ -286,6 +247,7 @@ func interfaceRefresh(cfg *config.Config) time.Duration {
 	return 30 * time.Second
 }
 
+// errString renders an error for a job record.
 func errString(err error) string {
 	if err == nil {
 		return ""
@@ -293,62 +255,5 @@ func errString(err error) string {
 	return err.Error()
 }
 
-// jobBook keeps recent discovery jobs in memory for the status and job
-// endpoints. Bounded, because Lanory runs on a router with limited RAM.
-type jobBook struct {
-	mu   sync.Mutex
-	jobs []*model.DiscoveryJob
-}
-
-func newJobBook() *jobBook {
-	return &jobBook{jobs: make([]*model.DiscoveryJob, 0, 16)}
-}
-
-func (b *jobBook) put(job *model.DiscoveryJob) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.jobs = append(b.jobs, job)
-	if len(b.jobs) > 16 {
-		b.jobs = b.jobs[len(b.jobs)-16:]
-	}
-}
-
-func (b *jobBook) get(id string) *model.DiscoveryJob {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	for i := len(b.jobs) - 1; i >= 0; i-- {
-		if b.jobs[i].ID == id {
-			return b.jobs[i]
-		}
-	}
-	return nil
-}
-
-func (b *jobBook) cancel(id string) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	for _, job := range b.jobs {
-		if job.ID == id && job.Status == model.JobRunning {
-			job.Status = model.JobCancelled
-			return
-		}
-	}
-}
-
-func (b *jobBook) latest() *model.DiscoveryJob {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if len(b.jobs) == 0 {
-		return nil
-	}
-	return b.jobs[len(b.jobs)-1]
-}
-
-func (b *jobBook) status(reg *discovery.Registry) *model.DiscoveryStatus {
-	return &model.DiscoveryStatus{
-		LastJob:    b.latest(),
-		Collectors: reg.Status(),
-		Interval:   "10m",
-		Enabled:    true,
-	}
-}
+// errNotFound is the shared "no such record" sentinel for the adapters.
+var errNotFound = errors.New("not found")

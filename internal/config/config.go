@@ -55,11 +55,11 @@ type DatabaseConfig struct {
 
 // DiscoveryConfig controls the discovery engine.
 type DiscoveryConfig struct {
-	Enabled          bool   `yaml:"enabled"`
-	Interval         string `yaml:"interval"`
+	Enabled  bool   `yaml:"enabled"`
+	Interval string `yaml:"interval"`
 	// AutoDetectSubnets derives scan targets from configured LAN networks.
 	AutoDetectSubnets bool `yaml:"auto_detect_subnets"`
-	MaxConcurrency   int   `yaml:"max_concurrency"`
+	MaxConcurrency    int  `yaml:"max_concurrency"`
 	// Subnets lists extra user authorised CIDRs to scan.
 	Subnets []string `yaml:"subnets"`
 	// ScanTimeout is the per-host timeout for active probes.
@@ -70,16 +70,16 @@ type DiscoveryConfig struct {
 
 // CollectorsConfig enables or disables individual collectors.
 type CollectorsConfig struct {
-	OpenWrt    bool `yaml:"openwrt"`
-	ARP        bool `yaml:"arp"`
-	NDP        bool `yaml:"ndp"`
-	DHCP       bool `yaml:"dhcp"`
-	FDB        bool `yaml:"fdb"`
-	LLDP       bool `yaml:"lldp"`
-	MDNS       bool `yaml:"mdns"`
-	SSDP       bool `yaml:"ssdp"`
-	SNMP       bool `yaml:"snmp"`
-	Scan       bool `yaml:"scan"`
+	OpenWrt bool `yaml:"openwrt"`
+	ARP     bool `yaml:"arp"`
+	NDP     bool `yaml:"ndp"`
+	DHCP    bool `yaml:"dhcp"`
+	FDB     bool `yaml:"fdb"`
+	LLDP    bool `yaml:"lldp"`
+	MDNS    bool `yaml:"mdns"`
+	SSDP    bool `yaml:"ssdp"`
+	SNMP    bool `yaml:"snmp"`
+	Scan    bool `yaml:"scan"`
 }
 
 // MonitoringConfig controls the probe engine.
@@ -97,7 +97,7 @@ type MonitoringConfig struct {
 
 // TopologyConfig controls the topology engine.
 type TopologyConfig struct {
-	AutoLayout          bool `yaml:"auto_layout"`
+	AutoLayout           bool `yaml:"auto_layout"`
 	PreserveManualLayout bool `yaml:"preserve_manual_layout"`
 	PreferConfirmedEdges bool `yaml:"prefer_confirmed_edges"`
 	// UnverifiedEdgeThreshold: edges below this confidence are drawn dashed.
@@ -152,13 +152,13 @@ func Default() *Config {
 			RetentionDays: 30,
 		},
 		Discovery: DiscoveryConfig{
-			Enabled:            true,
-			Interval:           "10m",
-			AutoDetectSubnets:  true,
-			MaxConcurrency:     16,
-			Subnets:            []string{},
-			ScanTimeout:        "500ms",
-			RateLimit:          64,
+			Enabled:           true,
+			Interval:          "10m",
+			AutoDetectSubnets: true,
+			MaxConcurrency:    16,
+			Subnets:           []string{},
+			ScanTimeout:       "500ms",
+			RateLimit:         64,
 		},
 		Collectors: CollectorsConfig{
 			OpenWrt: true,
@@ -173,25 +173,25 @@ func Default() *Config {
 			Scan:    false,
 		},
 		Monitoring: MonitoringConfig{
-			Enabled:           true,
-			Interval:          "60s",
-			Timeout:           "3s",
-			FailureThreshold:  3,
-			RecoverConfirm:    1,
-			InterfaceRefresh:  "30s",
-			DeviceRefresh:     "60s",
+			Enabled:          true,
+			Interval:         "60s",
+			Timeout:          "3s",
+			FailureThreshold: 3,
+			RecoverConfirm:   1,
+			InterfaceRefresh: "30s",
+			DeviceRefresh:    "60s",
 		},
 		Topology: TopologyConfig{
-			AutoLayout:               true,
-			PreserveManualLayout:     true,
-			PreferConfirmedEdges:     true,
-			UnverifiedEdgeThreshold:  0.6,
+			AutoLayout:              true,
+			PreserveManualLayout:    true,
+			PreferConfirmedEdges:    true,
+			UnverifiedEdgeThreshold: 0.6,
 		},
 		Auth: AuthConfig{
-			Enabled:  true,
-			Token:    "",
+			Enabled:   true,
+			Token:     "",
 			TokenFile: "",
-			AllowLAN: false,
+			AllowLAN:  false,
 		},
 		Logging: LoggingConfig{
 			Level:  "info",

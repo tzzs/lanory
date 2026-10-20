@@ -596,20 +596,28 @@ func (a *App) Done() <-chan struct{} { return a.closeCh }
 // ---------------------------------------------------------------------------
 
 // parseIntStrict parses a plain integer with no sign or padding tricks.
+//
+// The overflow guard uses a portable bound instead of a shift, because 1<<31 is
+// not representable as an int on 32-bit platforms (linux/386, linux/arm), which
+// are exactly the architectures many OpenWrt routers use. maxInt is computed
+// from the uint size so the check is correct on both 32-bit and 64-bit builds.
 func parseIntStrict(v string) (int, error) {
 	if v == "" {
 		return 0, fmt.Errorf("empty value")
 	}
+	// maxInt is the largest positive int on this platform.
+	const maxInt = int(^uint(0) >> 1)
 	n := 0
 	for i := 0; i < len(v); i++ {
 		c := v[i]
 		if c < '0' || c > '9' {
 			return 0, fmt.Errorf("%q is not a non-negative integer", v)
 		}
-		n = n*10 + int(c-'0')
-		if n > 1<<31 {
+		digit := int(c - '0')
+		if n > (maxInt-digit)/10 {
 			return 0, fmt.Errorf("%q is too large", v)
 		}
+		n = n*10 + digit
 	}
 	return n, nil
 }

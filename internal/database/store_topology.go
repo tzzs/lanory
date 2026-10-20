@@ -40,10 +40,10 @@ const edgeColumns = `id, source_id, target_id, source_interface_id, target_inter
 func scanEdge(sc interface{ Scan(...any) error }) (*model.TopologyEdge, error) {
 	e := &model.TopologyEdge{}
 	var (
-		src            string
-		userConfirmed  int
-		locked         int
-		unverified     int
+		src           string
+		userConfirmed int
+		locked        int
+		unverified    int
 	)
 	err := sc.Scan(&e.ID, &e.SourceID, &e.TargetID, &e.SourceInterfaceID, &e.TargetInterfaceID,
 		&e.EdgeType, &src, &e.Confidence, &userConfirmed, &locked, &e.Status, &e.Label, &unverified,
@@ -60,9 +60,9 @@ func scanEdge(sc interface{ Scan(...any) error }) (*model.TopologyEdge, error) {
 
 // EdgeFilter constrains edge listings.
 type EdgeFilter struct {
-	DeviceID string
-	Type     model.EdgeType
-	OnlyUnverified bool
+	DeviceID           string
+	Type               model.EdgeType
+	OnlyUnverified     bool
 	IncludeUserDefined bool
 }
 

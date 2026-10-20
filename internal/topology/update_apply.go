@@ -228,7 +228,92 @@ func (u *UpdateEngine) applyDevices(ctx context.Context, batch *observationBatch
 			res.EvidenceSaved += len(f.Evidence)
 		}
 	}
+
+	// Second pass: hosts known only by address.
+	//
+	// These come from active scanning, where an echo reply proves a host exists
+	// but cannot reveal its MAC. They are resolved by address at deliberately low
+	// confidence and without a MAC identity, so a later ARP, NDP or DHCP
+	// observation for the same address merges into the same device rather than
+	// creating a duplicate.
+	for _, addr := range batch.sortedIPs() {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		f := batch.byIP[addr]
+		if f == nil || f.Address == "" {
+			continue
+		}
+		// If a MAC-based pass already claimed this address, do not create a
+		// second device for it.
+		if dev, err := u.store.FindDeviceByAddress(f.Family, f.Address); err == nil && dev != nil {
+			f.deviceID = dev.ID
+			continue
+		}
+		ing := Ingest{
+			Hostname: f.Hostname,
+			Addresses: []discovery.AddressObservation{{
+				Address:   f.Address,
+				Family:    f.Family,
+				Interface: f.Interface,
+			}},
+			Source:     dominantIPSource(f),
+			ObservedAt: f.LastSeen,
+			TypeHint:   model.DeviceTypeUnknown,
+		}
+		dev, created, err := u.ident.Resolve(ing)
+		if err != nil {
+			res.Errors = append(res.Errors, fmt.Errorf("topology: resolve %s: %w", addr, err))
+			continue
+		}
+		if dev == nil {
+			continue
+		}
+		if created {
+			res.DevicesCreated++
+		} else {
+			res.DevicesUpdated++
+		}
+		f.deviceID = dev.ID
+		for _, ev := range f.Evidence {
+			if err := u.store.SaveEvidence(&model.DiscoveryEvidence{
+				Collector:    ev.Collector,
+				SubjectType:  "device",
+				SubjectID:    dev.ID,
+				EvidenceType: ev.EvidenceType,
+				RawData:      ev.Raw,
+				ObservedAt:   ev.ObservedAt,
+			}); err != nil {
+				res.Errors = append(res.Errors, err)
+			} else {
+				res.EvidenceSaved++
+			}
+		}
+	}
 	return nil
+}
+
+// dominantIPSource picks the collector that contributed most to an address-only
+// observation. IPv6 neighbours outrank an active scan, because a neighbour entry
+// is evidence the host is on the local segment while an echo reply only proves
+// it answered.
+func dominantIPSource(f *ipFacts) model.DiscoverySource {
+	if f.Sources[model.SourceNDP] {
+		return model.SourceNDP
+	}
+	if f.Sources[model.SourceARP] {
+		return model.SourceARP
+	}
+	if f.Sources[model.SourceDHCP] {
+		return model.SourceDHCP
+	}
+	if f.Sources[model.SourceScan] {
+		return model.SourceScan
+	}
+	for src := range f.Sources {
+		return src
+	}
+	return model.SourceScan
 }
 
 // applyEdges turns the raw observations into stored topology edges.

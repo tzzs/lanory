@@ -212,6 +212,12 @@ type observationBatch struct {
 	// byMAC collects everything known about one MAC address.
 	byMAC map[string]*macFacts
 
+	// byIP collects observations that identify a host only by address: an ICMP
+	// echo reply proves a host is there but carries no MAC. Without this bucket
+	// an active scan could report seven reachable hosts and the update engine
+	// would silently drop every one of them.
+	byIP map[string]*ipFacts
+
 	at time.Time
 }
 
@@ -242,6 +248,30 @@ type macFacts struct {
 	deviceID string
 }
 
+// ipFacts is everything the run learned about a host that has an address but no
+// MAC yet.
+//
+// It exists so a reachability observation is not discarded. The device is
+// created at low confidence and without a MAC identity; a later ARP, NDP or DHCP
+// observation merges into it through the address, which is exactly the
+// precedence order the identity engine documents.
+type ipFacts struct {
+	Address string
+	Family  model.AddressFamily
+	// Interface is the local interface the host was seen on, when known.
+	Interface string
+	// Sources are the collectors that observed it.
+	Sources map[model.DiscoverySource]bool
+	// LastSeen is the newest observation timestamp.
+	LastSeen time.Time
+	// Hostname is only ever present when another collector supplied it.
+	Hostname string
+	// Evidence is the raw lines that produced the facts.
+	Evidence []evidenceLine
+	// deviceID is filled in once the identity engine resolved the address.
+	deviceID string
+}
+
 // macPort is one (bridge, port, speed) observation.
 type macPort struct {
 	Bridge    string
@@ -263,7 +293,11 @@ type evidenceLine struct {
 
 // newObservationBatch groups the results.
 func newObservationBatch(results []discovery.Result, at time.Time) *observationBatch {
-	b := &observationBatch{byMAC: map[string]*macFacts{}, at: at}
+	b := &observationBatch{
+		byMAC: map[string]*macFacts{},
+		byIP:  map[string]*ipFacts{},
+		at:    at,
+	}
 	for _, r := range results {
 		switch {
 		case r.Interface != nil:
@@ -275,6 +309,23 @@ func newObservationBatch(results []discovery.Result, at time.Time) *observationB
 			}
 		case r.Neighbor != nil:
 			b.neighbors = append(b.neighbors, *r.Neighbor)
+			if r.Neighbor.MAC == "" && r.Neighbor.Address != "" {
+				// No MAC. Two very different cases hide here:
+				//
+				//   - a reachable host from an ICMP sweep: a real device that
+				//     we simply cannot identify yet, which must be kept;
+				//   - an INCOMPLETE or FAILED neighbour entry: address
+				//     resolution failed, there is no evidence any device exists
+				//     at that address at all.
+				//
+				// Only the first may become a device. Treating a failed ARP
+				// entry as a host would manufacture phantom devices from the
+				// kernel's negative cache.
+				if isPositiveNeighborState(r.Neighbor.State) {
+					b.ip(r.Neighbor.Address, r.Source, r.ObservedAt).addNeighbor(*r.Neighbor)
+				}
+				continue
+			}
 			if r.Neighbor.MAC != "" {
 				f := b.mac(r.Neighbor.MAC, r.Source, r.ObservedAt)
 				f.addAddress(discovery.AddressObservation{
@@ -380,6 +431,69 @@ func newObservationBatch(results []discovery.Result, at time.Time) *observationB
 // The key is the canonical 12-hex-digit form so the batch agrees with the
 // database's own MAC normalisation and with the local-interface filter. Using
 // the colon separated spelling would silently fail every such comparison.
+// ip returns the facts bucket for an address, creating it on first sight.
+func (b *observationBatch) ip(address string, src model.DiscoverySource, at time.Time) *ipFacts {
+	key := strings.ToLower(strings.TrimSpace(address))
+	f, ok := b.byIP[key]
+	if !ok {
+		f = &ipFacts{Address: address, Sources: map[model.DiscoverySource]bool{}}
+		b.byIP[key] = f
+	}
+	f.Sources[src] = true
+	if at.After(f.LastSeen) {
+		f.LastSeen = at
+	}
+	return f
+}
+
+// addNeighbor records one neighbour observation against the address.
+func (f *ipFacts) addNeighbor(n discovery.NeighborObservation) {
+	if f.Family == "" {
+		f.Family = n.Family
+	}
+	if f.Family == "" {
+		if strings.Contains(n.Address, ":") {
+			f.Family = model.AddressFamilyIPv6
+		} else {
+			f.Family = model.AddressFamilyIPv4
+		}
+	}
+	if f.Interface == "" {
+		f.Interface = n.Interface
+	}
+	f.Evidence = append(f.Evidence, evidenceLine{
+		Collector:    "scan",
+		EvidenceType: "reachability",
+		Raw:          fmt.Sprintf("%s reachable from the Lanory host (no MAC observed)", n.Address),
+		ObservedAt:   f.LastSeen,
+	})
+}
+
+// isPositiveNeighborState reports whether a neighbour state is evidence that a
+// host exists at the address.
+//
+// REACHABLE, DELAY, PROBE, STALE and PERMANENT all mean the kernel had (or still
+// has) a resolved entry, so a host was there. FAILED and INCOMPLETE mean
+// resolution did not succeed and prove nothing.
+func isPositiveNeighborState(s model.NeighborState) bool {
+	switch s {
+	case model.NeighborReachable, model.NeighborStale, model.NeighborDelay,
+		model.NeighborProbe, model.NeighborPermanent, model.NeighborNone:
+		return true
+	}
+	return false
+}
+
+// sortedIPs returns the observed addresses in a stable order.
+func (b *observationBatch) sortedIPs() []string {
+	out := make([]string, 0, len(b.byIP))
+	for addr := range b.byIP {
+		out = append(out, addr)
+	}
+	sort.Strings(out)
+	return out
+}
+
 func (b *observationBatch) mac(mac string, src model.DiscoverySource, at time.Time) *macFacts {
 	key := database.CanonicalizeMAC(mac)
 	if key == "" {

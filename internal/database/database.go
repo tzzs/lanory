@@ -156,12 +156,12 @@ func (d *DB) Version() (int, error) {
 
 // Stats returns lightweight database statistics for the settings page.
 type Stats struct {
-	Path          string `json:"path"`
-	SizeBytes     int64  `json:"size_bytes"`
-	PageCount     int64  `json:"page_count"`
-	SchemaVersion int    `json:"schema_version"`
+	Path          string         `json:"path"`
+	SizeBytes     int64          `json:"size_bytes"`
+	PageCount     int64          `json:"page_count"`
+	SchemaVersion int            `json:"schema_version"`
 	Counts        map[string]int `json:"counts"`
-	LastVacuumAt  time.Time `json:"last_vacuum_at,omitempty"`
+	LastVacuumAt  time.Time      `json:"last_vacuum_at,omitempty"`
 }
 
 // Stats collects database file size, page count and row counts.

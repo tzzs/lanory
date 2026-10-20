@@ -154,6 +154,7 @@ func (r *Registry) applyEnabled(c config.CollectorsConfig) {
 	r.enabled[model.CollectorBridgeFDB] = c.FDB
 	r.enabled[model.CollectorLLDP] = c.LLDP
 	r.enabled[model.CollectorMDNS] = c.MDNS
+	r.enabled[model.CollectorScan] = c.Scan
 }
 
 // SetEnabled turns a collector on or off at runtime (the settings endpoint).
@@ -266,6 +267,32 @@ func (r *Registry) Enabled() []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// TargetSetter is implemented by collectors that accept per-run parameters.
+//
+// The active scanner is the only one today: it needs the subnets for this run,
+// which come from the scan request rather than from the configuration. A
+// collector that does not implement it is simply run without targets.
+type TargetSetter interface {
+	SetTargets(subnets []string) error
+}
+
+// SetTargets asks every registered collector that accepts targets to configure
+// itself for the next run.
+//
+// An error from any collector is returned and the caller refuses the run:
+// scanning the wrong range, or scanning an unauthorised one, is worse than not
+// scanning at all.
+func (r *Registry) SetTargets(subnets []string) error {
+	for _, c := range r.Collectors() {
+		if ts, ok := c.(TargetSetter); ok {
+			if err := ts.SetTargets(subnets); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // Run executes the named collectors (or every enabled collector when names is

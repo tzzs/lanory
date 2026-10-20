@@ -242,6 +242,25 @@ func (s *Service) run(ctx context.Context, jobID string, req ScanRequest) {
 		s.mu.Unlock()
 	}()
 
+	// Apply the per-run subnet request before anything is probed. A rejected
+	// subnet fails the job instead of silently scanning the wrong range.
+	if len(req.Subnets) > 0 {
+		if err := s.registry.SetTargets(req.Subnets); err != nil {
+			s.mu.Lock()
+			if j := s.jobs[jobID]; j != nil {
+				j.Status = model.JobFailed
+				j.Error = err.Error()
+				j.FinishedAt = s.now()
+				j.Progress = 100
+			}
+			s.mu.Unlock()
+			if s.bus != nil {
+				s.bus.PublishDiscoveryCompleted(jobID, string(model.JobFailed), 100)
+			}
+			return
+		}
+	}
+
 	summary := s.registry.Run(ctx, req.Collectors...)
 	finished := s.now()
 

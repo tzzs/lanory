@@ -89,17 +89,17 @@ func (s *Store) scanDevice(sc interface{ Scan(...any) error }) (*model.Device, e
 
 // DeviceFilter constrains device listings.
 type DeviceFilter struct {
-	Query      string
-	Types      []model.DeviceType
-	States     []model.DeviceState
-	Source     string
-	Interface  string
-	NewerThan  time.Time
+	Query         string
+	Types         []model.DeviceType
+	States        []model.DeviceState
+	Source        string
+	Interface     string
+	NewerThan     time.Time
 	IncludeHidden bool
-	Sort       string // name | ip | last_seen | type
-	Order      string // asc | desc
-	Limit      int
-	Offset     int
+	Sort          string // name | ip | last_seen | type
+	Order         string // asc | desc
+	Limit         int
+	Offset        int
 }
 
 // ListDevices returns devices matching the filter.
@@ -552,7 +552,7 @@ func (s *Store) MergeDevices(dstID, srcID string) error {
 	if _, err := tx.Exec(`UPDATE topology_edges SET target_id = ? WHERE target_id = ?`, dstID, srcID); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(`DELETE FROM topology_edges WHERE source_id = target_id`, ); err != nil {
+	if _, err := tx.Exec(`DELETE FROM topology_edges WHERE source_id = target_id`); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(`UPDATE probe_targets SET device_id = ? WHERE device_id = ?`, dstID, srcID); err != nil {

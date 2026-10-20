@@ -195,8 +195,8 @@ func TestValidateHostname(t *testing.T) {
 		"router.lan":            "router.lan",
 		"Router.LAN":            "router.lan",
 		"a.b.c.d":               "a.b.c.d",
-		"iot-sensor":        "iot-sensor",
-		"client-desktop":    "client-desktop",
+		"iot-sensor":            "iot-sensor",
+		"client-desktop":        "client-desktop",
 		"host-1.example.com.":   "host-1.example.com",
 		strings.Repeat("a", 63): strings.Repeat("a", 63),
 	}

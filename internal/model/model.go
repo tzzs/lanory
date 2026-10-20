@@ -92,9 +92,9 @@ func IsValidDeviceType(t DeviceType) bool {
 type DeviceState string
 
 const (
-	StateOnline  DeviceState = "online"
-	StateOffline DeviceState = "offline"
-	StateUnknown DeviceState = "unknown"
+	StateOnline   DeviceState = "online"
+	StateOffline  DeviceState = "offline"
+	StateUnknown  DeviceState = "unknown"
 	StateSleeping DeviceState = "sleeping"
 )
 
@@ -102,9 +102,9 @@ const (
 type InterfaceRole string
 
 const (
-	InterfaceRoleWAN   InterfaceRole = "wan"
-	InterfaceRoleLAN   InterfaceRole = "lan"
-	InterfaceRoleDMZ   InterfaceRole = "dmz"
+	InterfaceRoleWAN      InterfaceRole = "wan"
+	InterfaceRoleLAN      InterfaceRole = "lan"
+	InterfaceRoleDMZ      InterfaceRole = "dmz"
 	InterfaceRoleLoopback InterfaceRole = "loopback"
 	InterfaceRoleVirtual  InterfaceRole = "virtual"
 	InterfaceRoleUnknown  InterfaceRole = "unknown"
@@ -127,8 +127,8 @@ const (
 type AdminState string
 
 const (
-	AdminUp   AdminState = "up"
-	AdminDown AdminState = "down"
+	AdminUp      AdminState = "up"
+	AdminDown    AdminState = "down"
 	AdminUnknown AdminState = "unknown"
 )
 
@@ -168,43 +168,43 @@ const (
 type EdgeStatus string
 
 const (
-	EdgeStatusLinkUp     EdgeStatus = "link_up"
-	EdgeStatusLinkDown   EdgeStatus = "link_down"
-	EdgeStatusReachable  EdgeStatus = "reachable"
+	EdgeStatusLinkUp      EdgeStatus = "link_up"
+	EdgeStatusLinkDown    EdgeStatus = "link_down"
+	EdgeStatusReachable   EdgeStatus = "reachable"
 	EdgeStatusUnreachable EdgeStatus = "unreachable"
-	EdgeStatusUnverified EdgeStatus = "unverified"
+	EdgeStatusUnverified  EdgeStatus = "unverified"
 )
 
 // DiscoverySource identifies where a piece of evidence came from.
 type DiscoverySource string
 
 const (
-	SourceOpenWRT     DiscoverySource = "openwrt"
-	SourceUCI         DiscoverySource = "uci"
-	SourceUBUS        DiscoverySource = "ubus"
-	SourceARP         DiscoverySource = "arp"
-	SourceNDP         DiscoverySource = "ndp"
-	SourceDHCP        DiscoverySource = "dhcp"
-	SourceBridgeFDB   DiscoverySource = "bridge_fdb"
-	SourceLLDP        DiscoverySource = "lldp"
-	SourceMDNS        DiscoverySource = "mdns"
-	SourceSSDP        DiscoverySource = "ssdp"
-	SourceSNMP        DiscoverySource = "snmp"
-	SourceXiaomi      DiscoverySource = "xiaomi"
-	SourceScan        DiscoverySource = "scan"
-	SourceManual      DiscoverySource = "manual"
-	SourcePlatform    DiscoverySource = "platform"
-	SourceDemo        DiscoverySource = "demo"
+	SourceOpenWRT   DiscoverySource = "openwrt"
+	SourceUCI       DiscoverySource = "uci"
+	SourceUBUS      DiscoverySource = "ubus"
+	SourceARP       DiscoverySource = "arp"
+	SourceNDP       DiscoverySource = "ndp"
+	SourceDHCP      DiscoverySource = "dhcp"
+	SourceBridgeFDB DiscoverySource = "bridge_fdb"
+	SourceLLDP      DiscoverySource = "lldp"
+	SourceMDNS      DiscoverySource = "mdns"
+	SourceSSDP      DiscoverySource = "ssdp"
+	SourceSNMP      DiscoverySource = "snmp"
+	SourceXiaomi    DiscoverySource = "xiaomi"
+	SourceScan      DiscoverySource = "scan"
+	SourceManual    DiscoverySource = "manual"
+	SourcePlatform  DiscoverySource = "platform"
+	SourceDemo      DiscoverySource = "demo"
 )
 
 // IdentityType classifies a device identity record.
 type IdentityType string
 
 const (
-	IdentityMAC        IdentityType = "mac"
-	IdentityDHCPClient IdentityType = "dhcp_client_id"
-	IdentityHostname   IdentityType = "hostname"
-	IdentityVendor     IdentityType = "vendor"
+	IdentityMAC         IdentityType = "mac"
+	IdentityDHCPClient  IdentityType = "dhcp_client_id"
+	IdentityHostname    IdentityType = "hostname"
+	IdentityVendor      IdentityType = "vendor"
 	IdentityFingerprint IdentityType = "fingerprint"
 )
 
@@ -234,24 +234,24 @@ const (
 type FDBEntryType string
 
 const (
-	FDBEntryDynamic  FDBEntryType = "dynamic"
-	FDBEntryStatic   FDBEntryType = "static"
+	FDBEntryDynamic   FDBEntryType = "dynamic"
+	FDBEntryStatic    FDBEntryType = "static"
 	FDBEntryPermanent FDBEntryType = "permanent"
-	FDBEntryLocal    FDBEntryType = "local"
-	FDBEntrySelf     FDBEntryType = "self"
+	FDBEntryLocal     FDBEntryType = "local"
+	FDBEntrySelf      FDBEntryType = "self"
 )
 
 // Collector names.
 const (
-	CollectorOpenWRT     = "openwrt"
-	CollectorInterfaces  = "interfaces"
-	CollectorARP         = "arp"
-	CollectorNDP         = "ndp"
-	CollectorDHCP        = "dhcp"
-	CollectorBridgeFDB   = "bridge_fdb"
-	CollectorLLDP        = "lldp"
-	CollectorMDNS        = "mdns"
-	CollectorScan        = "scan"
+	CollectorOpenWRT    = "openwrt"
+	CollectorInterfaces = "interfaces"
+	CollectorARP        = "arp"
+	CollectorNDP        = "ndp"
+	CollectorDHCP       = "dhcp"
+	CollectorBridgeFDB  = "bridge_fdb"
+	CollectorLLDP       = "lldp"
+	CollectorMDNS       = "mdns"
+	CollectorScan       = "scan"
 )
 
 // ProbeProtocol is the protocol used by a probe.
@@ -269,8 +269,8 @@ const (
 type ProbeKind string
 
 const (
-	ProbeKindDevice   ProbeKind = "device"
-	ProbeKindNetwork  ProbeKind = "network"
+	ProbeKindDevice  ProbeKind = "device"
+	ProbeKindNetwork ProbeKind = "network"
 )
 
 // ProbeRunStatus is the outcome of a single probe execution.
@@ -372,53 +372,53 @@ type Device struct {
 
 // DeviceAddress is an IP address observed for a device.
 type DeviceAddress struct {
-	ID           string        `json:"id"`
-	DeviceID     string        `json:"device_id"`
-	Address      string        `json:"address"`
-	Family       AddressFamily `json:"family"`
-	InterfaceID  string        `json:"interface_id,omitempty"`
+	ID           string          `json:"id"`
+	DeviceID     string          `json:"device_id"`
+	Address      string          `json:"address"`
+	Family       AddressFamily   `json:"family"`
+	InterfaceID  string          `json:"interface_id,omitempty"`
 	Source       DiscoverySource `json:"source"`
-	PrefixLength int           `json:"prefix_length,omitempty"`
-	IsPrimary    bool          `json:"is_primary"`
-	FirstSeen    time.Time     `json:"first_seen"`
-	LastSeen     time.Time     `json:"last_seen"`
+	PrefixLength int             `json:"prefix_length,omitempty"`
+	IsPrimary    bool            `json:"is_primary"`
+	FirstSeen    time.Time       `json:"first_seen"`
+	LastSeen     time.Time       `json:"last_seen"`
 }
 
 // DeviceIdentity is an identity claim about a device, with a confidence value.
 type DeviceIdentity struct {
-	ID         string       `json:"id"`
-	DeviceID   string       `json:"device_id"`
-	Type       IdentityType `json:"type"`
-	Value      string       `json:"value"`
+	ID         string          `json:"id"`
+	DeviceID   string          `json:"device_id"`
+	Type       IdentityType    `json:"type"`
+	Value      string          `json:"value"`
 	Source     DiscoverySource `json:"source"`
-	Confidence float64      `json:"confidence"`
-	FirstSeen  time.Time    `json:"first_seen"`
-	LastSeen   time.Time    `json:"last_seen"`
+	Confidence float64         `json:"confidence"`
+	FirstSeen  time.Time       `json:"first_seen"`
+	LastSeen   time.Time       `json:"last_seen"`
 }
 
 // NetworkInterface is a network interface of a device (typically the local
 // router, but manual devices may have interfaces too).
 type NetworkInterface struct {
-	ID       string `json:"id"`
-	DeviceID string `json:"device_id"`
-	Name     string `json:"name"`
-	MAC      string `json:"mac,omitempty"`
+	ID       string        `json:"id"`
+	DeviceID string        `json:"device_id"`
+	Name     string        `json:"name"`
+	MAC      string        `json:"mac,omitempty"`
 	Type     InterfaceType `json:"type"`
 	Role     InterfaceRole `json:"role"`
 
-	AdminState  AdminState  `json:"admin_state"`
-	OperState   OperState   `json:"oper_state"`
-	Carrier     bool        `json:"carrier"`
-	SpeedMbps   int         `json:"speed_mbps"`
-	MTU         int         `json:"mtu"`
-	BridgeID    string      `json:"bridge_id,omitempty"`
-	VLANID      int         `json:"vlan_id,omitempty"`
-	IsPhysical  bool        `json:"is_physical"`
+	AdminState AdminState `json:"admin_state"`
+	OperState  OperState  `json:"oper_state"`
+	Carrier    bool       `json:"carrier"`
+	SpeedMbps  int        `json:"speed_mbps"`
+	MTU        int        `json:"mtu"`
+	BridgeID   string     `json:"bridge_id,omitempty"`
+	VLANID     int        `json:"vlan_id,omitempty"`
+	IsPhysical bool       `json:"is_physical"`
 
-	RXBytes uint64 `json:"rx_bytes"`
-	TXBytes uint64 `json:"tx_bytes"`
-	RXErrors uint64 `json:"rx_errors"`
-	TXErrors uint64 `json:"tx_errors"`
+	RXBytes   uint64 `json:"rx_bytes"`
+	TXBytes   uint64 `json:"tx_bytes"`
+	RXErrors  uint64 `json:"rx_errors"`
+	TXErrors  uint64 `json:"tx_errors"`
 	RXPackets uint64 `json:"rx_packets"`
 	TXPackets uint64 `json:"tx_packets"`
 	RXDropped uint64 `json:"rx_dropped"`
@@ -433,17 +433,17 @@ type NetworkInterface struct {
 
 // TopologyEdge is a relation between two devices.
 type TopologyEdge struct {
-	ID                 string    `json:"id"`
-	SourceID           string    `json:"source_id"`
-	TargetID           string    `json:"target_id"`
-	SourceInterfaceID  string    `json:"source_interface_id,omitempty"`
-	TargetInterfaceID  string    `json:"target_interface_id,omitempty"`
-	EdgeType           EdgeType  `json:"edge_type"`
-	DiscoverySource    DiscoverySource `json:"discovery_source"`
-	Confidence         float64   `json:"confidence"`
-	UserConfirmed      bool      `json:"user_confirmed"`
-	Locked             bool      `json:"locked"`
-	Status             EdgeStatus `json:"status"`
+	ID                string          `json:"id"`
+	SourceID          string          `json:"source_id"`
+	TargetID          string          `json:"target_id"`
+	SourceInterfaceID string          `json:"source_interface_id,omitempty"`
+	TargetInterfaceID string          `json:"target_interface_id,omitempty"`
+	EdgeType          EdgeType        `json:"edge_type"`
+	DiscoverySource   DiscoverySource `json:"discovery_source"`
+	Confidence        float64         `json:"confidence"`
+	UserConfirmed     bool            `json:"user_confirmed"`
+	Locked            bool            `json:"locked"`
+	Status            EdgeStatus      `json:"status"`
 
 	// Label is an optional user provided label for the edge.
 	Label string `json:"label,omitempty"`
@@ -460,27 +460,27 @@ type TopologyEdge struct {
 
 // DiscoveryEvidence stores the raw basis for an inference.
 type DiscoveryEvidence struct {
-	ID           string       `json:"id"`
-	Collector    string       `json:"collector"`
-	SubjectType  string       `json:"subject_type"` // device | interface | edge | address
-	SubjectID    string       `json:"subject_id"`
-	EvidenceType string       `json:"evidence_type"`
-	RawData      string       `json:"raw_data"`
-	ObservedAt   time.Time    `json:"observed_at"`
+	ID           string    `json:"id"`
+	Collector    string    `json:"collector"`
+	SubjectType  string    `json:"subject_type"` // device | interface | edge | address
+	SubjectID    string    `json:"subject_id"`
+	EvidenceType string    `json:"evidence_type"`
+	RawData      string    `json:"raw_data"`
+	ObservedAt   time.Time `json:"observed_at"`
 }
 
 // ProbeTarget is a monitored target.
 type ProbeTarget struct {
-	ID        string        `json:"id"`
-	Name      string        `json:"name"`
-	Kind      ProbeKind     `json:"kind"`
-	Target    string        `json:"target"` // IP, hostname or CIDR
-	Port      int           `json:"port,omitempty"`
-	Protocol  ProbeProtocol `json:"protocol"`
-	SourceID  string        `json:"source_id"` // the device the probe runs from
-	Interval  int           `json:"interval"`  // seconds
-	Timeout   int           `json:"timeout"`   // seconds
-	Enabled   bool          `json:"enabled"`
+	ID       string        `json:"id"`
+	Name     string        `json:"name"`
+	Kind     ProbeKind     `json:"kind"`
+	Target   string        `json:"target"` // IP, hostname or CIDR
+	Port     int           `json:"port,omitempty"`
+	Protocol ProbeProtocol `json:"protocol"`
+	SourceID string        `json:"source_id"` // the device the probe runs from
+	Interval int           `json:"interval"`  // seconds
+	Timeout  int           `json:"timeout"`   // seconds
+	Enabled  bool          `json:"enabled"`
 	// DeviceID links a device probe to its device.
 	DeviceID string `json:"device_id,omitempty"`
 
@@ -491,15 +491,15 @@ type ProbeTarget struct {
 	// a device back online.
 	RecoverConfirm int `json:"recover_confirm"`
 
-	State DeviceState `json:"state"`
-	StateReason string `json:"state_reason,omitempty"`
-	ConsecutiveFailures int `json:"consecutive_failures"`
-	ConsecutiveSuccesses int `json:"consecutive_successes"`
-	LastResult ProbeRunStatus `json:"last_result,omitempty"`
-	LastLatencyMS int `json:"last_latency_ms,omitempty"`
-	LastError string `json:"last_error,omitempty"`
-	LastRunAt time.Time `json:"last_run_at"`
-	LastSuccessAt time.Time `json:"last_success_at"`
+	State                DeviceState    `json:"state"`
+	StateReason          string         `json:"state_reason,omitempty"`
+	ConsecutiveFailures  int            `json:"consecutive_failures"`
+	ConsecutiveSuccesses int            `json:"consecutive_successes"`
+	LastResult           ProbeRunStatus `json:"last_result,omitempty"`
+	LastLatencyMS        int            `json:"last_latency_ms,omitempty"`
+	LastError            string         `json:"last_error,omitempty"`
+	LastRunAt            time.Time      `json:"last_run_at"`
+	LastSuccessAt        time.Time      `json:"last_success_at"`
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -507,27 +507,27 @@ type ProbeTarget struct {
 
 // ProbeResult is a single probe execution result.
 type ProbeResult struct {
-	ID           string        `json:"id"`
-	ProbeID      string        `json:"probe_id"`
-	Timestamp    time.Time     `json:"timestamp"`
-	Success      bool          `json:"success"`
-	LatencyMS    int           `json:"latency_ms"`
+	ID           string         `json:"id"`
+	ProbeID      string         `json:"probe_id"`
+	Timestamp    time.Time      `json:"timestamp"`
+	Success      bool           `json:"success"`
+	LatencyMS    int            `json:"latency_ms"`
 	Status       ProbeRunStatus `json:"status"`
-	ErrorType    string        `json:"error_type,omitempty"`
-	ErrorMessage string        `json:"error_message,omitempty"`
+	ErrorType    string         `json:"error_type,omitempty"`
+	ErrorMessage string         `json:"error_message,omitempty"`
 }
 
 // NetworkEvent is a history record.
 type NetworkEvent struct {
-	ID        string     `json:"id"`
-	EventType EventType  `json:"event_type"`
-	DeviceID  string     `json:"device_id,omitempty"`
-	EdgeID    string     `json:"edge_id,omitempty"`
-	OldValue  string     `json:"old_value,omitempty"`
-	NewValue  string     `json:"new_value,omitempty"`
-	Message   string     `json:"message,omitempty"`
-	Evidence  string     `json:"evidence,omitempty"`
-	Timestamp time.Time  `json:"timestamp"`
+	ID        string    `json:"id"`
+	EventType EventType `json:"event_type"`
+	DeviceID  string    `json:"device_id,omitempty"`
+	EdgeID    string    `json:"edge_id,omitempty"`
+	OldValue  string    `json:"old_value,omitempty"`
+	NewValue  string    `json:"new_value,omitempty"`
+	Message   string    `json:"message,omitempty"`
+	Evidence  string    `json:"evidence,omitempty"`
+	Timestamp time.Time `json:"timestamp"`
 }
 
 // TopologyLayout persists a node position.
@@ -553,40 +553,40 @@ type AppSetting struct {
 
 // DeviceDetail is the full device payload returned by GET /devices/{id}.
 type DeviceDetail struct {
-	Device      *Device           `json:"device"`
-	Addresses   []DeviceAddress   `json:"addresses"`
-	Identities  []DeviceIdentity  `json:"identities"`
-	Interfaces  []NetworkInterface `json:"interfaces"`
-	Edges       []TopologyEdge    `json:"edges"`
-	Probes      []ProbeTarget     `json:"probes"`
-	LastProbe   *ProbeResult      `json:"last_probe"`
-	Events      []NetworkEvent    `json:"events"`
+	Device     *Device            `json:"device"`
+	Addresses  []DeviceAddress    `json:"addresses"`
+	Identities []DeviceIdentity   `json:"identities"`
+	Interfaces []NetworkInterface `json:"interfaces"`
+	Edges      []TopologyEdge     `json:"edges"`
+	Probes     []ProbeTarget      `json:"probes"`
+	LastProbe  *ProbeResult       `json:"last_probe"`
+	Events     []NetworkEvent     `json:"events"`
 }
 
 // Overview is the payload of GET /overview.
 type Overview struct {
-	Counts         DeviceCounts        `json:"counts"`
-	Interfaces     []InterfaceStatus   `json:"interfaces"`
-	Networks       []NetworkStatus     `json:"networks"`
-	RecentNew      []Device            `json:"recent_new_devices"`
-	RecentOffline  []Device            `json:"recent_offline_devices"`
-	RecentEvents   []NetworkEvent      `json:"recent_events"`
-	Anomalies      []Anomaly           `json:"anomalies"`
-	LastScanAt     time.Time           `json:"last_scan_at"`
+	Counts           DeviceCounts      `json:"counts"`
+	Interfaces       []InterfaceStatus `json:"interfaces"`
+	Networks         []NetworkStatus   `json:"networks"`
+	RecentNew        []Device          `json:"recent_new_devices"`
+	RecentOffline    []Device          `json:"recent_offline_devices"`
+	RecentEvents     []NetworkEvent    `json:"recent_events"`
+	Anomalies        []Anomaly         `json:"anomalies"`
+	LastScanAt       time.Time         `json:"last_scan_at"`
 	DiscoveryEnabled bool              `json:"discovery_enabled"`
-	DemoMode       bool                `json:"demo_mode"`
-	GeneratedAt    time.Time           `json:"generated_at"`
+	DemoMode         bool              `json:"demo_mode"`
+	GeneratedAt      time.Time         `json:"generated_at"`
 }
 
 // DeviceCounts holds device counters.
 type DeviceCounts struct {
-	Total   int `json:"total"`
-	Online  int `json:"online"`
-	Offline int `json:"offline"`
-	Unknown int `json:"unknown"`
+	Total    int `json:"total"`
+	Online   int `json:"online"`
+	Offline  int `json:"offline"`
+	Unknown  int `json:"unknown"`
 	Sleeping int `json:"sleeping"`
-	Hidden  int `json:"hidden"`
-	Manual  int `json:"manual"`
+	Hidden   int `json:"hidden"`
+	Manual   int `json:"manual"`
 }
 
 // InterfaceStatus is the runtime status of a network interface.
@@ -599,13 +599,13 @@ type InterfaceStatus struct {
 
 // NetworkStatus describes a logical network (bridge or interface with an IP).
 type NetworkStatus struct {
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
-	InterfaceID string   `json:"interface_id"`
-	CIDR        string   `json:"cidr,omitempty"`
-	GatewayIP   string   `json:"gateway_ip,omitempty"`
+	ID          string        `json:"id"`
+	Name        string        `json:"name"`
+	InterfaceID string        `json:"interface_id"`
+	CIDR        string        `json:"cidr,omitempty"`
+	GatewayIP   string        `json:"gateway_ip,omitempty"`
 	Role        InterfaceRole `json:"role"`
-	DeviceCount int      `json:"device_count"`
+	DeviceCount int           `json:"device_count"`
 }
 
 // Anomaly is a network level problem surfaced on the overview page.
@@ -619,24 +619,24 @@ type Anomaly struct {
 
 // Topology is the payload of GET /topology.
 type Topology struct {
-	Nodes    []TopologyNode    `json:"nodes"`
-	Edges    []TopologyEdge    `json:"edges"`
-	Layout   []TopologyLayout  `json:"layout"`
-	GeneratedAt time.Time      `json:"generated_at"`
+	Nodes       []TopologyNode   `json:"nodes"`
+	Edges       []TopologyEdge   `json:"edges"`
+	Layout      []TopologyLayout `json:"layout"`
+	GeneratedAt time.Time        `json:"generated_at"`
 }
 
 // TopologyNode is a node in the topology graph.
 type TopologyNode struct {
-	ID           string            `json:"id"`
-	Kind         string            `json:"kind"` // device | network
-	Device       *Device           `json:"device,omitempty"`
-	Interface    *NetworkInterface `json:"interface,omitempty"`
-	Network      *NetworkStatus    `json:"network,omitempty"`
-	State        DeviceState       `json:"state"`
-	StateReason  string            `json:"state_reason,omitempty"`
-	PrimaryIP    string            `json:"primary_ip,omitempty"`
-	PrimaryMAC   string            `json:"primary_mac,omitempty"`
-	Children     []string          `json:"children,omitempty"`
+	ID          string            `json:"id"`
+	Kind        string            `json:"kind"` // device | network
+	Device      *Device           `json:"device,omitempty"`
+	Interface   *NetworkInterface `json:"interface,omitempty"`
+	Network     *NetworkStatus    `json:"network,omitempty"`
+	State       DeviceState       `json:"state"`
+	StateReason string            `json:"state_reason,omitempty"`
+	PrimaryIP   string            `json:"primary_ip,omitempty"`
+	PrimaryMAC  string            `json:"primary_mac,omitempty"`
+	Children    []string          `json:"children,omitempty"`
 	// Unresolved marks a synthetic segment node that groups devices without a
 	// known intermediate.
 	Unresolved bool `json:"unresolved,omitempty"`
@@ -644,7 +644,7 @@ type TopologyNode struct {
 
 // TopologyEvidence is the payload of GET /topology/evidence.
 type TopologyEvidence struct {
-	Edges    []EdgeEvidence `json:"edges"`
+	Edges    []EdgeEvidence   `json:"edges"`
 	Unmapped []DeviceEvidence `json:"unmapped_devices"`
 }
 
@@ -656,9 +656,9 @@ type EdgeEvidence struct {
 
 // DeviceEvidence bundles a device with its evidence and address observations.
 type DeviceEvidence struct {
-	Device   Device              `json:"device"`
-	Evidence []DiscoveryEvidence `json:"evidence"`
-	Addresses []DeviceAddress    `json:"addresses"`
+	Device    Device              `json:"device"`
+	Evidence  []DiscoveryEvidence `json:"evidence"`
+	Addresses []DeviceAddress     `json:"addresses"`
 }
 
 // DiscoveryStatus is the payload of GET /discovery/status.
@@ -673,55 +673,55 @@ type DiscoveryStatus struct {
 
 // CollectorStatus describes a registered collector.
 type CollectorStatus struct {
-	Name         string   `json:"name"`
-	Supported    bool     `json:"supported"`
-	Capabilities []string `json:"capabilities"`
-	Description  string   `json:"description,omitempty"`
-	Enabled      bool     `json:"enabled"`
-	LastRunAt    time.Time `json:"last_run_at,omitempty"`
-	LastError    string    `json:"last_error,omitempty"`
-	LastDurationMS int     `json:"last_duration_ms,omitempty"`
-	Records      int      `json:"records,omitempty"`
+	Name           string    `json:"name"`
+	Supported      bool      `json:"supported"`
+	Capabilities   []string  `json:"capabilities"`
+	Description    string    `json:"description,omitempty"`
+	Enabled        bool      `json:"enabled"`
+	LastRunAt      time.Time `json:"last_run_at,omitempty"`
+	LastError      string    `json:"last_error,omitempty"`
+	LastDurationMS int       `json:"last_duration_ms,omitempty"`
+	Records        int       `json:"records,omitempty"`
 }
 
 // DiscoveryJob tracks one discovery run.
 type DiscoveryJob struct {
-	ID          string    `json:"id"`
-	Status      JobStatus `json:"status"`
-	Trigger     string    `json:"trigger"` // manual | scheduled | startup
-	StartedAt   time.Time `json:"started_at"`
-	FinishedAt  time.Time `json:"finished_at,omitempty"`
-	Progress    int       `json:"progress"` // 0..100
-	Collectors  []CollectorRun `json:"collectors"`
-	Error       string    `json:"error,omitempty"`
-	DevicesFound int      `json:"devices_found"`
-	DevicesNew   int      `json:"devices_new"`
-	InterfacesFound int   `json:"interfaces_found"`
-	EdgesCreated int      `json:"edges_created"`
+	ID              string         `json:"id"`
+	Status          JobStatus      `json:"status"`
+	Trigger         string         `json:"trigger"` // manual | scheduled | startup
+	StartedAt       time.Time      `json:"started_at"`
+	FinishedAt      time.Time      `json:"finished_at,omitempty"`
+	Progress        int            `json:"progress"` // 0..100
+	Collectors      []CollectorRun `json:"collectors"`
+	Error           string         `json:"error,omitempty"`
+	DevicesFound    int            `json:"devices_found"`
+	DevicesNew      int            `json:"devices_new"`
+	InterfacesFound int            `json:"interfaces_found"`
+	EdgesCreated    int            `json:"edges_created"`
 }
 
 // CollectorRun records one collector execution inside a job.
 type CollectorRun struct {
-	Name      string    `json:"name"`
-	Status    JobStatus `json:"status"`
-	DurationMS int      `json:"duration_ms"`
-	Records   int      `json:"records"`
-	Error     string    `json:"error,omitempty"`
+	Name       string    `json:"name"`
+	Status     JobStatus `json:"status"`
+	DurationMS int       `json:"duration_ms"`
+	Records    int       `json:"records"`
+	Error      string    `json:"error,omitempty"`
 }
 
 // MonitoringStatus is the payload of GET /monitoring/status.
 type MonitoringStatus struct {
-	Probes     []ProbeStatus `json:"probes"`
-	Interfaces []InterfaceStatus `json:"interfaces"`
-	GeneratedAt time.Time `json:"generated_at"`
+	Probes      []ProbeStatus     `json:"probes"`
+	Interfaces  []InterfaceStatus `json:"interfaces"`
+	GeneratedAt time.Time         `json:"generated_at"`
 }
 
 // ProbeStatus bundles a probe with its latest results.
 type ProbeStatus struct {
-	Probe    ProbeTarget    `json:"probe"`
-	Recent   []ProbeResult  `json:"recent"`
-	LossPct  float64        `json:"loss_pct"`
-	AvgLatencyMS int        `json:"avg_latency_ms"`
+	Probe        ProbeTarget   `json:"probe"`
+	Recent       []ProbeResult `json:"recent"`
+	LossPct      float64       `json:"loss_pct"`
+	AvgLatencyMS int           `json:"avg_latency_ms"`
 }
 
 // EventList is the payload of GET /events.
@@ -749,8 +749,8 @@ type ErrorResponse struct {
 
 // HealthResponse is the payload of GET /api/v1/health.
 type HealthResponse struct {
-	Status  string `json:"status"`
-	Version string `json:"version"`
-	DemoMode bool  `json:"demo_mode"`
-	UptimeSeconds int64 `json:"uptime_seconds"`
+	Status        string `json:"status"`
+	Version       string `json:"version"`
+	DemoMode      bool   `json:"demo_mode"`
+	UptimeSeconds int64  `json:"uptime_seconds"`
 }

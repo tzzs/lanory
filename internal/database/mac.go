@@ -27,7 +27,7 @@ func FormatMAC(canonical string) string {
 	}
 	parts := make([]string, 6)
 	for i := 0; i < 6; i++ {
-		parts[i] = canonical[i*2:i*2+2]
+		parts[i] = canonical[i*2 : i*2+2]
 	}
 	return strings.Join(parts, ":")
 }
