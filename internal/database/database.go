@@ -55,7 +55,14 @@ func Open(path string) (*DB, error) {
 		"&_pragma=synchronous(NORMAL)" +
 		"&_pragma=temp_store(MEMORY)" +
 		"&_pragma=cache_size(-4000)" +
-		"&_pragma=wal_autocheckpoint(1000)"
+		// Checkpoint after 256 pages (1 MiB) instead of 1000 (4 MiB).
+		//
+		// On a router the WAL is the part of the database that lives in flash,
+		// and a long-lived reader (the API holds a connection open) blocks
+		// SQLite from checkpointing a WAL that has grown past the page limit. A
+		// 4 MiB WAL was observed on the reference device; 1 MiB keeps the flash
+		// write amplification down while still giving the writer room to batch.
+		"&_pragma=wal_autocheckpoint(256)"
 
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {

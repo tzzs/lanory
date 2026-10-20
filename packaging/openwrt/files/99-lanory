@@ -19,6 +19,7 @@ if ! uci -q get lanory.main >/dev/null 2>&1; then
 		set lanory.main.port='8787'
 		set lanory.main.data_dir='/var/lib/lanory'
 		set lanory.main.generate_config='1'
+		set lanory.main.generate_token='1'
 		commit lanory
 	EOF
 fi
