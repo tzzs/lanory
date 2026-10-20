@@ -98,6 +98,10 @@ apk add --allow-untrusted /tmp/lanory-0.1.0-r1.apk
 
 > 本仓库**没有验证过**软件包构建：环境里没有 OpenWrt SDK。Makefile 与 init
 > 脚本遵循上游惯例，在你用对应 SDK 实际跑通之前一律视为未构建。
+>
+> 已实测的部分：`make release` 可为 amd64、arm64、386、armv7 生成真实的静态二进制
+> （用 `file` 确认 ELF 架构正确、无 `libc.so` 依赖，可直接运行于 musl 环境），
+> 且均已内嵌前端。procd 初始化脚本通过 `sh -n` 语法校验。
 
 ### Docker（可选）
 

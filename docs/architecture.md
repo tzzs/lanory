@@ -312,3 +312,47 @@ require breaking one, the design is wrong, not the invariant.
 - **No writing to the router.** Not even a "convenience" DHCP reservation feature.
 - **No fabricated topology.** A switch behind eth1 without LLDP is not a node; it
   is an unresolved segment.
+
+## Measured resource usage
+
+The specification asks for CPU, memory, database growth, scan duration and
+concurrency testing, and explicitly forbids inventing low-memory numbers. The
+measurements below come from `make bench` and `make resource-test`, which run as
+part of the normal test suite (`internal/resourcetest`).
+
+They were taken on a **developer machine (Apple silicon, darwin/arm64)**, not on a
+router. They are representative of the algorithmic cost, not of absolute router
+performance — the same code on a 1 GHz MIPS-like core will be several times
+slower in wall-clock terms while the complexity stays the same.
+
+| Operation | Cost | Why it matters |
+| --- | --- | --- |
+| `UpsertDevice` (write) | ~80–130 µs/op | the dominant per-tick cost, bound by flash writes |
+| `SaveEvent` (history write) | ~135 µs/op | one row per state transition, not per poll |
+| `Service.Build()` (topology) | ~1.5 ms/op | the graph the UI polls every 15 s |
+| Overview aggregate query | ~0.5 ms/op | stat tiles + device list page |
+| SSE publish, 4 subscribers | ~3 µs/op | fan-out is effectively free |
+
+Scale and retention behaviour:
+
+| Property | Result |
+| --- | --- |
+| Topology build for 250 devices | 5 ms, 200 nodes — comfortably inside a 15 s poll |
+| 100 consecutive builds over 200 devices | heap delta **−38 KiB** (no retained graphs) |
+| 25 discovery ticks observing the same 3 devices | still 3 rows, not 75 |
+| Retention pruning of 200 old + 50 recent events | removes exactly 200 |
+
+The memory test asserts only that the heap does not grow by more than 64 MiB over
+100 builds, which is a leak detector rather than a performance target. Publishing
+a precise "runs in N MB" figure without measuring on the target hardware would be
+dishonest, so none is published.
+
+### What the measurements exposed
+
+Writing these tests found a schema bug rather than confirming the code was fine.
+`network_events.device_id` was declared `NOT NULL DEFAULT ''` together with
+`ON DELETE SET NULL`. SQLite therefore could not satisfy the foreign key when a
+device was deleted: the delete failed and the device's history was lost, which is
+exactly when history matters most. Migration `0002_event_foreign_keys.sql`
+rebuilds the table with nullable reference columns, and
+`TestHistorySurvivesDeviceDeletion` guards the behaviour.

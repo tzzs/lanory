@@ -61,7 +61,7 @@ web:
 webapp: web
 	mkdir -p internal/api/webapp
 	cp -r $(WEB_DIR)/dist/. internal/api/webapp/
-	@echo "frontend staged into internal/api/webapp"'"'"'
+	@echo "frontend staged into internal/api/webapp"
 
 ## web-dev: run the frontend dev server (proxies /api to :8787)
 web-dev:

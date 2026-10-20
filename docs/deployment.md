@@ -344,7 +344,9 @@ logs lanory` in a container.
 | Statement | Verified? |
 | --- | --- |
 | Go code builds and its tests pass | **yes** — run `make check` |
-| the binary cross-compiles for amd64/arm64/armv7/386 | **yes** — run in this environment |
+| the binary cross-compiles for amd64/arm64/armv7/386 | **yes** — `make release`, verified with `file` (static, correct ELF arch, frontend embedded) |
+| the binary runs on the target architecture | **no** — no Linux host or router in the build environment |
+| the OpenWrt APK builds | **no** — no OpenWrt SDK available |
 | Demo Mode works end to end | **yes** — `internal/demo` tests + CI integration job |
 | the OpenWrt package builds | **no** — no SDK available |
 | the package installs on iStoreOS 25.12.5 | **no** |

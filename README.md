@@ -55,8 +55,9 @@ Internet
 | ✅ | Reachability monitoring with failure thresholds (offline needs *N* consecutive failures) | implemented |
 | ✅ | Probe history, device state history, network event log | implemented |
 | ✅ | Realtime updates over SSE | implemented |
-| ✅ | OpenWrt package (procd, UCI; x86 / arm64 / armv7 — **not MIPS**) | packaging complete, **unbuilt** |
-| ✅ | Docker image (distroless, multi-stage) | config complete, **unbuilt** |
+| ✅ | Cross-compiles for linux **amd64 / arm64 / 386 / armv7**, statically linked | built and verified |
+| ✅ | OpenWrt package (procd, UCI; x86 / arm64 / armv7 — **not MIPS**) | packaging complete, **unbuilt** (no SDK here) |
+| ✅ | Docker image (distroless, multi-stage) | config complete, **unbuilt** (no daemon here) |
 | ✅ | Demo Mode: the whole UI without a router | implemented |
 | ✅ | Chinese and English UI | implemented |
 | ⚠️ | LLDP, mDNS, SSDP collectors | implemented, opt-in, not exercised against a real multicast network yet |
@@ -103,6 +104,11 @@ semantics: **[packaging/openwrt/README.md](packaging/openwrt/README.md)**.
 > The package build is **not** verified in this repository: no OpenWrt SDK was
 > available. The Makefile and init script follow upstream conventions and are
 > marked as unbuilt until you run them on a Linux host with the right SDK.
+>
+> What *was* verified: `make release` produces real static binaries for
+> amd64, arm64, 386 and armv7 (confirmed with `file` — correct ELF class and
+> machine, no `libc.so` reference, so they run against musl), each with the
+> frontend embedded. `sh -n` validates the procd init script.
 
 ### Docker (optional)
 
