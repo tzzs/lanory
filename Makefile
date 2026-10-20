@@ -13,7 +13,7 @@ WEB_DIR     := web
 PKG_DIR     := packaging/openwrt
 
 .PHONY: all build test test-race bench lint fmt vet clean web web-dev install uninstall \
-        packages apk-sdk apk-check package-check check run dev demo
+        packages apk-sign apk-keygen apk-sdk apk-check package-check check run dev demo
 
 all: build
 
@@ -100,6 +100,22 @@ package-check:
 ## (no OpenWrt SDK needed: the binary is already static, the rest is text)
 packages: release
 	python3 $(PKG_DIR)/mkpackage.py --all --binary-dir dist --version $(VERSION) --out dist/packages
+
+## apk-sign: sign the built packages with a local RSA key
+## (LANORY_KEY=/path/to/key.key, defaults to ~/.lanory/lanory.key)
+apk-sign:
+	@test -n "$(LANORY_KEY)" || { echo "set LANORY_KEY=/path/to/key.key"; exit 1; }
+	@test -f "$(LANORY_KEY)" || python3 $(PKG_DIR)/signapk.py --keygen $(LANORY_KEY)
+	@for p in dist/packages/*.apk; do \
+		case "$$p" in *.signed) continue;; esac; \
+		python3 $(PKG_DIR)/signapk.py --key $(LANORY_KEY) --in $$p --out $$p.signed || exit 1; \
+	done
+	@echo "signed packages are in dist/packages/*.apk.signed"
+
+## apk-keygen: generate a signing key pair
+apk-keygen:
+	@test -n "$(LANORY_KEY)" || { echo "set LANORY_KEY=/path/to/key.key"; exit 1; }
+	python3 $(PKG_DIR)/signapk.py --keygen $(LANORY_KEY)
 
 ## apk-sdk: build the package inside the OpenWrt buildroot (needs the SDK)
 apk-sdk:

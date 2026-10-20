@@ -220,6 +220,31 @@ If the SDK refuses to build the Go package, check in this order:
    one.
 3. The `GO_PKG_BUILD_PKG` path matches `cmd/lanory` in this repository.
 
+## Signing the package
+
+An unsigned package can only be installed with `apk add --allow-untrusted`,
+which is fine for a quick test and not something to ask of a user on a router
+they depend on. A signed package is verified against a public key the user
+installs once, and then installs without the override.
+
+```sh
+# 1. generate a key pair (once)
+make apk-keygen LANORY_KEY=~/.lanory/lanory.key
+
+# 2. copy the public key to the router
+scp ~/.lanory/lanory.key.pub root@192.168.100.1:/etc/apk/keys/lanory
+#   the file name must match the key id exactly, with no extension
+
+# 3. sign the packages
+make apk-sign LANORY_KEY=~/.lanory/lanory.key
+scp dist/packages/aarch64_generic-lanory-0.1.0.apk.signed root@192.168.100.1:/tmp/
+
+# 4. install; no --allow-untrusted needed
+ssh root@192.168.100.1 'apk add /tmp/lanory-0.1.0.apk.signed'
+```
+
+The private key stays on your workstation. Never put it on the router.
+
 ## Access control on first start
 
 An installation must not be reachable unauthenticated: the API can trigger scans
