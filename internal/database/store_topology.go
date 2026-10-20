@@ -600,10 +600,13 @@ func (s *Store) SaveEvent(e *model.NetworkEvent) error {
 	if e.Timestamp.IsZero() {
 		e.Timestamp = Now()
 	}
+	// device_id and edge_id are nullable so history survives the deletion of the
+	// row it refers to. An empty string means "no reference".
 	_, err := s.db.Exec(`INSERT INTO network_events
 		(id, event_type, device_id, edge_id, old_value, new_value, message, evidence, timestamp)
 		VALUES (?,?,?,?,?,?,?,?,?)`,
-		e.ID, string(e.EventType), e.DeviceID, e.EdgeID, e.OldValue, e.NewValue, e.Message, e.Evidence,
+		e.ID, string(e.EventType), nullString(e.DeviceID), nullString(e.EdgeID),
+		e.OldValue, e.NewValue, e.Message, e.Evidence,
 		e.Timestamp.UTC().Format(TimeLayout))
 	return err
 }
@@ -677,9 +680,12 @@ func (s *Store) ListEvents(f EventFilter) ([]model.NetworkEvent, int, error) {
 	for rows.Next() {
 		var e model.NetworkEvent
 		var et string
-		if err := rows.Scan(&e.ID, &et, &e.DeviceID, &e.EdgeID, &e.OldValue, &e.NewValue, &e.Message, &e.Evidence, &e.Timestamp); err != nil {
+		var deviceID, edgeID sql.NullString
+		if err := rows.Scan(&e.ID, &et, &deviceID, &edgeID, &e.OldValue, &e.NewValue, &e.Message, &e.Evidence, &e.Timestamp); err != nil {
 			return nil, 0, err
 		}
+		e.DeviceID = deviceID.String
+		e.EdgeID = edgeID.String
 		e.EventType = model.EventType(et)
 		out = append(out, e)
 	}

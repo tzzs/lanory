@@ -34,9 +34,13 @@ coverage:
 	$(GO) test ./... -count=1 -coverprofile=coverage.out
 	$(GO) tool cover -func=coverage.out | tail -1
 
-## bench: run benchmarks
+## bench: run the resource benchmarks (writes, reads, topology build, SSE)
 bench:
-	$(GO) test ./... -bench=. -benchtime=10x -run=^
+	$(GO) test ./internal/resourcetest/ -bench=. -benchtime=20x -run=^$$ -v
+
+## resource-test: run the scale, memory and retention tests
+resource-test:
+	$(GO) test ./internal/resourcetest/ -v -run 'Test' 2>&1 | grep -Ev '^(=== RUN|=== PAUSE|=== CONT)'px
 
 ## vet: run go vet
 vet:
