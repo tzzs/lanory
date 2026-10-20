@@ -82,6 +82,7 @@ hardware or a real build system — which, for packaging, it has not been.
 | Topology builder | `internal/topology` | implemented | graph tests vs fixtures |
 | Layout (tree, pinning) | `internal/topology` | implemented | layout tests |
 | Probe engine + state machine | `internal/monitoring` | implemented | scheduler + state tests |
+| Neighbour-table cross-check | `internal/monitoring` | implemented | parses /proc/net/ |
 | Internet connectivity | `internal/monitoring` | implemented | aggregation tests |
 | REST + SSE API | `internal/api` | implemented | route tests |
 | Static frontend embedding | `internal/api` | implemented | SPA fallback tests |
@@ -355,3 +356,31 @@ device was deleted: the delete failed and the device's history was lost, which i
 exactly when history matters most. Migration `0002_event_foreign_keys.sql`
 rebuilds the table with nullable reference columns, and
 `TestHistorySurvivesDeviceDeletion` guards the behaviour.
+
+## How a device state is decided
+
+The state machine never reports a device as offline on the strength of a single
+failed probe. The rules, in the order they are applied:
+
+1. **The probe source must be reachable.** If the router itself lost its
+   connectivity, a failed probe says nothing about the device and the state
+   becomes `sleeping` with that as the reason.
+2. **The neighbour table has the last word.** An address with a complete entry
+   in `/proc/net/arp` means the kernel exchanged traffic with it recently. The
+   device is on the segment; it just does not answer this probe method. That is
+   `sleeping`, with the reason naming the neighbour table. This is what keeps a
+   Windows machine, a sleeping phone and a printer without an ICMP stack from
+   being reported as offline.
+3. **An intermittent pattern is power saving.** A device that answers
+   sometimes and not others is `sleeping`, not offline.
+4. **Only a run of failures with no recent success is offline.** The run length
+   is `monitoring.failure_threshold` (three by default) and coming back requires
+   `monitoring.recover_confirm` successes.
+
+An address the kernel could not resolve has a zero flag and a zero MAC in the
+neighbour table. It proves nothing and is ignored.
+
+The distinction matters on a real network: on the reference router, nine of the
+eighteen devices answer echo requests, four are IPv6-only hosts the router has
+no route to, and five are present but silent. The last group is reported as
+`sleeping` with a reason that says why, and none of them is reported offline.
