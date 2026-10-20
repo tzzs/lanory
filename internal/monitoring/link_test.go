@@ -536,3 +536,58 @@ func TestLinkObserverConcurrentObserveIsSafe(t *testing.T) {
 		}
 	}
 }
+
+// TestListInterfacesSkipsVirtualPorts pins the filter that keeps the monitoring
+// page readable.
+//
+// On the reference router /sys/class/net contained 18 entries of which 11 were
+// virtual: lo, docker0, dummy0, gre0, gretap0, erspan0, ip6gre0, ip6tnl0, sit0,
+// teql0 and tunl0. They are not ports, they never carry a household device, and
+// showing them made the real interfaces hard to find.
+func TestListInterfacesSkipsVirtualPorts(t *testing.T) {
+	root := t.TempDir()
+	// The exact set observed on iStoreOS 25.12.5.
+	real := []string{"br-lan", "dheth0", "eth0", "eth1", "eth2", "eth3"}
+	virtual := []string{"lo", "docker0", "dummy0", "erspan0", "gre0", "gretap0", "ip6gre0", "ip6tnl0", "sit0", "teql0", "tunl0"}
+	for _, name := range append(append([]string{}, real...), virtual...) {
+		if err := os.MkdirAll(filepath.Join(root, name), 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", name, err)
+		}
+	}
+
+	o := &LinkObserver{sysRoot: root}
+	names, err := o.listInterfaces()
+	if err != nil {
+		t.Fatalf("listInterfaces: %v", err)
+	}
+
+	for _, v := range virtual {
+		for _, got := range names {
+			if got == v {
+				t.Errorf("virtual interface %q must not be listed as a port", v)
+			}
+		}
+	}
+	for _, want := range real {
+		found := false
+		for _, got := range names {
+			if got == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("real interface %q is missing from the list: %v", want, names)
+		}
+	}
+	if len(names) != len(real) {
+		t.Errorf("listed %d interfaces, want %d real ones: %v", len(names), len(real), names)
+	}
+	// Output must be stable so the API payload does not shuffle between polls.
+	for i := 1; i < len(names); i++ {
+		if names[i-1] > names[i] {
+			t.Errorf("interfaces are not sorted: %v", names)
+			break
+		}
+	}
+}

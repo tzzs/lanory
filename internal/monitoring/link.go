@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/lanory/lanory/internal/discovery/parsers"
 	"github.com/lanory/lanory/internal/model"
 )
 
@@ -301,8 +303,19 @@ func (o *LinkObserver) listInterfaces() ([]string, error) {
 	}
 	var names []string
 	for _, e := range entries {
-		names = append(names, e.Name())
+		name := e.Name()
+		// Skip loopback and the virtual interfaces the kernel creates for
+		// tunnels, dummy devices and container bridges. They are not network
+		// ports, they never carry a household device, and listing them made the
+		// monitoring page show eighteen rows of which eleven were unmanaged:
+		// docker0, dummy0, gre0, gretap0, erspan0, ip6gre0, ip6tnl0, sit0,
+		// teql0, tunl0 and lo.
+		if parsers.LooksVirtualByName(name) {
+			continue
+		}
+		names = append(names, name)
 	}
+	sort.Strings(names)
 	return names, nil
 }
 

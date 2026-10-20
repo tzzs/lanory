@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/lanory/lanory/internal/database"
+	"github.com/lanory/lanory/internal/events"
 	"github.com/lanory/lanory/internal/model"
 )
 
@@ -112,6 +113,14 @@ type recordingPublisher struct {
 	online  int
 	offline int
 	updated int
+}
+
+// Subscribe returns an event channel. The recording publisher never emits, so
+// the channel stays empty until it is closed; the tests that use it do not
+// depend on the subscription.
+func (r *recordingPublisher) Subscribe() (<-chan events.Event, func()) {
+	ch := make(chan events.Event)
+	return ch, func() { close(ch) }
 }
 
 func (r *recordingPublisher) PublishProbeCompleted(p *model.ProbeTarget, res *model.ProbeResult) {

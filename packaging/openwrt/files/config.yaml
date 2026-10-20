@@ -57,6 +57,10 @@ monitoring:
   recover_confirm: 1
   interface_refresh: "30s"
   device_refresh: "60s"
+  # Create an ICMP probe for every discovered device that has an address.
+  # Without it a discovered device stays "unknown" forever, because nothing
+  # else creates probes.
+  auto_probe: true
 
 topology:
   auto_layout: true

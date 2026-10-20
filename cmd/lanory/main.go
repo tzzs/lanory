@@ -117,7 +117,21 @@ Flags:
 
 // run executes the whole command with injectable writers, so tests can drive
 // main without spawning a process.
+//
+// It waits for SIGINT or SIGTERM to shut down, which is what a real invocation
+// needs and what procd and systemd send.
 func run(args []string, stdout, stderr io.Writer) error {
+	return runWithContext(context.Background(), args, stdout, stderr)
+}
+
+// runWithContext is run with an injected shutdown trigger.
+//
+// Sending the test process a real SIGTERM cannot work: the signal handler is
+// installed inside the server goroutine, so a second stop request after the
+// server has already exited hits the default disposition and kills the test
+// binary. A cancellable parent context gives the tests the same shutdown path
+// with no process-level signal at all.
+func runWithContext(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	opts, err := parseFlags(args)
 	if err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -146,7 +160,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return printConfig(stdout, cfg)
 	}
 
-	return serve(cfg, opts, logger, stdout)
+	return serve(ctx, cfg, opts, logger, stdout)
 }
 
 // loadConfig reads the configuration and applies the command line overrides.
@@ -253,7 +267,7 @@ func printConfig(w io.Writer, cfg *config.Config) error {
 }
 
 // serve builds the application and runs it until a termination signal arrives.
-func serve(cfg *config.Config, opts options, logger *slog.Logger, stdout io.Writer) error {
+func serve(parent context.Context, cfg *config.Config, opts options, logger *slog.Logger, stdout io.Writer) error {
 	logger.Info("lanory starting",
 		"version", version,
 		"commit", commit,
@@ -341,7 +355,10 @@ func serve(cfg *config.Config, opts options, logger *slog.Logger, stdout io.Writ
 	fmt.Fprintf(stdout, "lanory %s listening on %s (frontend: %s)\n",
 		version, cfg.Addr(), app.FrontendSource())
 
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	// Shutdown is triggered by either a signal (the real deployment: procd and
+	// systemd both send SIGTERM) or the caller cancelling the parent context
+	// (the tests).
+	ctx, stop := signal.NotifyContext(parent, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
 	errCh := make(chan error, 1)

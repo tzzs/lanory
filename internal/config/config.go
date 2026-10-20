@@ -91,6 +91,10 @@ type MonitoringConfig struct {
 	RecoverConfirm   int    `yaml:"recover_confirm"`
 	// InterfaceRefresh controls how often interface state is polled.
 	InterfaceRefresh string `yaml:"interface_refresh"`
+	// AutoProbe creates an ICMP probe for every newly discovered device that has
+	// an address. Without it a discovered device stays "unknown" forever, because
+	// nothing else creates probes.
+	AutoProbe bool `yaml:"auto_probe"`
 	// DeviceRefresh controls how often device reachability is polled.
 	DeviceRefresh string `yaml:"device_refresh"`
 }

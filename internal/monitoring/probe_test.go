@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"os"
 	"runtime"
 	"strings"
 	"testing"
@@ -175,9 +176,6 @@ func TestExecuteTimeoutUsesUnroutableLAN(t *testing.T) {
 // against an address that drops the echo request.
 func TestExecuteICMPTimeout(t *testing.T) {
 	e := NewExecutor(DefaultExecutorConfig())
-	if _, err := e.icmpConn(); err != nil {
-		t.Skipf("unprivileged ICMP socket unavailable: %v", err)
-	}
 	target := model.ProbeTarget{Target: "10.255.255.1", Protocol: model.ProbeICMP, Timeout: 1}
 	start := time.Now()
 	rec := e.Execute(context.Background(), target)
@@ -315,12 +313,8 @@ func TestExecuteDNSSuccessAndFailure(t *testing.T) {
 // available, and that it never claims success when it is not.
 func TestExecuteICMPLoopback(t *testing.T) {
 	e := NewExecutor(DefaultExecutorConfig())
-	_, sockErr := e.icmpConn()
-	if sockErr != nil {
-		// The socket is unavailable (locked down kernel, container). The probe
-		// must then degrade to TCP and say so — never claim an ICMP success.
-		t.Skipf("unprivileged ICMP socket unavailable on %s: %v", runtime.GOOS, sockErr)
-	}
+	// The probe works with either socket form; when neither is available it
+	// degrades to TCP and says so, and never claims an ICMP success.
 
 	rec := e.Execute(context.Background(), model.ProbeTarget{
 		Target: "127.0.0.1", Protocol: model.ProbeICMP, SourceID: "lanory", Timeout: 2,
@@ -551,18 +545,36 @@ func TestExecutorCloseIsIdempotent(t *testing.T) {
 	}
 }
 
-// TestExecutorReusesSocket asserts the socket is created once and reused, so a
-// long running engine does not exhaust file descriptors.
-func TestExecutorReusesSocket(t *testing.T) {
+// TestExecutorDoesNotLeakSockets asserts the probe sockets are closed again.
+//
+// The sockets are opened per probe rather than cached: a socket carries the
+// deadline and the kernel's reply demultiplexing for one exchange, and a
+// shared socket serialised every probe behind the slowest one. The cost of
+// opening a socket is far below the cost of a round trip, and the socket must
+// not be leaked.
+func TestExecutorDoesNotLeakSockets(t *testing.T) {
+	before := openFileDescriptors(t)
 	e := NewExecutor(DefaultExecutorConfig())
-	c1, err1 := e.icmpConn()
-	if err1 == nil {
-		c2, err2 := e.icmpConn()
-		if err2 != nil || c1 != c2 {
-			t.Fatalf("socket was recreated: %v / %v", err1, err2)
-		}
+	for i := 0; i < 20; i++ {
+		_, _, _, _ = e.probeICMP(context.Background(), model.ProbeTarget{
+			Target: "127.0.0.1", Protocol: model.ProbeICMP, Timeout: 1,
+		})
 	}
 	_ = e.Close()
+	after := openFileDescriptors(t)
+	if after > before+2 {
+		t.Errorf("file descriptors grew from %d to %d over 20 probes", before, after)
+	}
+}
+
+// openFileDescriptors counts the open file descriptors of this process.
+func openFileDescriptors(t *testing.T) int {
+	t.Helper()
+	entries, err := os.ReadDir("/proc/self/fd")
+	if err != nil {
+		t.Skipf("cannot read /proc/self/fd on this platform: %v", err)
+	}
+	return len(entries)
 }
 
 // TestNoGoroutineLeakOnConcurrentExecutes asserts concurrent executions do not

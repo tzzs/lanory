@@ -228,6 +228,23 @@ if [ -f "$CFG" ]; then
 	else
 		fail "the config layer does not read LANORY_AUTH_TOKEN, so the init script's token is ignored"
 	fi
+	# Every key the init script writes must exist in the config struct, and
+	# vice versa for the monitoring section: a key the struct has but the
+	# script does not write silently falls back to the Go zero value, which
+	# for a bool means "off" (that is how auto_probe silently disabled the
+	# device monitoring on a real router).
+	for key in auto_probe; do
+		if grep -q "yaml:\"$key\"" "$CFG"; then
+			pass "the config struct has the $key option"
+		else
+			fail "the config struct has no $key option"
+		fi
+		if grep -q "$key:" "$DIR/files/lanory.init"; then
+			pass "the init script writes $key"
+		else
+			fail "the init script does not write $key; the option falls back to its zero value"
+		fi
+	done
 else
 	printf 'skip  config.go not found at %s\n' "$CFG"
 fi

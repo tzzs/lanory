@@ -8,6 +8,7 @@ import (
 
 	"github.com/lanory/lanory/internal/config"
 	"github.com/lanory/lanory/internal/database"
+	"github.com/lanory/lanory/internal/events"
 	"github.com/lanory/lanory/internal/model"
 )
 
@@ -68,6 +69,9 @@ type EngineConfig struct {
 	RetentionCheck time.Duration
 	// InterfaceRefresh controls how often interface state is polled.
 	InterfaceRefresh time.Duration
+	// AutoProbe controls automatic probe provisioning for discovered devices.
+	// The zero value disables it; DefaultEngineConfig enables it.
+	AutoProbe AutoProbeConfig
 }
 
 // DefaultEngineConfig returns the built-in defaults.
@@ -80,6 +84,7 @@ func DefaultEngineConfig() EngineConfig {
 		RunNowTimeout:    10 * time.Second,
 		RetentionCheck:   time.Hour,
 		InterfaceRefresh: 30 * time.Second,
+		AutoProbe:        DefaultAutoProbeConfig(),
 	}
 }
 
@@ -118,6 +123,13 @@ type Publisher interface {
 	PublishDeviceOffline(d *model.Device, reason string)
 	PublishDeviceUpdated(d *model.Device, reason string)
 	PublishLinkUpdated(e *model.TopologyEdge, reason string)
+	// Subscribe delivers events to the engine. It is part of the interface
+	// because the event bus always provides it, and the engine uses it to react
+	// to discovery instead of waiting for the next interface-refresh tick:
+	// without it a device found by a scan waited up to 30 seconds before its
+	// probe was created, so the monitoring page showed it as "unknown" for
+	// that long.
+	Subscribe() (<-chan events.Event, func())
 }
 
 // probeJob tracks one scheduled probe.
@@ -196,10 +208,18 @@ func (e *Engine) Start(ctx context.Context) error {
 		return err
 	}
 
-	e.wg.Add(3)
+	// Provision probes for devices discovery already found before the first
+	// tick, so a freshly installed service starts monitoring immediately instead
+	// of leaving every device "unknown" for a whole interface-refresh interval.
+	if _, err := e.EnsureProbes(runCtx, e.cfg.AutoProbe); err == nil {
+		_ = e.reload(runCtx)
+	}
+
+	e.wg.Add(4)
 	go e.retentionLoop(runCtx)
 	go e.interfaceLoop(runCtx)
 	go e.linkRefreshLoop(runCtx)
+	go e.discoveryLoop(runCtx)
 	return nil
 }
 
@@ -388,8 +408,59 @@ func (e *Engine) interfaceLoop(ctx context.Context) {
 			return
 		case <-ticker.C:
 			e.observeLinks()
+			e.provisionProbes(ctx)
 		}
 	}
+}
+
+// discoveryLoop provisions probes as soon as discovery reports new devices.
+//
+// It subscribes to the event bus rather than polling, so a device found by a
+// scan starts being monitored within a second instead of at the next
+// interface-refresh tick. The subscription is optional: a bus that cannot be
+// subscribed to simply leaves the periodic path in charge.
+func (e *Engine) discoveryLoop(ctx context.Context) {
+	defer e.wg.Done()
+
+	if e.bus == nil {
+		// No event bus: the periodic provisioning still runs.
+		<-ctx.Done()
+		return
+	}
+	ch, cancel := e.bus.Subscribe()
+	defer cancel()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case ev, ok := <-ch:
+			if !ok {
+				return
+			}
+			// A topology change means devices may have been added.
+			if ev.Type != "topology.updated" && ev.Type != "device.updated" {
+				continue
+			}
+			e.provisionProbes(ctx)
+		}
+	}
+}
+
+// provisionProbes creates probes for devices that do not have one yet, then
+// reloads the schedule so they start running.
+//
+// Without this a discovered device stays in the "unknown" state forever: the
+// probe engine only runs probes that already exist, and nothing in the discovery
+// path was creating them. That made the monitoring page empty on a fresh
+// install even though seventeen devices had been found.
+func (e *Engine) provisionProbes(ctx context.Context) {
+	created, err := e.EnsureProbes(ctx, e.cfg.AutoProbe)
+	if err != nil || created == 0 {
+		return
+	}
+	// New rows must be picked up by the scheduler.
+	_ = e.reload(ctx)
 }
 
 // linkRefreshLoop performs the first interface observation shortly after Start so

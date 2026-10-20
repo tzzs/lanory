@@ -58,10 +58,19 @@ func newSchedulers(
 	discoverySvc.WithReconciler(reconcilerAdapter{engine: updateEngine})
 
 	// Monitoring: probe engine with a conservative worker pool.
+	executorCfg := monitoring.DefaultExecutorConfig()
+	// A link-local IPv6 target is only reachable with the interface zone, and
+	// the raw ICMP socket needs the source address in the IP header. Both are
+	// resolved per probe rather than once at startup: at startup the database
+	// is still empty, because the interfaces only appear after the first
+	// discovery run.
+	executorCfg.ICMPZone = func() string { return lanZone(store) }
+	executorCfg.ICMPLocalAddr = func() string { return lanAddress(store) }
+
 	monEngine := monitoring.NewEngine(
 		store,
 		bus,
-		monitoring.NewExecutor(monitoring.DefaultExecutorConfig()),
+		monitoring.NewExecutor(executorCfg),
 		identity,
 		monitoringEngineConfig(cfg),
 	)
@@ -230,13 +239,77 @@ func monitoringEngineConfig(cfg *config.Config) monitoring.EngineConfig {
 	if err != nil || timeout <= 0 {
 		timeout = 3 * time.Second
 	}
+	interval, ierr := cfg.MonitoringInterval()
+	if ierr != nil || interval <= 0 {
+		interval = 60 * time.Second
+	}
+
+	auto := monitoring.DefaultAutoProbeConfig()
+	auto.Enabled = cfg.Monitoring.AutoProbe
+	auto.Interval = interval
+	auto.Timeout = timeout
+	if cfg.Monitoring.FailureThreshold > 0 {
+		auto.FailureThreshold = cfg.Monitoring.FailureThreshold
+	}
+	if cfg.Monitoring.RecoverConfirm > 0 {
+		auto.RecoverConfirm = cfg.Monitoring.RecoverConfirm
+	}
+
 	return monitoring.EngineConfig{
 		Monitoring:       cfg.Monitoring,
 		Database:         cfg.Database,
 		Workers:          cfg.Discovery.MaxConcurrency,
 		RunNowTimeout:    timeout,
 		InterfaceRefresh: interfaceRefresh(cfg),
+		AutoProbe:        auto,
 	}
+}
+
+// lanAddress returns the IPv4 address of the LAN interface.
+//
+// It is the source address used for ICMP probes: sending from the router's WAN
+// address would make a peer answer a different host than the one the user is
+// looking at.
+func lanAddress(store *database.Store) string {
+	ifaces, err := store.ListAllInterfaces()
+	if err != nil {
+		return ""
+	}
+	for _, iface := range ifaces {
+		if iface.Role != model.InterfaceRoleLAN {
+			continue
+		}
+		for _, addr := range iface.Addresses {
+			if addr.Family == model.AddressFamilyIPv4 && addr.Address != "" {
+				return addr.Address
+			}
+		}
+	}
+	return ""
+}
+
+// lanZone returns the name of the interface that carries the LAN, used as the
+// zone for link-local IPv6 probes.
+//
+// A link-local address (fe80::/10) is not routable: it is only meaningful
+// together with the interface it was seen on. The LAN interface is preferred,
+// and the first bridge is the fallback.
+func lanZone(store *database.Store) string {
+	ifaces, err := store.ListAllInterfaces()
+	if err != nil {
+		return ""
+	}
+	for _, iface := range ifaces {
+		if iface.Role == model.InterfaceRoleLAN && iface.Type == model.InterfaceTypeEthernet {
+			return iface.Name
+		}
+	}
+	for _, iface := range ifaces {
+		if iface.Type == model.InterfaceTypeBridge {
+			return iface.Name
+		}
+	}
+	return ""
 }
 
 // interfaceRefresh returns how often the link observer polls the interface state.

@@ -9,13 +9,13 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
 	"github.com/lanory/lanory/internal/model"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv4"
+	"golang.org/x/net/ipv6"
 )
 
 // ErrorType classifies why a probe failed. The values are persisted in
@@ -94,6 +94,14 @@ type ExecutorConfig struct {
 	ICMPPayloadSize int
 	// ICMPListenAddr is the local address the ICMP datagram socket binds to.
 	ICMPListenAddr string
+	// ICMPZone returns the interface zone used to reach a link-local IPv6
+	// target, for example "br-lan". An empty result means the link-local
+	// address is not probed. It is a function because the interface list is
+	// only known after the first discovery run.
+	ICMPZone func() string
+	// ICMPLocalAddr returns the local address the raw ICMP socket binds to.
+	// An empty result means 0.0.0.0.
+	ICMPLocalAddr func() string
 	// HTTPMaxRedirects caps redirect following for http probes.
 	HTTPMaxRedirects int
 	// HTTPMaxBodyBytes caps how much of a response body is read.
@@ -128,17 +136,10 @@ type ProbeExecutor struct {
 	// two concurrent echo requests could otherwise swallow each other's
 	// replies. Serialising also keeps a soft router from being flooded with
 	// parallel echo traffic, which is the intended behaviour here.
-	icmpMu sync.Mutex
-	sock   icmpSocket
 }
 
 // icmpSocket is the lazily created unprivileged ICMP datagram socket. A
 // container or a hardened kernel may refuse it, so the error is cached too.
-type icmpSocket struct {
-	conn *icmp.PacketConn
-	err  error
-}
-
 // NewExecutor returns an Executor using cfg, filling zero fields from
 // DefaultExecutorConfig.
 func NewExecutor(cfg ExecutorConfig) *ProbeExecutor {
@@ -175,10 +176,15 @@ func NewExecutor(cfg ExecutorConfig) *ProbeExecutor {
 func (e *ProbeExecutor) Protocol(protocol model.ProbeProtocol) bool {
 	switch protocol {
 	case model.ProbeICMP:
-		if _, err := e.icmpConn(); err != nil && !e.cfg.FallbackToTCP {
-			return false
+		// ICMP is possible when either socket form can be opened, or when the
+		// TCP fallback is allowed.
+		if _, err := icmp.ListenPacket("udp4", e.cfg.ICMPListenAddr); err == nil {
+			return true
 		}
-		return true
+		if rawSocketSupported() {
+			return true
+		}
+		return e.cfg.FallbackToTCP
 	case model.ProbeTCP, model.ProbeHTTP, model.ProbeDNS:
 		return true
 	default:
@@ -186,33 +192,12 @@ func (e *ProbeExecutor) Protocol(protocol model.ProbeProtocol) bool {
 	}
 }
 
-// Close releases the cached ICMP socket, if any.
-func (e *ProbeExecutor) Close() error {
-	e.icmpMu.Lock()
-	defer e.icmpMu.Unlock()
-	if e.sock.conn == nil {
-		return nil
-	}
-	conn := e.sock.conn
-	e.sock.conn = nil
-	return conn.Close()
-}
-
-// icmpConn returns the shared unprivileged ICMP socket, opening it on first use.
-func (e *ProbeExecutor) icmpConn() (*icmp.PacketConn, error) {
-	e.icmpMu.Lock()
-	defer e.icmpMu.Unlock()
-	if e.sock.conn != nil || e.sock.err != nil {
-		return e.sock.conn, e.sock.err
-	}
-	conn, err := icmp.ListenPacket("udp4", e.cfg.ICMPListenAddr)
-	if err != nil {
-		e.sock.err = fmt.Errorf("icmp datagram socket unavailable: %w", err)
-		return nil, e.sock.err
-	}
-	e.sock.conn = conn
-	return conn, nil
-}
+// Close releases any resources the executor holds.
+//
+// The probe sockets are opened per probe and closed with it, so there is
+// normally nothing to release; the method exists for the contract and for a
+// future pooled implementation.
+func (e *ProbeExecutor) Close() error { return nil }
 
 // Execute runs one probe.
 //
@@ -334,35 +319,68 @@ func (e *ProbeExecutor) timeoutFor(target model.ProbeTarget) time.Duration {
 // is set, the probe degrades to a TCP connect against the same target and
 // reports the degradation; it never claims that an ICMP packet was sent.
 func (e *ProbeExecutor) probeICMP(ctx context.Context, target model.ProbeTarget) (bool, error, string, model.ProbeProtocol) {
-	ip, err := net.ResolveIPAddr("ip4", target.Target)
+	// Resolve without forcing a family: an IPv6-only host must be probed over
+	// IPv6, and "ip4" made every such target fail with "no such host".
+	ip, err := net.ResolveIPAddr("ip", target.Target)
 	if err != nil {
 		return false, err, "", model.ProbeICMP
 	}
 	if ip.IP.To4() == nil {
-		return false, errors.New("target is not an IPv4 address"), "", model.ProbeICMP
+		return e.probeICMPv6(ctx, target, ip.IP)
 	}
 
-	conn, sockErr := e.icmpConn()
-	if sockErr != nil {
+	payload := icmpEchoBody(e.cfg.ICMPPayloadSize)
+	timeout := e.timeoutFor(target)
+
+	// The unprivileged datagram socket is preferred: it needs no capability.
+	// It is opened per probe, because its deadline and the kernel's reply
+	// demultiplexing belong to one exchange, and a shared socket serialised
+	// every probe behind the slowest one.
+	conn, sockErr := icmp.ListenPacket("udp4", e.cfg.ICMPListenAddr)
+	if sockErr == nil {
+		defer conn.Close()
+		ok, err := e.echoDatagram(ctx, conn, ip.IP, target, timeout, payload)
+		if err == nil {
+			return ok, nil, "", model.ProbeICMP
+		}
 		if !e.cfg.FallbackToTCP {
-			return false, sockErr, "", model.ProbeICMP
+			return false, err, "", model.ProbeICMP
 		}
-		port := target.Port
-		if port <= 0 {
-			port = e.cfg.DefaultPort
-		}
-		ok, dialErr, _ := e.probeTCP(ctx, model.ProbeTarget{
-			Target:   ip.IP.String(),
-			Port:     port,
-			Protocol: model.ProbeTCP,
-			Timeout:  target.Timeout,
-		})
-		note := fmt.Sprintf("icmp unavailable (%s); fell back to tcp/%d", sockErr.Error(), port)
-		return ok, dialErr, note, model.ProbeTCP
+		return e.fallbackToTCP(ctx, target, ip.IP, fmt.Sprintf("icmp datagram socket: %v", err))
 	}
 
-	e.icmpMu.Lock()
-	defer e.icmpMu.Unlock()
+	// The datagram socket is not permitted (an empty ping_group_range, as
+	// shipped by iStoreOS). Try the raw socket, which needs CAP_NET_RAW.
+	if rawSocketSupported() {
+		ok, err := PingOne(ctx, e.localAddr(), ip.IP, timeout, payload, e.sourceIP())
+		if err == nil {
+			if ok {
+				return true, nil, "", model.ProbeICMP
+			}
+			// No reply within the timeout: the host did not answer. That is a
+			// timeout, not a success and not a crash.
+			if !e.cfg.FallbackToTCP {
+				return false, errICMPTimeout, "", model.ProbeICMP
+			}
+			return e.fallbackToTCP(ctx, target, ip.IP, "icmp: no reply within the timeout")
+		}
+		if !e.cfg.FallbackToTCP {
+			return false, err, "", model.ProbeICMP
+		}
+		return e.fallbackToTCP(ctx, target, ip.IP, fmt.Sprintf("icmp raw socket: %v", err))
+	}
+	return e.fallbackToTCP(ctx, target, ip.IP, fmt.Sprintf("icmp unavailable (%s)", sockErr.Error()))
+}
+
+// echoDatagram sends one echo request on a datagram socket and waits for the
+// matching reply.
+func (e *ProbeExecutor) echoDatagram(ctx context.Context, conn *icmp.PacketConn, dst net.IP, target model.ProbeTarget, timeout time.Duration, payload []byte) (bool, error) {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		deadline = time.Now().Add(timeout)
+	}
+	_ = conn.SetDeadline(deadline)
+	defer func() { _ = conn.SetDeadline(time.Time{}) }()
 
 	id := int(time.Now().UnixNano() & 0xffff)
 	if id == 0 {
@@ -371,7 +389,85 @@ func (e *ProbeExecutor) probeICMP(ctx context.Context, target model.ProbeTarget)
 	msg := icmp.Message{
 		Type: ipv4.ICMPTypeEcho,
 		Code: 0,
-		Body: &icmp.Echo{ID: id, Seq: 1, Data: icmpEchoBody(e.cfg.ICMPPayloadSize)},
+		Body: &icmp.Echo{ID: id, Seq: 1, Data: payload},
+	}
+	req, err := msg.Marshal(nil)
+	if err != nil {
+		return false, err
+	}
+
+	if _, err := conn.WriteTo(req, &net.UDPAddr{IP: dst}); err != nil {
+		return false, err
+	}
+
+	buf := make([]byte, 1500)
+	for {
+		n, peer, err := conn.ReadFrom(buf)
+		if err != nil {
+			return false, err
+		}
+		reply, perr := icmp.ParseMessage(1, buf[:n])
+		if perr != nil {
+			continue // not a message we understand, keep waiting
+		}
+		echo, isEcho := reply.Body.(*icmp.Echo)
+		if !isEcho || echo.ID != id || echo.Seq != 1 {
+			continue // a reply to somebody else's probe
+		}
+		if !peerIs(peer, dst) {
+			continue
+		}
+		switch reply.Type {
+		case ipv4.ICMPTypeEchoReply:
+			return true, nil
+		case ipv4.ICMPTypeDestinationUnreachable:
+			return false, errors.New("icmp destination unreachable")
+		default:
+			continue // time exceeded, redirect, ... keep waiting
+		}
+	}
+}
+
+// probeICMPv6 sends an ICMPv6 echo request.
+//
+// IPv6 needs its own socket and its own message type, and a link-local
+// address needs the interface zone to be specified. An IPv6-only device that
+// was discovered through NDP is a normal case on a modern home network, so
+// reporting "no such host" for it was simply wrong.
+func (e *ProbeExecutor) probeICMPv6(ctx context.Context, target model.ProbeTarget, ip net.IP) (bool, error, string, model.ProbeProtocol) {
+	// A raw ICMPv6 socket needs the IPv6 header in front of the message, and
+	// the source address has to be one of the host's own addresses or the peer
+	// will not answer. The IPv6 header is therefore built explicitly.
+	// The socket is bound to the local address, so the kernel picks the right
+	// source address for the reply. A link-local target additionally needs the
+	// interface zone.
+	local := "::"
+	if addr := e.localAddrV6(); addr != "" {
+		local = addr
+	}
+	conn, err := icmp.ListenPacket("ip6:ipv6-icmp", local)
+	if err != nil {
+		// The datagram form may still be permitted.
+		conn, err = icmp.ListenPacket("udp6", "::")
+		if err != nil {
+			return false, fmt.Errorf("icmpv6 socket unavailable: %w", err), "", model.ProbeICMP
+		}
+	}
+	defer conn.Close()
+
+	// A link-local address is only reachable with a zone.
+	zone := ""
+	if ip.IsLinkLocalUnicast() {
+		zone = e.zone()
+		if zone == "" {
+			return false, errors.New("link-local IPv6 target needs an interface zone"), "", model.ProbeICMP
+		}
+	}
+
+	msg := icmp.Message{
+		Type: ipv6.ICMPTypeEchoRequest,
+		Code: 0,
+		Body: &icmp.Echo{ID: 1, Seq: 1, Data: icmpEchoBody(e.cfg.ICMPPayloadSize)},
 	}
 	req, err := msg.Marshal(nil)
 	if err != nil {
@@ -382,12 +478,19 @@ func (e *ProbeExecutor) probeICMP(ctx context.Context, target model.ProbeTarget)
 	if !hasDeadline {
 		deadline = time.Now().Add(e.timeoutFor(target))
 	}
-	// The socket is shared: always set an explicit deadline and always clear it
-	// so a slow peer cannot poison the next probe.
 	_ = conn.SetDeadline(deadline)
 	defer func() { _ = conn.SetDeadline(time.Time{}) }()
 
-	if _, err := conn.WriteTo(req, &net.UDPAddr{IP: ip.IP}); err != nil {
+	dst := &net.IPAddr{IP: ip}
+	if zone != "" {
+		dst.Zone = zone
+	}
+	// The ICMPv6 message is written as-is: Go's "ip6:ipv6-icmp" endpoint has
+	// IPV6_HDRINCL cleared, so the kernel builds the IPv6 header.
+	if _, err := conn.WriteTo(req, dst); err != nil {
+		// "network is unreachable" means the router has no route to that
+		// prefix, which is a fact about the network rather than a broken
+		// probe. It is reported as unreachable so the UI can say so.
 		return false, err, "", model.ProbeICMP
 	}
 
@@ -397,26 +500,94 @@ func (e *ProbeExecutor) probeICMP(ctx context.Context, target model.ProbeTarget)
 		if err != nil {
 			return false, err, "", model.ProbeICMP
 		}
-		reply, perr := icmp.ParseMessage(1, buf[:n])
+		reply, perr := icmp.ParseMessage(58, buf[:n])
 		if perr != nil {
-			continue // not a message we understand, keep waiting
+			continue
 		}
-		echo, isEcho := reply.Body.(*icmp.Echo)
-		if !isEcho || echo.ID != id || echo.Seq != 1 {
-			continue // a reply to somebody else's probe
-		}
-		if !peerIs(peer, ip.IP) {
+		if !peerIs(peer, ip) {
 			continue
 		}
 		switch reply.Type {
-		case ipv4.ICMPTypeEchoReply:
+		case ipv6.ICMPTypeEchoReply:
 			return true, nil, "", model.ProbeICMP
-		case ipv4.ICMPTypeDestinationUnreachable:
-			return false, errors.New("icmp destination unreachable"), "", model.ProbeICMP
+		case ipv6.ICMPTypeDestinationUnreachable, ipv6.ICMPTypePacketTooBig:
+			return false, errors.New("icmpv6 destination unreachable"), "", model.ProbeICMP
 		default:
-			continue // time exceeded, redirect, ... keep waiting
+			continue
 		}
 	}
+}
+
+// fallbackToTCP degrades a failed ICMP probe to a TCP connect.
+//
+// The result always carries a note saying that the protocol was changed, so the
+// UI can show that the answer came from a different method than requested. It
+// never claims that an ICMP packet was sent.
+func (e *ProbeExecutor) fallbackToTCP(ctx context.Context, target model.ProbeTarget, ip net.IP, reason string) (bool, error, string, model.ProbeProtocol) {
+	if !e.cfg.FallbackToTCP {
+		return false, errors.New(reason), reason, model.ProbeICMP
+	}
+	port := target.Port
+	if port <= 0 {
+		port = e.cfg.DefaultPort
+	}
+	ok, dialErr, _ := e.probeTCP(ctx, model.ProbeTarget{
+		Target:   ip.String(),
+		Port:     port,
+		Protocol: model.ProbeTCP,
+		Timeout:  target.Timeout,
+	})
+	note := fmt.Sprintf("%s; fell back to tcp/%d", reason, port)
+	return ok, dialErr, note, model.ProbeTCP
+}
+
+// localAddr returns the local address the raw ICMP socket binds to.
+func (e *ProbeExecutor) localAddr() string {
+	if e.cfg.ICMPLocalAddr == nil {
+		return ""
+	}
+	return e.cfg.ICMPLocalAddr()
+}
+
+// localAddrV6 returns the local IPv6 address the ICMPv6 socket binds to.
+func (e *ProbeExecutor) localAddrV6() string {
+	addr := e.localAddr()
+	if addr == "" {
+		return ""
+	}
+	ip := net.ParseIP(addr)
+	if ip == nil || ip.To4() != nil {
+		return ""
+	}
+	return ip.String()
+}
+
+// zone returns the interface zone for link-local IPv6 targets.
+func (e *ProbeExecutor) zone() string {
+	if e.cfg.ICMPZone == nil {
+		return ""
+	}
+	return e.cfg.ICMPZone()
+}
+
+// sourceIP returns the local address to send probes from.
+//
+// A raw socket needs the source address in the IP header, and getting it
+// wrong makes the peer answer a different host. The address of the interface
+// that carries the LAN is the right one for a home network.
+func (e *ProbeExecutor) sourceIP() net.IP {
+	addr := ""
+	if e.cfg.ICMPLocalAddr != nil {
+		addr = e.cfg.ICMPLocalAddr()
+	}
+	if addr == "" {
+		return nil
+	}
+	ip := net.ParseIP(addr)
+	if ip == nil {
+		return nil
+	}
+	return ip
 }
 
 // icmpEchoBody builds the echo payload of size bytes.

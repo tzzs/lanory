@@ -13,10 +13,22 @@ import (
 // (br-lan) is a real forwarding device built from physical ports, so it must
 // not be classified as virtual by name alone. Container bridges such as
 // "br-docker" and "docker0" are covered by their own hints.
+// The list covers the interfaces the Linux kernel and common OpenWrt services
+// create. "gre" also matches gre0, gretap0, ip6gre0 and ip6gretap0; the IPsec
+// and VTI families are listed separately because their names do not share a
+// prefix. Keep this in sync with what `ls /sys/class/net` shows on a real box.
 var VirtualNameHints = []string{
-	"docker", "dummy", "gretap", "erspan", "tunl", "sit", "teql",
-	"veth", "wireguard", "wg", "tailscale", "ifb", "pppoe-wan",
-	"6in4", "ip6tnl", "macvlan", "macvtap",
+	// containers and virtual ethernet
+	"docker", "veth", "virbr", "lxc", "vz",
+	// kernel dummy / test devices
+	"dummy", "ifb", "teql",
+	// tunnels (gre, ip6gre, gretap, ip6gretap, sit, ipip, ip6tnl, vti, tun/tap)
+	"gre", "ip6gre", "gretap", "erspan", "tunl", "tun", "tap", "sit", "ipip",
+	"ip6tnl", "vti", "vxlan", "geneve", "6in4", "6to4",
+	// VPN and overlay networks
+	"wireguard", "wg", "tailscale", "zerotier", "zt", "pppoe-wan", "ppp",
+	// Layer 2 tricks
+	"macvlan", "macvtap", "bond", "br-docker",
 }
 
 // LooksVirtualByName reports whether an interface name suggests a virtual

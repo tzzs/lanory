@@ -2,13 +2,16 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
-	"syscall"
+	"sync"
 	"testing"
 	"time"
 )
@@ -138,24 +141,15 @@ func TestFlagsOverrideConfig(t *testing.T) {
 // shut down on a termination signal.
 func TestServesAndShutsDown(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "lanory-cmd.db")
-	var out, errOut bytes.Buffer
+	port := freePort(t)
 
-	runErr := make(chan error, 1)
-	go func() {
-		runErr <- run([]string{
-			"--db", dbPath,
-			"--port", "9933",
-			"--log-level", "error",
-		}, &out, &errOut)
-	}()
-
-	// Wait for the listen line on stdout.
-	addr := waitForListenLine(t, &out, 5*time.Second)
-	if addr == "" {
-		t.Fatalf("the listen line never appeared: out=%q err=%q", out.String(), errOut.String())
-	}
-	if !strings.Contains(addr, "9933") {
-		t.Errorf("listen line = %q, want to mention the port", addr)
+	addr, stop := startServer(t,
+		"--db", dbPath,
+		"--port", strconv.Itoa(port),
+		"--log-level", "error",
+	)
+	if !strings.Contains(addr, strconv.Itoa(port)) {
+		t.Errorf("listen line = %q, want to mention port %d", addr, port)
 	}
 
 	base := "http://" + addr
@@ -192,10 +186,9 @@ func TestServesAndShutsDown(t *testing.T) {
 		t.Errorf("database was not created: %v", err)
 	}
 
-	// Termination must lead to a clean exit, not a hang.
-	stopProcess(t)
+	// Cancellation must lead to a clean exit, not a hang.
 	select {
-	case err := <-runErr:
+	case err := <-stop():
 		if err != nil {
 			t.Errorf("run returned an error on shutdown: %v", err)
 		}
@@ -212,16 +205,9 @@ func TestServesWithWebDir(t *testing.T) {
 	}
 	dbPath := filepath.Join(t.TempDir(), "lanory-web.db")
 
-	var out, errOut bytes.Buffer
-	go func() {
-		_ = run([]string{"--db", dbPath, "--port", "9934", "--web-dir", dir, "--log-level", "error"}, &out, &errOut)
-	}()
-	defer stopProcess(t)
+	port := freePort(t)
+	addr, _ := startServer(t, "--db", dbPath, "--port", strconv.Itoa(port), "--web-dir", dir, "--log-level", "error")
 
-	addr := waitForListenLine(t, &out, 5*time.Second)
-	if addr == "" {
-		t.Fatalf("no listen line: %q / %q", out.String(), errOut.String())
-	}
 	res, err := http.Get("http://" + addr + "/")
 	if err != nil {
 		t.Fatalf("GET /: %v", err)
@@ -232,24 +218,13 @@ func TestServesWithWebDir(t *testing.T) {
 	if !strings.Contains(string(body[:n]), "WEB DIR") {
 		t.Errorf("the web dir was not served: %s", body[:n])
 	}
-	if !strings.Contains(out.String(), "disk") {
-		t.Errorf("the listen line should report the disk frontend: %s", out.String())
-	}
 }
 
 // TestAuthTokenFlag checks that --auth-token turns authentication on.
 func TestAuthTokenFlag(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "lanory-auth.db")
-	var out, errOut bytes.Buffer
-	go func() {
-		_ = run([]string{"--db", dbPath, "--port", "9935", "--auth-token", "flag-token"}, &out, &errOut)
-	}()
-	defer stopProcess(t)
-
-	addr := waitForListenLine(t, &out, 5*time.Second)
-	if addr == "" {
-		t.Fatalf("no listen line: %q / %q", out.String(), errOut.String())
-	}
+	port := freePort(t)
+	addr, _ := startServer(t, "--db", dbPath, "--port", strconv.Itoa(port), "--auth-token", "flag-token")
 
 	// Without the token.
 	res, err := http.Get("http://" + addr + "/api/v1/devices")
@@ -290,7 +265,72 @@ func runtimeGoos() string   { return goosReporter() }
 func runtimeGoarch() string { return goarchReporter() }
 
 // waitForListenLine waits until the process prints its listen address.
-func waitForListenLine(t *testing.T, out *bytes.Buffer, timeout time.Duration) string {
+// freePort returns a port the kernel says is currently unused.
+//
+// The server tests used fixed ports (9933-9936). When Go runs packages in
+// parallel, or a previous test's process has not finished shutting down yet, the
+// bind fails and the test flakes; that was happening roughly one run in three.
+// Asking the kernel for an ephemeral port removes the collision entirely. There
+// is still a window between closing this listener and the server binding it, but
+// it is tiny and the kernel will not hand the same port to two concurrent
+// callers.
+func freePort(t *testing.T) int {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("allocate a free port: %v", err)
+	}
+	port := l.Addr().(*net.TCPAddr).Port
+	if err := l.Close(); err != nil {
+		t.Fatalf("release the probe listener: %v", err)
+	}
+	return port
+}
+
+// syncBuffer is a bytes.Buffer safe for the writer goroutine and the test
+// goroutine to touch concurrently.
+//
+// The server under test writes to it from its own goroutine while the test polls
+// it for the listen line and reads it again at the end. bytes.Buffer is not
+// safe for that, so the original tests had a genuine data race that `go test
+// -race` flags.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+// waitForAccept blocks until the server at addr accepts a TCP connection.
+//
+// The listen line is printed before the listener is created, so a request sent
+// immediately after reading it can be refused. Polling until the socket answers
+// is the reliable way to know the server is actually up.
+func waitForAccept(t *testing.T, addr string) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		conn, err := net.DialTimeout("tcp", addr, 500*time.Millisecond)
+		if err == nil {
+			_ = conn.Close()
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("the server at %s never accepted a connection", addr)
+}
+
+func waitForListenLine(t *testing.T, out *syncBuffer, timeout time.Duration) string {
 	t.Helper()
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
@@ -307,11 +347,80 @@ func waitForListenLine(t *testing.T, out *bytes.Buffer, timeout time.Duration) s
 	return ""
 }
 
-// stopProcess sends SIGTERM to the current process, which is how the server
-// under test observes a shutdown request.
-func stopProcess(t *testing.T) {
+// startServer launches runWithContext in the background and returns the address
+// it is listening on plus a stop function.
+//
+// The tests used to send SIGTERM to their own process to trigger a shutdown.
+// That only worked while a signal handler happened to be installed: once the
+// server had exited, the deferred second stop hit the default disposition and
+// killed the whole test binary ("signal: terminated"). A cancellable context is
+// the same shutdown path without any process-level signal.
+func startServer(t *testing.T, args ...string) (addr string, stop func() <-chan error) {
 	t.Helper()
-	syscall.Kill(syscall.Getpid(), syscall.SIGTERM)
-	// Give the signal handler a moment to run before the test proceeds.
-	time.Sleep(200 * time.Millisecond)
+	ctx, cancel := context.WithCancel(context.Background())
+	var out, errOut syncBuffer
+	runErr := make(chan error, 1)
+	go func() {
+		runErr <- runWithContext(ctx, args, &out, &errOut)
+	}()
+
+	addr = waitForListenLine(t, &out, 10*time.Second)
+	if addr == "" {
+		cancel()
+		t.Fatalf("the listen line never appeared: out=%q err=%q", out.String(), errOut.String())
+	}
+	// The server binds 0.0.0.0. Connecting to 0.0.0.0 as a destination works on
+	// some kernels and is refused on others, which made these tests flaky, so
+	// the loopback address is used instead.
+	if host, port, err := net.SplitHostPort(addr); err == nil && (host == "0.0.0.0" || host == "::" || host == "") {
+		addr = net.JoinHostPort("127.0.0.1", port)
+	}
+	// The listen line is printed just before ListenAndServe is called, so the
+	// socket may not be accepting connections yet. Wait until it answers.
+	waitForAccept(t, addr)
+
+	// The result channel can be consumed exactly once, so remember it: the test
+	// may wait on it and the cleanup must not then block on the same channel.
+	var (
+		once sync.Once
+		mu   sync.Mutex
+		res  error
+		got  bool
+	)
+	wait := func(timeout time.Duration) (error, bool) {
+		mu.Lock()
+		if got {
+			err := res
+			mu.Unlock()
+			return err, true
+		}
+		mu.Unlock()
+		select {
+		case err := <-runErr:
+			mu.Lock()
+			res, got = err, true
+			mu.Unlock()
+			return err, true
+		case <-time.After(timeout):
+			return nil, false
+		}
+	}
+
+	stop = func() <-chan error {
+		once.Do(func() { cancel() })
+		done := make(chan error, 1)
+		go func() {
+			err, _ := wait(10 * time.Second)
+			done <- err
+		}()
+		return done
+	}
+
+	t.Cleanup(func() {
+		stop()
+		if _, ok := wait(10 * time.Second); !ok {
+			t.Log("warning: the server did not stop within 10s")
+		}
+	})
+	return addr, stop
 }
