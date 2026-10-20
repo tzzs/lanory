@@ -591,3 +591,57 @@ func TestListInterfacesSkipsVirtualPorts(t *testing.T) {
 		}
 	}
 }
+
+// TestListInterfacesSkipsNamespaceDevices covers the interfaces that no name
+// rule can identify.
+//
+// iStoreOS creates "dheth0", a veth device for its DHCP helper, and bridges it
+// into br-lan. It is infrastructure, not a port a user can plug a cable into,
+// and it appeared in the monitoring page with an empty id because the topology
+// engine never recorded it. The kernel does identify it: a veth whose peer is
+// in another network namespace has a "link-netns" attribute.
+func TestListInterfacesSkipsNamespaceDevices(t *testing.T) {
+	root := t.TempDir()
+
+	// A real port.
+	mkIface(t, root, "eth2", map[string]string{
+		"carrier": "1", "operstate": "up", "speed": "2500",
+	})
+	// A veth whose peer lives in another namespace.
+	mkIface(t, root, "dheth0", map[string]string{
+		"carrier": "1", "operstate": "up", "speed": "10000",
+		"link-netns": "dhns",
+	})
+	// A device the kernel reports as a dummy.
+	mkIface(t, root, "veth0", map[string]string{
+		"carrier": "1", "operstate": "up", "type": "veth",
+	})
+
+	o := &LinkObserver{sysRoot: root}
+	names, err := o.listInterfaces()
+	if err != nil {
+		t.Fatalf("listInterfaces: %v", err)
+	}
+	for _, name := range names {
+		if name == "dheth0" {
+			t.Error("dheth0 (a namespace veth) must not be listed as a port")
+		}
+	}
+	if len(names) != 1 || names[0] != "eth2" {
+		t.Errorf("listed %v, want only eth2", names)
+	}
+}
+
+// mkIface creates a sysfs-style interface directory with the given attributes.
+func mkIface(t *testing.T, root, name string, attrs map[string]string) {
+	t.Helper()
+	dir := filepath.Join(root, name)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", name, err)
+	}
+	for key, value := range attrs {
+		if err := os.WriteFile(filepath.Join(dir, key), []byte(value), 0o644); err != nil {
+			t.Fatalf("write %s/%s: %v", name, key, err)
+		}
+	}
+}

@@ -313,10 +313,75 @@ func (o *LinkObserver) listInterfaces() ([]string, error) {
 		if parsers.LooksVirtualByName(name) {
 			continue
 		}
+		// A name is not enough: iStoreOS creates "dheth0", a veth device for
+		// its DHCP helper, and no name-based rule can tell that apart from a
+		// physical port. The kernel does say so, though, in two ways: a veth
+		// whose peer is in another network namespace has a "link-netns"
+		// attribute, and a software device lives under
+		// /sys/devices/virtual/net rather than under a platform device.
+		//
+		// A bridge is also under /sys/devices/virtual, but it is a real
+		// forwarding device built from physical ports, so it stays.
+		if o.isVirtualDevice(filepath.Join(o.sysRoot, name), name) {
+			continue
+		}
 		names = append(names, name)
 	}
 	sort.Strings(names)
 	return names, nil
+}
+
+// isVirtualDevice reports whether a sysfs interface entry is not a real port.
+//
+// Two kernel attributes give it away:
+//
+//   - "link-netns" is present on a veth whose peer lives in another network
+//     namespace. iStoreOS creates such a device ("dheth0") for its DHCP
+//     helper, and it is bridge member without being a port a user can plug
+//     something into.
+//   - "type" names the device kind for the pseudo devices the kernel creates
+//     (dummy, tunl, gretap and so on).
+//
+// A device without either attribute is a real interface.
+func (o *LinkObserver) isVirtualDevice(dir, name string) bool {
+	// A veth whose peer lives in another network namespace.
+	if _, ok := readSysfsString(dir, "link-netns"); ok {
+		return true
+	}
+	// The kernel reports the device kind for the pseudo devices.
+	if kind, ok := readSysfsString(dir, "type"); ok {
+		switch kind {
+		case "dummy", "tunl", "gre", "gretap", "erspan", "ip6gre", "ip6gretap",
+			"sit", "ipip", "ip6tnl", "vti", "vlan", "macvlan", "macvtap",
+			"vxlan", "geneve", "wireguard", "ifb", "teql", "veth":
+			return true
+		}
+	}
+	// A software device lives under /sys/devices/virtual/net. A bridge does
+	// too, but it is a real forwarding device, so it is kept.
+	if o.isUnderVirtualDir(name) && !isBridgeName(name) {
+		return true
+	}
+	return false
+}
+
+// isUnderVirtualDir reports whether the sysfs entry for an interface lives
+// under /sys/devices/virtual/net.
+//
+// The sysfs root used by the observer may be a test directory, in which case
+// there is no way to tell, and the answer is false.
+func (o *LinkObserver) isUnderVirtualDir(name string) bool {
+	real, err := filepath.EvalSymlinks(filepath.Join(o.sysRoot, name))
+	if err != nil {
+		return false
+	}
+	return strings.Contains(real, "/devices/virtual/net/")
+}
+
+// isBridgeName reports whether an interface name is a bridge.
+func isBridgeName(name string) bool {
+	n := strings.ToLower(strings.TrimSpace(name))
+	return n == "br" || strings.HasPrefix(n, "br-") || strings.HasPrefix(n, "br.")
 }
 
 // readSample reads carrier, operstate and speed for one interface.
