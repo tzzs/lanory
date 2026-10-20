@@ -92,7 +92,6 @@ hardware or a real build system — which, for packaging, it has not been.
 | Adapter registry | `internal/adapters/registry` | implemented | isolation tests |
 | OpenWrt package | `packaging/openwrt` | **configured, unbuilt** | no SDK available |
 | LuCI companion | `packaging/openwrt/luci-app-lanory` | **configured, unbuilt** | no LuCI SDK |
-| Docker image | `packaging/docker` | **configured, unbuilt** | no Docker daemon |
 | systemd unit | `packaging/linux` | **configured, unverified** | no Linux host |
 | CI | `.github/workflows/ci.yml` | configured, never run on GitHub | — |
 

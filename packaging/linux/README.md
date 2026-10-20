@@ -54,7 +54,7 @@ Differences that matter:
 
 - the procd script generates `/etc/lanory/config.yaml` from UCI. There is no UCI
   on a generic Linux host, so this unit reads the YAML directly. Copy
-  `packaging/docker/config.yaml` or write your own; the schema is in
+  `packaging/linux/config.yaml` or write your own; the schema is in
   `docs/deployment.md`.
 - systemd's sandboxing (`ProtectSystem=strict`, `ReadWritePaths=/var/lib/lanory`)
   is stricter than procd's. If you move the database, update `ReadWritePaths`.

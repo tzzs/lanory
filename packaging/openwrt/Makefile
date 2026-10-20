@@ -63,7 +63,7 @@ include $(INCLUDE_DIR)/golang.mk
 #   - nftables (or iptables): only for `nft list ruleset` in the DMZ detector;
 #                       the package degrades gracefully when absent
 # It deliberately does NOT depend on: dnsmasq (leases are read as a file when
-# present), curl, node, python, docker.
+# present), curl, node, python.
 define Package/lanory
   SECTION:=net
   CATEGORY:=Network

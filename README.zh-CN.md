@@ -55,7 +55,6 @@ Internet
 | ✅ | 探测历史、设备状态历史、网络事件记录 | 已实现 |
 | ✅ | SSE 实时推送 | 已实现 |
 | ✅ | OpenWrt 软件包（procd、UCI；x86 / arm64 / armv7，**不支持 MIPS**） | 打包配置完整，**未实际构建** |
-| ✅ | Docker 镜像（distroless、多阶段） | 配置完整，**未实际构建** |
 | ✅ | Demo 模式：不需要路由器即可预览完整界面 | 已实现 |
 | ✅ | 中英文界面 | 已实现 |
 | ⚠️ | LLDP、mDNS、SSDP 采集器 | 已实现，默认关闭，未在真实组播网络验证 |
@@ -102,18 +101,6 @@ apk add --allow-untrusted /tmp/lanory-0.1.0-r1.apk
 > 已实测的部分：`make release` 可为 amd64、arm64、386、armv7 生成真实的静态二进制
 > （用 `file` 确认 ELF 架构正确、无 `libc.so` 依赖，可直接运行于 musl 环境），
 > 且均已内嵌前端。procd 初始化脚本通过 `sh -n` 语法校验。
-
-### Docker（可选）
-
-```sh
-# 完整二层发现需要 host 网络模式
-docker build -f packaging/docker/Dockerfile -t lanory:0.1.0 .
-docker run -d --name lanory --network host \
-  -v lanory-data:/var/lib/lanory lanory:0.1.0
-```
-
-bridge 网络模式看不到 ARP / FDB / mDNS，选之前请先读
-[packaging/docker/README.md](packaging/docker/README.md)。
 
 ### 普通 Linux（systemd）
 
@@ -179,7 +166,7 @@ internal/api/          REST + SSE + 静态资源
 internal/demo/         Demo 模式数据集与加载器
 internal/platform/     OpenWrt 与普通 Linux 的平台识别
 web/                   React 18 + TypeScript + Vite + Tailwind + React Flow
-packaging/             openwrt / docker / linux
+packaging/             openwrt / linux
 docs/                  architecture、discovery、topology、api、development …
 fixtures/easepi-r1/    脱敏参考网络，测试与 Demo 模式共用
 ```
@@ -190,7 +177,7 @@ fixtures/easepi-r1/    脱敏参考网络，测试与 Demo 模式共用
 ## 路线图
 
 **当前（0.1）** —— 就是本仓库
-被动发现、身份引擎、拓扑、监控、手动编辑、SSE、OpenWrt 打包、Docker 打包、
+被动发现、身份引擎、拓扑、监控、手动编辑、SSE、OpenWrt 打包、
 Demo 模式、中英文界面。
 
 **下一步（0.2）**

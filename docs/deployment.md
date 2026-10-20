@@ -1,18 +1,15 @@
 # Deployment
 
-Three deployment targets, in order of how well they fit Lanory:
+Two deployment targets, in order of how well they fit Lanory:
 
 1. **OpenWrt / iStoreOS on the router** — the supported production path. Lanory
    sits where the bridge is, so it sees the real ports.
 2. **A generic Linux host** (systemd) — a Raspberry Pi, an x86 mini PC, a NAS.
    Works for monitoring; layer-2 detail depends on where the host sits.
-3. **Docker** — evaluation and homelab convenience. Host networking is required
-   for full discovery.
 
 - [Requirements](#requirements)
 - [OpenWrt / iStoreOS](#openwrt--istoreos)
 - [Generic Linux](#generic-linux)
-- [Docker](#docker)
 - [Configuration reference](#configuration-reference)
 - [Reverse proxy](#reverse-proxy)
 - [Authentication](#authentication)
@@ -117,28 +114,6 @@ The unit grants `CAP_NET_RAW` (ICMP) and nothing else. It is sandboxed with
 requires editing the unit.
 
 Details: [packaging/linux/README.md](../packaging/linux/README.md).
-
-## Docker
-
-```sh
-docker build -f packaging/docker/Dockerfile -t lanory:0.1.0 .
-docker compose -f packaging/docker/docker-compose.yml up -d lanory-hostnet
-```
-
-**Network mode decides what Lanory can see:**
-
-| | host | bridge |
-| --- | --- | --- |
-| bridge FDB | real | container veth only |
-| ARP / NDP | host table | docker network only |
-| mDNS / SSDP | visible | not forwarded |
-| interface speeds | host interfaces | veth |
-| verdict | **use this** | needs an explicit subnet list |
-
-Details and the exact commands: [packaging/docker/README.md](../packaging/docker/README.md).
-
-Docker is not a prerequisite for the OpenWrt deployment and should not be used on
-the router itself.
 
 ## Configuration reference
 
@@ -302,8 +277,6 @@ sqlite3 /var/lib/lanory/lanory.db ".backup /tmp/lanory.backup.db"
 - **OpenWrt:** install the new APK/IPK over the old one. `/var/lib/lanory` is
   preserved; migrations run at startup.
 - **Generic Linux:** replace the binary, then `systemctl restart lanory`.
-- **Docker:** pull or rebuild, recreate the container. The named volume keeps the
-  data.
 
 Migrations are versioned and forward-only (`internal/database/migrations`). There
 is no downgrade path: keep the backup you made before upgrading.
@@ -336,8 +309,7 @@ shows, per collector, whether it is supported on this host, whether it is enable
 when it last ran, how long it took, how many records it produced and the last
 error.
 
-Logs: `logread -e lanory` on OpenWrt, `journalctl -u lanory` on systemd, `docker
-logs lanory` in a container.
+Logs: `logread -e lanory` on OpenWrt, `journalctl -u lanory` on systemd.
 
 ## What is verified
 
@@ -350,7 +322,6 @@ logs lanory` in a container.
 | Demo Mode works end to end | **yes** — `internal/demo` tests + CI integration job |
 | the OpenWrt package builds | **no** — no SDK available |
 | the package installs on iStoreOS 25.12.5 | **no** |
-| the Docker image builds | **no** — no daemon available |
 | the systemd unit passes `systemd-analyze verify` | **no** |
 | resource usage on a router | **no** — desktop estimate only |
 | LLDP / mDNS against a real network | **no** — parser tests only |

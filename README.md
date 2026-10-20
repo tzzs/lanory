@@ -57,7 +57,6 @@ Internet
 | ✅ | Realtime updates over SSE | implemented |
 | ✅ | Cross-compiles for linux **amd64 / arm64 / 386 / armv7**, statically linked | built and verified |
 | ✅ | OpenWrt package (procd, UCI; x86 / arm64 / armv7 — **not MIPS**) | packaging complete, **unbuilt** (no SDK here) |
-| ✅ | Docker image (distroless, multi-stage) | config complete, **unbuilt** (no daemon here) |
 | ✅ | Demo Mode: the whole UI without a router | implemented |
 | ✅ | Chinese and English UI | implemented |
 | ⚠️ | LLDP, mDNS, SSDP collectors | implemented, opt-in, not exercised against a real multicast network yet |
@@ -109,18 +108,6 @@ semantics: **[packaging/openwrt/README.md](packaging/openwrt/README.md)**.
 > amd64, arm64, 386 and armv7 (confirmed with `file` — correct ELF class and
 > machine, no `libc.so` reference, so they run against musl), each with the
 > frontend embedded. `sh -n` validates the procd init script.
-
-### Docker (optional)
-
-```sh
-# full layer-2 discovery needs host networking
-docker build -f packaging/docker/Dockerfile -t lanory:0.1.0 .
-docker run -d --name lanory --network host \
-  -v lanory-data:/var/lib/lanory lanory:0.1.0
-```
-
-Bridge networking loses ARP/FDB/mDNS visibility — read
-[packaging/docker/README.md](packaging/docker/README.md) before choosing it.
 
 ### Generic Linux (systemd)
 
@@ -189,7 +176,7 @@ internal/api/          REST + SSE + static hosting
 internal/demo/         Demo Mode dataset and loader
 internal/platform/     OpenWrt vs generic Linux detection
 web/                   React 18 + TypeScript + Vite + Tailwind + React Flow
-packaging/             openwrt / docker / linux
+packaging/             openwrt / linux
 docs/                  architecture, discovery, topology, api, development, …
 fixtures/easepi-r1/    sanitized reference network used by tests and Demo Mode
 ```
@@ -201,7 +188,7 @@ Read [docs/development.md](docs/development.md) before your first change, and
 
 **Now (0.1)** — the current tree
 Passive discovery, identity engine, topology, monitoring, manual editing, SSE,
-OpenWrt packaging, Docker packaging, Demo Mode, bilingual UI.
+OpenWrt packaging, Demo Mode, bilingual UI.
 
 **Next (0.2)**
 Verify the OpenWrt package against a real 25.12 / iStoreOS 25.12.5 target; verify

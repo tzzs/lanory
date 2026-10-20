@@ -25,9 +25,6 @@ make demo
 
 # or directly
 LANORY_DEMO_MODE=true LANORY_DATABASE_PATH=/tmp/lanory-demo.db go run ./cmd/lanory
-
-# container
-docker run --rm -p 8787:8787 -e LANORY_DEMO_MODE=true lanory:0.1.0
 ```
 
 Then open <http://127.0.0.1:8787/>.

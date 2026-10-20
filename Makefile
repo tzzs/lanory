@@ -13,7 +13,7 @@ WEB_DIR     := web
 PKG_DIR     := packaging/openwrt
 
 .PHONY: all build test test-race bench lint fmt vet clean web web-dev install uninstall \
-        docker apk check run dev demo
+        apk check run dev demo
 
 all: build
 
@@ -79,10 +79,6 @@ dev:
 ## demo: run the service against the built-in sample network
 demo: web build
 	./bin/$(BINARY) --demo --config config.yaml
-
-## docker: build the docker image
-docker:
-	docker build -f packaging/docker/Dockerfile -t lanory:$(VERSION) .
 
 ## release: cross-compile the release binaries for the supported targets
 release: webapp

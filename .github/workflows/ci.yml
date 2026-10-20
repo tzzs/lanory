@@ -239,11 +239,6 @@ jobs:
           grep -q '^\[Service\]' packaging/linux/lanory.service
           grep -q '^\[Install\]' packaging/linux/lanory.service
 
-      - name: Dockerfile lint (hadolint, non blocking)
-        continue-on-error: true
-        run: |
-          docker run --rm -i hadolint/hadolint < packaging/docker/Dockerfile
-
   # ---------------------------------------------------------------------------
   # Integration: build the binary with the real frontend embedded, then exercise
   # the HTTP API in Demo Mode. This is the only job that proves the pieces work

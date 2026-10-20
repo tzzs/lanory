@@ -217,8 +217,6 @@ configuration; the package has no `setcap` step and no `sudo`. If you want
 unprivileged operation, run it under `runit`/`s6` as a dedicated user with
 `CAP_NET_RAW`.
 
-**Docker**: `read_only: true`, `cap_drop: ALL`, `cap_add: NET_RAW`,
-`no-new-privileges`, nonroot distroless base, one writable volume.
 
 ## Demo Mode
 
@@ -242,7 +240,7 @@ security advisory for the repository, or contact the maintainer listed in the
 commit history. Include:
 
 - the version or commit,
-- the deployment (OpenWrt / Linux / Docker),
+- the deployment (OpenWrt / Linux),
 - whether authentication was enabled,
 - a reproduction that does not contain your real MAC or IP addresses.
 

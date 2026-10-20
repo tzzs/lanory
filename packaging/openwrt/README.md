@@ -59,7 +59,7 @@ Runtime (declared in the `Makefile`):
 
 Deliberately **not** dependencies: `dnsmasq` (leases are read as a file when
 present and the collector degrades to `Supported() == false` otherwise), `curl`,
-`node`, `python`, `docker`, `nftables` (only used opportunistically for a
+`node`, `python`, `nftables` (only used opportunistically for a
 firewall hint).
 
 ## Target architecture
