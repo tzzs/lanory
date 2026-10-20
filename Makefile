@@ -13,7 +13,7 @@ WEB_DIR     := web
 PKG_DIR     := packaging/openwrt
 
 .PHONY: all build test test-race bench lint fmt vet clean web web-dev install uninstall \
-        apk apk-check check run dev demo
+        packages apk-sdk apk-check package-check check run dev demo
 
 all: build
 
@@ -92,8 +92,17 @@ release: webapp
 apk-check:
 	sh $(PKG_DIR)/verify.sh
 
-## apk: build the OpenWrt APK through the SDK (see packaging/openwrt/README.md)
-apk:
+## package-check: verify the built .ipk/.apk archives are structurally valid
+package-check:
+	python3 $(PKG_DIR)/verify-packages.py
+
+## packages: build installable .ipk and .apk packages from the release binaries
+## (no OpenWrt SDK needed: the binary is already static, the rest is text)
+packages: release
+	python3 $(PKG_DIR)/mkpackage.py --all --binary-dir dist --version $(VERSION) --out dist/packages
+
+## apk-sdk: build the package inside the OpenWrt buildroot (needs the SDK)
+apk-sdk:
 	$(MAKE) -C $(PKG_DIR)
 
 ## install: install onto the local OpenWrt target

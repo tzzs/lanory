@@ -56,7 +56,7 @@ Internet
 | ✅ | Probe history, device state history, network event log | implemented |
 | ✅ | Realtime updates over SSE | implemented |
 | ✅ | Cross-compiles for linux **amd64 / arm64 / 386 / armv7**, statically linked | built and verified |
-| ✅ | OpenWrt package (procd, UCI; x86 / arm64 / armv7 — **not MIPS**) | packaging verified by `make apk-check`; **APK itself unbuilt** (no SDK here) |
+| ✅ | Installable `.ipk` + `.apk` for x86_64 / aarch64 / armv7 / i386 (**not MIPS**) | `make packages` builds all 8 without an SDK; archives format-verified. **Not yet installed on real hardware** |
 | ✅ | Demo Mode: the whole UI without a router | implemented |
 | ✅ | Chinese and English UI | implemented |
 | ⚠️ | LLDP, mDNS, SSDP collectors | implemented, opt-in, not exercised against a real multicast network yet |
@@ -91,23 +91,39 @@ clearly labelled as simulated.
 
 ### OpenWrt / iStoreOS (recommended)
 
+No OpenWrt SDK is needed. An OpenWrt package is an archive of the already-built
+binary plus a few scripts; Lanory's binary is fully static, so the cross-compile
+is all the "toolchain" that is required.
+
 ```sh
-# build the package with the matching OpenWrt SDK, then on the router:
-apk add --allow-untrusted /tmp/lanory-0.1.0-r1.apk
-/etc/init.d/lanory enable && /etc/init.d/lanory start
+# on your workstation: cross-compile and package every architecture
+make release     # dist/lanory-linux-{amd64,arm64,armv7,386}
+make packages    # dist/packages/*.ipk + *.apk, no SDK involved
+make package-check
+
+# on the router: pick the file matching `uname -m`
+scp dist/packages/lanory_0.1.0_aarch64_generic.ipk root@192.168.100.1:/tmp/
+ssh root@192.168.100.1 'opkg install /tmp/lanory_0.1.0_aarch64_generic.ipk'
+ssh root@192.168.100.1 'logread -e lanory | grep token'   # the access token
 ```
 
-Full instructions, including the APK build, dependency list and upgrade
-semantics: **[packaging/openwrt/README.md](packaging/openwrt/README.md)**.
+Then open `http://192.168.100.1:8787/` and paste the token. On apk-based
+releases install the `.apk` with `apk add --allow-untrusted` instead.
 
-> The package build is **not** verified in this repository: no OpenWrt SDK was
-> available. The Makefile and init script follow upstream conventions and are
-> marked as unbuilt until you run them on a Linux host with the right SDK.
+If you would rather have the buildroot compile the Go source (feed-style,
+reproducible, signed by the SDK), the SDK route is documented too.
+
+Full instructions, dependency list, upgrade and purge semantics:
+**[packaging/openwrt/README.md](packaging/openwrt/README.md)**.
+
+> **Verified:** 8 packages (`.ipk` + `.apk` × 4 architectures) build with no SDK;
+> `make package-check` re-parses each archive, checks the format, control fields,
+> conffiles, install scripts, file modes and that the packaged binary is
+> byte-identical to the release binary.
 >
-> What *was* verified: `make release` produces real static binaries for
-> amd64, arm64, 386 and armv7 (confirmed with `file` — correct ELF class and
-> machine, no `libc.so` reference, so they run against musl), each with the
-> frontend embedded. `sh -n` validates the procd init script.
+> **Not verified:** that `opkg`/`apk` on a real router accepts them, and that the
+> service starts there — there is no OpenWrt device in this environment. Test on
+> your hardware before relying on it.
 
 ### Generic Linux (systemd)
 

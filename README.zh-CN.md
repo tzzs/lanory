@@ -54,7 +54,7 @@ Internet
 | ✅ | 可达性监控，带失败阈值（连续失败 N 次才判定离线） | 已实现 |
 | ✅ | 探测历史、设备状态历史、网络事件记录 | 已实现 |
 | ✅ | SSE 实时推送 | 已实现 |
-| ✅ | OpenWrt 软件包（procd、UCI；x86 / arm64 / armv7，**不支持 MIPS**） | 打包配置已通过 `make apk-check` 静态校验；**APK 本身未构建**（本机无 SDK） |
+| ✅ | 可安装的 `.ipk` + `.apk`（x86_64 / aarch64 / armv7 / i386，**不支持 MIPS**） | `make packages` 无需 SDK 即可产出全部 8 个包，并通过格式校验。**尚未在真机安装** |
 | ✅ | Demo 模式：不需要路由器即可预览完整界面 | 已实现 |
 | ✅ | 中英文界面 | 已实现 |
 | ⚠️ | LLDP、mDNS、SSDP 采集器 | 已实现，默认关闭，未在真实组播网络验证 |
@@ -86,21 +86,36 @@ Demo 模式的实例截图——那里的数据被明确标注为模拟数据。
 
 ### OpenWrt / iStoreOS（推荐）
 
+**不需要 OpenWrt SDK。** 软件包本质上只是「已编译好的二进制 + 几个脚本」的压缩包，
+而 Lanory 的二进制是完全静态的，交叉编译就是全部所需的"工具链"。
+
 ```sh
-# 用匹配的 OpenWrt SDK 构建软件包，然后在路由器上：
-apk add --allow-untrusted /tmp/lanory-0.1.0-r1.apk
-/etc/init.d/lanory enable && /etc/init.d/lanory start
+# 在你的电脑上：交叉编译并打包所有架构
+make release     # dist/lanory-linux-{amd64,arm64,armv7,386}
+make packages    # dist/packages/*.ipk + *.apk，全程不涉及 SDK
+make package-check
+
+# 在路由器上：挑与 `uname -m` 匹配的那个文件
+scp dist/packages/lanory_0.1.0_aarch64_generic.ipk root@192.168.100.1:/tmp/
+ssh root@192.168.100.1 'opkg install /tmp/lanory_0.1.0_aarch64_generic.ipk'
+ssh root@192.168.100.1 'logread -e lanory | grep token'   # 访问令牌
 ```
 
-构建步骤、依赖列表、升级语义见
+然后打开 `http://192.168.100.1:8787/`，粘贴该令牌。基于 apk 的版本改用
+`apk add --allow-untrusted` 安装 `.apk`。
+
+如果你希望由 buildroot 从源码编译（feed 风格、可复现、由 SDK 签名），
+SDK 路线也一并写进了文档。
+
+构建步骤、依赖列表、升级与清除语义见
 **[packaging/openwrt/README.md](packaging/openwrt/README.md)**。
 
-> 本仓库**没有验证过**软件包构建：环境里没有 OpenWrt SDK。Makefile 与 init
-> 脚本遵循上游惯例，在你用对应 SDK 实际跑通之前一律视为未构建。
+> **已验证：** 无需 SDK 即可产出 8 个包（`.ipk` + `.apk` × 4 架构）；
+> `make package-check` 会重新解析每个归档，校验格式、control 字段、conffiles、
+> 安装脚本、文件权限，并确认包内二进制与发布二进制逐字节一致。
 >
-> 已实测的部分：`make release` 可为 amd64、arm64、386、armv7 生成真实的静态二进制
-> （用 `file` 确认 ELF 架构正确、无 `libc.so` 依赖，可直接运行于 musl 环境），
-> 且均已内嵌前端。procd 初始化脚本通过 `sh -n` 语法校验。
+> **未验证：** 真实路由器上的 `opkg`/`apk` 是否接受这些包，以及服务能否启动 ——
+> 本环境没有 OpenWrt 设备。请在真机上先行验证。
 
 ### 普通 Linux（systemd）
 

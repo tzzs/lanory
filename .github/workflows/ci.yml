@@ -235,8 +235,16 @@ jobs:
         # Everything about the package that can be verified without the SDK:
         # init script structure, UCI/init/YAML agreement, installed paths,
         # package metadata, LuCI companion, and that the token handling is
-        # coherent. Building the APK itself needs the SDK and is not covered here.
+        # coherent.
         run: sh packaging/openwrt/verify.sh
+
+      - name: Build installable packages
+        # Produces real .ipk and .apk files from the release binaries. No SDK is
+        # involved: the binary is static and the rest of the package is text.
+        run: |
+          make release
+          make packages
+          make package-check
 
       - name: systemd unit file
         run: |

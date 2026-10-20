@@ -11,6 +11,12 @@ the matching SDK.
 
 What *is* verified, because it was run:
 
+- **`make packages` produces 8 installable packages** (`.ipk` and `.apk` for
+  x86_64, aarch64, armv7 and i386) with no SDK present, and
+  `make package-check` re-parses every one of them against the documented
+  formats, including a SHA-256 comparison of the packaged binary against the
+  release binary;
+
 - `go build ./...` and `go test ./...` for the Go code that the package installs;
 - cross-compilation of the binary for `linux/amd64`, `linux/arm64`, `linux/arm`
   (v7) and `linux/386` with `CGO_ENABLED=0` (the same build the package performs),
@@ -110,7 +116,51 @@ uname -m                 # aarch64 / armv7l / x86_64 / mips
 opkg print-architecture  # or: apk --print-arch
 ```
 
-## Building with the OpenWrt SDK
+## Two ways to build a package
+
+There are two routes, and for Lanory the first one is much simpler.
+
+### A. Build the package directly — no SDK (recommended)
+
+An OpenWrt package is not a compiled artefact. It is an archive of the
+already-built binary plus a few shell scripts, UCI defaults and a YAML template.
+Lanory's binary is a **fully static** Go executable, so nothing in the package
+needs the target toolchain; the SDK is only needed if you want the buildroot to
+compile the Go source itself.
+
+```sh
+# cross-compile every architecture we support, then package each one
+make release     # dist/lanory-linux-{amd64,arm64,armv7,386}
+make packages    # dist/packages/*.ipk and *.apk
+
+# or one architecture only
+python3 packaging/openwrt/mkpackage.py \
+  --binary dist/lanory-linux-arm64 --version 0.1.0 --out dist/packages
+```
+
+`mkpackage.py` detects the ELF machine type and names the package with the right
+OpenWrt architecture (`x86_64`, `aarch64_generic`, `arm_cortex-a7_neon-vfpv4`,
+`i386_pentium4`). It emits both formats:
+
+| Format | Layout | Install with |
+| --- | --- | --- |
+| `.ipk` | `debian-binary` + `control.tar.gz` + `data.tar.gz` | `opkg install` |
+| `.apk` | one gzip stream: `.PKGINFO` + files | `apk add --allow-untrusted` |
+
+Both are unsigned, which OpenWrt accepts for an explicitly installed local file.
+Sign them with your own key if you intend to serve them from a feed.
+
+`make package-check` re-parses the produced archives and verifies them against
+the documented formats: the debian-binary marker, the two gzip streams, every
+required control/.PKGINFO field, the conffiles list, the install scripts, file
+modes, that `/var/lib/lanory` exists, and that the binary inside is byte-identical
+to the release binary and of the architecture the package claims.
+
+### B. Build inside the OpenWrt SDK
+
+Use this when you want a buildroot-produced, feed-style package: reproducible from
+source, signed by the buildroot, with the SDK's own Go toolchain compiling the
+module.
 
 The SDK must match the target release **and** the target architecture. For an
 iStoreOS 25.12.5 device, use the iStoreOS SDK of the same release if one is
@@ -149,10 +199,8 @@ find bin/ -name 'lanory*.apk' -o -name 'lanory*.ipk'
 ### APK versus IPK
 
 OpenWrt 24.10 and later default to `apk` (Alpine's package format, via
-`apk-tools`) instead of `opkg`. The format is selected by the SDK, not by this
-package: `make package/lanory/compile` produces whichever the SDK is configured
-for. If your SDK still emits `.ipk`, install with `opkg`; if it emits `.apk`, use
-`apk`. Both are listed below.
+`apk-tools`) instead of `opkg`. Route A produces both, so you can install on any
+release. Route B produces whichever format the SDK is configured for.
 
 ```sh
 # APK (OpenWrt 24.10+, 25.12, recent iStoreOS)
@@ -202,11 +250,18 @@ public source addresses.
 ## Installing on the device
 
 ```sh
+# pick the file matching `uname -m` on the router:
+#   aarch64 -> *aarch64_generic*   armv7l -> *arm_cortex-a7*
+#   x86_64  -> *x86_64*            i686   -> *i386_pentium4*
+ls dist/packages/
+
 # copy the artifact over
-scp bin/targets/*/packages/lanory-*.apk root@192.168.100.1:/tmp/
+scp dist/packages/lanory_0.1.0_aarch64_generic.ipk root@192.168.100.1:/tmp/
 
 # install (or upgrade; /var/lib/lanory is preserved)
-ssh root@192.168.100.1 'apk add --allow-untrusted /tmp/lanory-*.apk'
+ssh root@192.168.100.1 'opkg install /tmp/lanory_0.1.0_aarch64_generic.ipk'
+# on apk-based releases:
+# ssh root@192.168.100.1 'apk add --allow-untrusted /tmp/aarch64_generic-lanory-0.1.0.apk'
 
 # edit the UCI config
 ssh root@192.168.100.1 'vi /etc/config/lanory'
@@ -292,7 +347,12 @@ To be explicit: this README describes the intended behaviour. The following
 statements are design intent, not observed results in this repository's
 environment:
 
-- that the package compiles under OpenWrt 25.12 / iStoreOS 25.12.5;
+- that the package **installs** on OpenWrt 25.12 / iStoreOS 25.12.5. The archives
+  are structurally verified against the documented formats and contain the right
+  files with the right modes, but no package manager has ever consumed them here,
+  because there is no OpenWrt device in this environment. This is the single most
+  important thing to check first on your hardware;
+- that the SDK buildroot compiles the Go module (`route B`);
 - that procd restarts the binary correctly after a crash;
 - that the LuCI page renders on those LuCI versions;
 - that the dependency set is sufficient on a minimal image (`CONFIG_ALL=n`);
