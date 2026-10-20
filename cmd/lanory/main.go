@@ -186,6 +186,9 @@ func loadConfig(opts options) (*config.Config, error) {
 		cfg.Auth.Token = opts.authToken
 		cfg.Auth.Enabled = true
 	}
+	// Note: a token arriving through LANORY_AUTH_TOKEN (config.go) must enable
+	// auth too. That is handled once below, after the App exists, so every
+	// source (flag, env, file) goes through the same path.
 	if opts.logLevel != "" {
 		cfg.Logging.Level = opts.logLevel
 	}
@@ -288,6 +291,16 @@ func serve(cfg *config.Config, opts options, logger *slog.Logger, stdout io.Writ
 	})
 	if err != nil {
 		return fmt.Errorf("build application: %w", err)
+	}
+
+	// A configured token enables authentication, whatever source it came from:
+	// --auth-token, the YAML, token_file, or the LANORY_AUTH_TOKEN environment
+	// variable that the procd init script uses so the token never appears in
+	// `ps` or in the world readable YAML. Without this, the OpenWrt install
+	// shipped with auth.enabled=false in the generated YAML and silently ignored
+	// the token it had just been handed.
+	if cfg.Auth.Token != "" {
+		app.SetAuthToken(cfg.Auth.Token)
 	}
 
 	// Demo mode: load the sample network before wiring the schedulers so the UI

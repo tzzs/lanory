@@ -13,7 +13,7 @@ WEB_DIR     := web
 PKG_DIR     := packaging/openwrt
 
 .PHONY: all build test test-race bench lint fmt vet clean web web-dev install uninstall \
-        apk check run dev demo
+        apk apk-check check run dev demo
 
 all: build
 
@@ -50,8 +50,8 @@ vet:
 fmt:
 	$(GO) fmt ./...
 
-## check: fmt + vet + test (the pre-commit gate)
-check: fmt vet test
+## check: fmt + vet + test + packaging verification (the pre-commit gate)
+check: fmt vet test apk-check
 
 ## web: build the frontend into web/dist
 web:
@@ -87,6 +87,10 @@ release: webapp
 	CGO_ENABLED=0 GOOS=linux GOARCH=386 $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o dist/$(BINARY)-linux-386 ./cmd/lanory
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o dist/$(BINARY)-linux-armv7 ./cmd/lanory
 	@echo "release binaries in dist/"
+
+## apk-check: static verification of the OpenWrt packaging (no SDK needed)
+apk-check:
+	sh $(PKG_DIR)/verify.sh
 
 ## apk: build the OpenWrt APK through the SDK (see packaging/openwrt/README.md)
 apk:

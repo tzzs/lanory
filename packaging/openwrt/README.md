@@ -13,9 +13,18 @@ What *is* verified, because it was run:
 
 - `go build ./...` and `go test ./...` for the Go code that the package installs;
 - cross-compilation of the binary for `linux/amd64`, `linux/arm64`, `linux/arm`
-  (v7) and `linux/386` with `CGO_ENABLED=0` (the same build the package performs);
-- the init script passes `sh -n` (syntax checked with `dash`/`busybox ash`
-  wherever one was available).
+  (v7) and `linux/386` with `CGO_ENABLED=0` (the same build the package performs),
+  confirmed with `file` to be static and of the right ELF class;
+- the init script parses under `sh -n` and passes `shellcheck --shell=sh`;
+- `packaging/openwrt/verify.sh` (`make apk-check`) passes. It checks 40+
+  invariants that do not need the SDK: init script structure, that the option
+  names in the UCI file match the ones the init script reads, that every path the
+  Makefile installs is the path the init script uses, that no `PKGARCH:=all` is
+  declared for a compiled binary, that the conffiles are complete, the LuCI
+  companion metadata, and that the token handling is coherent (see below);
+- the token path end to end: with `LANORY_AUTH_TOKEN` set, an unauthenticated
+  request returns 401 and the token returns 200, while `/api/v1/health` stays
+  exempt.
 
 What is *not* verified:
 
@@ -163,6 +172,33 @@ If the SDK refuses to build the Go package, check in this order:
    one.
 3. The `GO_PKG_BUILD_PKG` path matches `cmd/lanory` in this repository.
 
+## Access control on first start
+
+An installation must not be reachable unauthenticated: the API can trigger scans
+and exposes every MAC, IP and hostname on the network. The init script therefore
+generates a random 64-hex-character token in `/etc/lanory/token` (mode 0600) on
+first start and logs it exactly once:
+
+```
+logread -e lanory | grep token
+```
+
+Paste it into the UI when prompted. The token is passed to the daemon through the
+`LANORY_AUTH_TOKEN` environment variable, so it never appears in `ps`, in
+`/etc/config/lanory`, or in the world readable generated YAML.
+
+To opt out (for example when a reverse proxy authenticates requests itself):
+
+```sh
+uci set lanory.main.generate_token='0'
+uci commit lanory
+/etc/init.d/lanory restart
+```
+
+With no token present the service trusts private LAN addresses
+(`auth.allow_lan` is set accordingly in the generated YAML) and still refuses
+public source addresses.
+
 ## Installing on the device
 
 ```sh
@@ -241,6 +277,8 @@ schedule. If you want to reduce writes further:
 
 | Symptom | Check |
 | --- | --- |
+| UI loads but every request is 401 | you need the token: `logread -e lanory \| grep token` |
+| forgot the token | `cat /etc/lanory/token`, or delete it and restart to generate a new one |
 | service starts, UI does not load | `/etc/init.d/lanory status`; `netstat -ltnp \| grep 8787`; the listen address in UCI |
 | "no devices" on a fresh install | `bridge fdb show` has entries; `ip neigh` is not empty; the FDB collector needs the `bridge` package |
 | empty interface list | `ubus call network.interface dump` works; `iproute2-ip-full` is installed, not the trimmed `ip-tiny` |
@@ -257,6 +295,9 @@ environment:
 - that the package compiles under OpenWrt 25.12 / iStoreOS 25.12.5;
 - that procd restarts the binary correctly after a crash;
 - that the LuCI page renders on those LuCI versions;
-- that the dependency set is sufficient on a minimal image (`CONFIG_ALL=n`).
+- that the dependency set is sufficient on a minimal image (`CONFIG_ALL=n`);
+- that `luci.mk` resolves at the assumed path in your SDK tree; the Makefile
+  notes the alternative `$(TOPDIR)/feeds/luci/luci.mk`.
 
-Verify each of them on your target before shipping.
+Verify each of them on your target before shipping. `make apk-check` is the
+boundary: it proves the packaging is internally consistent, not that it builds.

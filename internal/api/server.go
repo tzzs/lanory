@@ -299,6 +299,17 @@ func (a *App) SetPlatform(p platformInfo) {
 	}
 }
 
+// AuthEnabled reports whether bearer-token authentication is currently active.
+//
+// Like AuthToken, it is a method so a late token (set through SetAuthToken, which
+// is what the OpenWrt init script relies on) switches authentication on without
+// rebuilding the handler chain.
+func (a *App) AuthEnabled() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.cfg.Auth.Enabled
+}
+
 // AuthToken returns the current bearer token.
 //
 // The token is read on every request rather than captured at build time,
@@ -392,7 +403,10 @@ func (a *App) routes() http.Handler {
 	h = a.limiter.middleware(h)
 
 	auth := authConfig{
-		enabled:     a.cfg.Auth.Enabled,
+		// enabled and token are read through methods so a token supplied after
+		// the handler chain was built (the OpenWrt LANORY_AUTH_TOKEN path) takes
+		// effect immediately instead of being frozen at New() time.
+		enabled:     a.AuthEnabled,
 		allowLAN:    a.cfg.Auth.AllowLAN,
 		trustedNets: trustedPrefixes(a.cfg.Server.TrustedProxies),
 		basePath:    strings.TrimSuffix(a.cfg.Server.BasePath, "/"),

@@ -35,6 +35,8 @@ PKG_HOMEPAGE:=https://github.com/lanory/lanory
 PKG_BUILD_DEPENDS:=golang/host
 PKG_BUILD_PARALLEL:=1
 PKG_USE_MIPS16:=0
+# Go cannot be built with the MIPS16 ISA (the Go runtime needs full MIPS32).
+PKG_USE_MIPS16:=0
 
 # The upstream source lives one level above this Makefile (the repository root).
 # When building from a tarball, set PKG_SOURCE/PKG_SOURCE_URL instead.
@@ -71,9 +73,12 @@ define Package/lanory
   TITLE:=Home network topology visualisation and monitoring
   URL:=https://github.com/lanory/lanory
   DEPENDS:=+libc +iproute2-ip-full +bridge +ubus +libubox +libjson-c +ca-bundle
-  PROVIDES:=lanory
-  CONFLICTS:=luci-app-lanory-web
-  PKGARCH:=all
+  # No PKGARCH here on purpose. The package ships a compiled Go binary, so its
+  # architecture is the target's, not "all". Declaring PKGARCH:=all would let a
+  # build for x86_64 be installed on an aarch64 router, which fails at exec time
+  # with "Exec format error" and is confusing to debug. Omitting it makes the
+  # buildroot assign the target architecture automatically. LuCI packages, which
+  # are Lua only, do use all.
 endef
 
 define Package/lanory/description
@@ -94,7 +99,9 @@ endef
 # config directory. Data lives in /var/lib/lanory and is created at runtime.
 define Package/lanory/install
 	$(INSTALL_DIR) $(1)/usr/bin
-	$(INSTALL_BIN) $(GO_PKG_BUILD_BIN_DIR)/lanory $(1)/usr/bin/lanory
+	# golang.mk installs into $(GO_PKG_BUILD_BIN_DIR); fall back to the package
+	# build dir for older golang.mk variants that use the package bin dir.
+	$(INSTALL_BIN) $(if $(GO_PKG_BUILD_BIN_DIR),$(GO_PKG_BUILD_BIN_DIR),$(PKG_BUILD_DIR)/bin)/lanory $(1)/usr/bin/lanory
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/lanory.init $(1)/etc/init.d/lanory
 	$(INSTALL_DIR) $(1)/etc/config

@@ -56,7 +56,7 @@ Internet
 | ✅ | Probe history, device state history, network event log | implemented |
 | ✅ | Realtime updates over SSE | implemented |
 | ✅ | Cross-compiles for linux **amd64 / arm64 / 386 / armv7**, statically linked | built and verified |
-| ✅ | OpenWrt package (procd, UCI; x86 / arm64 / armv7 — **not MIPS**) | packaging complete, **unbuilt** (no SDK here) |
+| ✅ | OpenWrt package (procd, UCI; x86 / arm64 / armv7 — **not MIPS**) | packaging verified by `make apk-check`; **APK itself unbuilt** (no SDK here) |
 | ✅ | Demo Mode: the whole UI without a router | implemented |
 | ✅ | Chinese and English UI | implemented |
 | ⚠️ | LLDP, mDNS, SSDP collectors | implemented, opt-in, not exercised against a real multicast network yet |

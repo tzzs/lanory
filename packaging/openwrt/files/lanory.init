@@ -36,6 +36,34 @@ lanory_bool() {
 	esac
 }
 
+# lanory_ensure_token creates an access token on first start.
+#
+# Shipping without one would leave the API open to the whole LAN, so a token is
+# generated and printed to the system log exactly once. Set
+# lanory.main.generate_token=0 to opt out, for example when a reverse proxy
+# authenticates requests instead. The token lives in a 0600 file and reaches the
+# daemon through the environment, never through the world readable YAML.
+lanory_ensure_token() {
+	config_load lanory
+	config_get generate_token main generate_token 1
+	[ "$(lanory_bool "$generate_token" 1)" = "1" ] || return 0
+	[ -s /etc/lanory/token ] && return 0
+
+	mkdir -p /etc/lanory 2>/dev/null
+	# od is in every busybox; hexdump is not guaranteed.
+	if head -c 32 /dev/urandom 2>/dev/null | od -A n -t x1 2>/dev/null | tr -d ' \n' > /etc/lanory/token.tmp 2>/dev/null \
+		&& [ -s /etc/lanory/token.tmp ]; then
+		mv /etc/lanory/token.tmp /etc/lanory/token
+		chmod 600 /etc/lanory/token
+		umask 077
+		logger -t lanory "generated an access token: $(cat /etc/lanory/token)"
+		logger -t lanory "paste it into the Lanory UI when prompted; it is logged only once"
+	else
+		rm -f /etc/lanory/token.tmp
+		logger -t lanory "could not generate an access token; the UI will be open to the LAN"
+	fi
+}
+
 # lanory_generate_config writes /etc/lanory/config.yaml from UCI.
 #
 # The YAML is generated rather than edited by hand so a user only ever touches
@@ -111,8 +139,12 @@ topology:
   prefer_confirmed_edges: true
   unverified_edge_threshold: 0.6
 auth:
-  enabled: false
-  allow_lan: true
+  # Authentication follows the token file: with a token present the API requires
+  # it, without one the service trusts the LAN only. The token itself is never
+  # written here (this file is world readable); it is passed through
+  # LANORY_AUTH_TOKEN, see start_service().
+  enabled: $( [ -s /etc/lanory/token ] && echo true || echo false )
+  allow_lan: $( [ -s /etc/lanory/token ] && echo false || echo true )
 logging:
   level: "$log_level"
   pretty: true
@@ -120,9 +152,7 @@ demo:
   enabled: false
 EOF
 
-	# Keep the token out of the world readable YAML: it comes from
-	# /etc/lanory/token, mode 0600, and is read by the binary through
-	# LANORY_AUTH_TOKEN (see procd env below). See README.md.
+	# The token is world readable protection: it never goes into this file.
 	if [ -s /etc/lanory/token ]; then
 		chmod 600 /etc/lanory/token
 	fi
@@ -145,6 +175,9 @@ start_service() {
 		return 0
 	fi
 
+	# The token must exist before the YAML is generated, because the YAML encodes
+	# whether authentication is on.
+	lanory_ensure_token
 	lanory_generate_config
 
 	mkdir -p "$data_dir"
@@ -187,9 +220,9 @@ service_triggers() {
 
 reload_service() {
 	# A reload regenerates the YAML and restarts the process. The database is
-	# untouched, so history survives.
-	stop
-	start
+	# untouched, so history survives. restart (not stop+start) is used so
+	# rc.common's bookkeeping stays consistent.
+	restart
 }
 
 # status is used by `service lanory status` and by the LuCI page. rc.common's

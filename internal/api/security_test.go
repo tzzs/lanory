@@ -674,3 +674,45 @@ func (f *flushCounter) Flush()                      { f.count++ }
 func jsonUnmarshalString(s string, v any) error {
 	return jsonUnmarshal([]byte(s), v)
 }
+
+// TestTokenPresenceEnablesAuth covers the OpenWrt deployment path.
+//
+// The procd init script generates /etc/lanory/config.yaml with
+// auth.enabled=false (the router is a trusted LAN device) and hands the token to
+// the binary through the LANORY_AUTH_TOKEN environment variable so it never
+// appears in `ps` or in the world readable YAML. A configured token must switch
+// authentication on regardless of that flag: shipping a token and then ignoring
+// it leaves the API open to the whole LAN, including unauthenticated scan
+// triggers.
+func TestTokenPresenceEnablesAuth(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.Auth.Enabled = false // as the generated YAML has it
+	cfg.Auth.Token = "lanory-openwrt-token"
+	app := newTestAppWithConfig(t, cfg)
+	app.SetAuthToken(cfg.Auth.Token)
+
+	srv := httptest.NewServer(app.Handler())
+	defer srv.Close()
+
+	// No token: refused, even though the YAML said disabled.
+	resp, err := http.Get(srv.URL + "/api/v1/overview")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("request without a token -> %d, want 401 (a configured token must enable auth)", resp.StatusCode)
+	}
+
+	// With the token: accepted.
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/api/v1/overview", nil)
+	req.Header.Set("Authorization", "Bearer "+cfg.Auth.Token)
+	allowed, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	allowed.Body.Close()
+	if allowed.StatusCode != http.StatusOK {
+		t.Errorf("request with the configured token -> %d, want 200", allowed.StatusCode)
+	}
+}

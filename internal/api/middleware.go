@@ -204,7 +204,11 @@ const doubleSubmitCookie = "lanory_csrf"
 
 // authConfig is what the auth middleware needs from the configuration.
 type authConfig struct {
-	enabled     bool
+	// enabled reports whether authentication is active. It is a function for the
+	// same reason token is: the OpenWrt init script supplies the token through an
+	// environment variable after the handler chain exists, and that must switch
+	// authentication on without rebuilding the chain.
+	enabled     func() bool
 	allowLAN    bool
 	trustedNets []netip.Prefix
 	// basePath is the configured reverse-proxy prefix, so the API is
@@ -229,7 +233,11 @@ func (a authConfig) middleware(next http.Handler) http.Handler {
 		if a.token != nil {
 			token = a.token()
 		}
-		if !a.enabled || token == "" {
+		enabled := false
+		if a.enabled != nil {
+			enabled = a.enabled()
+		}
+		if !enabled || token == "" {
 			next.ServeHTTP(w, r)
 			return
 		}

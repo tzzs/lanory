@@ -224,10 +224,19 @@ jobs:
       - name: shellcheck
         # SC1091: sourced OpenWrt helpers (/lib/functions.sh) are not available
         # here. SC3043: `local` is a busybox/dash extension that OpenWrt's ash
-        # supports and the script relies on.
+        # supports and the script relies on. SC2034: START/STOP/USE_PROCD are
+        # read by rc.common, not by this file. SC2154: variables assigned by
+        # config_get from /lib/functions.sh are invisible to shellcheck.
         run: |
-          shellcheck --shell=sh --exclude=SC1091,SC3043 \
+          shellcheck --shell=sh --exclude=SC1091,SC3043,SC2034,SC2154 \
             $(git ls-files 'packaging/**/*.init' 'packaging/**/99-*')
+
+      - name: OpenWrt packaging
+        # Everything about the package that can be verified without the SDK:
+        # init script structure, UCI/init/YAML agreement, installed paths,
+        # package metadata, LuCI companion, and that the token handling is
+        # coherent. Building the APK itself needs the SDK and is not covered here.
+        run: sh packaging/openwrt/verify.sh
 
       - name: systemd unit file
         run: |
