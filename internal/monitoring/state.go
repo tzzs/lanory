@@ -122,6 +122,21 @@ type StateMachine struct {
 	// network. When it is false, a failed device probe is not evidence that the
 	// device is gone — it is evidence that the source cannot see the network.
 	sourceReachable bool
+
+	// presence is the optional cross-check of whether a device is still on the
+	// segment. The neighbour table is the kernel's own view: an entry means the
+	// host answered an ARP request recently, whatever it does about echo
+	// requests. It is what separates "the device is gone" from "the device does
+	// not answer ping", which a Windows machine or a sleeping phone otherwise
+	// gets reported as.
+	presence PresenceChecker
+}
+
+// PresenceChecker reports whether a device is still present on the segment.
+type PresenceChecker interface {
+	// Seen reports whether the neighbour table has a recent entry for the
+	// address.
+	Seen(ip string) bool
 }
 
 // probeState is the per-probe bookkeeping the state machine needs.
@@ -148,6 +163,16 @@ func NewStateMachine(setter DeviceStateSetter) *StateMachine {
 // Setter returns the device state setter this machine pushes transitions
 // through, or nil when none was configured.
 func (m *StateMachine) Setter() DeviceStateSetter { return m.setter }
+
+// WithPresence attaches the neighbour-table cross-check.
+//
+// Without it a device that is present but silent to the probe method is
+// reported as offline, which is wrong for a Windows machine, a sleeping phone
+// or a printer with no ICMP stack.
+func (m *StateMachine) WithPresence(p PresenceChecker) *StateMachine {
+	m.presence = p
+	return m
+}
 
 // SetSourceReachable records whether the probe source still has a path to the
 // network. When it is false the machine stops declaring devices offline: the
@@ -245,6 +270,14 @@ func (m *StateMachine) decideHistory(target model.ProbeTarget, history []bool) (
 			return model.StateSleeping, fmt.Sprintf(
 				"unreachable for %d consecutive probes from %s via %s, but the probe source itself lost connectivity: this says nothing about the device",
 				failures, src, proto)
+		}
+		// The device is in the neighbour table, so it is on the segment and
+		// answered an ARP request recently. It is not gone; it just does not
+		// answer this probe method.
+		if m.presence != nil && target.Target != "" && m.presence.Seen(target.Target) {
+			return model.StateSleeping, fmt.Sprintf(
+				"unreachable for %d consecutive probes from %s via %s, but the neighbour table still lists %s: the device is on the segment and does not answer this probe method",
+				failures, src, proto, target.Target)
 		}
 		if oscillating(history) {
 			// The device resumed after an earlier run of failures: power cycling.

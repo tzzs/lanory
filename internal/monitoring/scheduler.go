@@ -152,7 +152,7 @@ func NewEngine(store Store, bus Publisher, executor Executor, setter DeviceState
 		store:      store,
 		bus:        bus,
 		executor:   executor,
-		states:     NewStateMachine(setter),
+		states:     NewStateMachine(setter).WithPresence(NewARPObserver()),
 		cfg:        cfg,
 		jobs:       map[string]*probeJob{},
 		sem:        make(chan struct{}, workerCount(cfg.Workers)),
@@ -408,6 +408,7 @@ func (e *Engine) interfaceLoop(ctx context.Context) {
 			return
 		case <-ticker.C:
 			e.observeLinks()
+			e.refreshPresence()
 			e.provisionProbes(ctx)
 		}
 	}
@@ -444,6 +445,23 @@ func (e *Engine) discoveryLoop(ctx context.Context) {
 			}
 			e.provisionProbes(ctx)
 		}
+	}
+}
+
+// refreshPresence re-reads the neighbour table.
+//
+// The table is the cross-check that tells "the device is gone" from "the device
+// does not answer this probe method", so it has to be current when the state
+// machine decides.
+func (e *Engine) refreshPresence() {
+	observer, ok := e.states.presence.(*ARPObserver)
+	if !ok || observer == nil {
+		return
+	}
+	if _, err := observer.Refresh(context.Background()); err != nil {
+		// The neighbour table is not available everywhere; the state machine
+		// then simply has no cross-check and falls back to the probe outcome.
+		return
 	}
 }
 
