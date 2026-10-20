@@ -314,7 +314,13 @@ func (c *Collector) hostResult(now time.Time) *discovery.Result {
 
 // readUCI returns the grouped UCI network sections.
 func (c *Collector) readUCI(ctx context.Context) ([]parsers.UCISection, error) {
-	data, err := c.readInput(ctx, c.uciPath, cmdUCI, "export", "network")
+	// `uci show network` prints the flat "network.lan.ifname='br-lan'" form that
+	// parsers.ParseUCI expects. `uci export network` prints a completely
+	// different, multi-line config-file syntax ("config interface 'lan'" plus
+	// "	option ifname 'br-lan'"), which ParseUCI cannot read: on a real router
+	// that mismatch produced ErrEmptyInput and silently disabled the entire
+	// interface and edge pipeline.
+	data, err := c.readInput(ctx, c.uciPath, cmdUCI, "show", "network")
 	if err != nil || len(data) == 0 {
 		return nil, nil //nolint:nilerr // an unavailable source is not an error
 	}

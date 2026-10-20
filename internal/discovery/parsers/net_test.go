@@ -370,9 +370,15 @@ func TestParseUCI(t *testing.T) {
 		t.Fatalf("wan device = %q", v)
 	}
 
-	// br-lan is a bridge with three member ports.
-	if brlan.Type != "bridge" {
-		t.Fatalf("br-lan type = %q", brlan.Type)
+	// br-lan is a *device section* whose device kind is bridge. The section type
+	// is "device" (from the "=device" marker); "bridge" is the value of its
+	// `type` option. Conflating the two made the topology engine unable to find
+	// device sections at all, so both are asserted here.
+	if brlan.Type != "device" {
+		t.Fatalf("br-lan section type = %q, want device", brlan.Type)
+	}
+	if kind, _ := brlan.Get("type"); kind != "bridge" {
+		t.Fatalf("br-lan device kind = %q, want bridge", kind)
 	}
 	members := SplitList(brlan.Options["ports"])
 	if !reflect.DeepEqual(members, []string{"eth1", "eth2", "eth3"}) {

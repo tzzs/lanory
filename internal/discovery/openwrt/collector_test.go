@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lanory/lanory/internal/discovery/parsers"
 	"github.com/lanory/lanory/internal/model"
 )
 
@@ -400,4 +401,90 @@ func TestCollectIPLinkOnly(t *testing.T) {
 
 func writeFile(path, content string) error {
 	return os.WriteFile(path, []byte(content), 0o600)
+}
+
+// TestUCIShowFormatIsParsed guards the command/parser contract.
+//
+// readUCI runs `uci show network`, which prints the flat
+// "network.lan.ifname='br-lan'" form. An earlier version ran `uci export
+// network`, which prints the multi-line config-file syntax instead; ParseUCI
+// returned ErrEmptyInput on it, so on a real router the whole interface stage
+// failed and no topology edges were ever created. This test pins the flat form
+// so the two cannot drift apart again.
+func TestUCIShowFormatIsParsed(t *testing.T) {
+	// Exactly what `uci show network` prints.
+	showOutput := `network.loopback=interface
+network.loopback.device='lo'
+network.loopback.proto='static'
+network.@device[0]=device
+network.@device[0].name='br-lan'
+network.@device[0].type='bridge'
+network.@device[0].ports='eth1' 'eth2' 'eth0'
+network.@device[1]=device
+network.@device[1].name='eth1'
+network.@device[1].macaddr='16:8d:88:77:35:77'
+network.lan=interface
+network.lan.device='br-lan'
+network.lan.proto='static'
+network.lan.ipaddr='192.168.100.1/24'
+network.wan=interface
+network.wan.device='eth0'
+network.wan.proto='dhcp'
+`
+	entries, err := parsers.ParseUCI([]byte(showOutput))
+	if err != nil {
+		t.Fatalf("ParseUCI rejected `uci show network` output: %v", err)
+	}
+	sections := parsers.GroupUCI(entries)
+	if len(sections) == 0 {
+		t.Fatal("no sections parsed from `uci show network` output")
+	}
+
+	// The bridge device must expose its ports, which is what drives bridge
+	// membership and the LAN port list.
+	var sawBridge bool
+	for _, s := range sections {
+		name, _ := s.Get("name")
+		if s.Type == "device" && name == "br-lan" {
+			sawBridge = true
+			if ports, _ := s.Get("ports"); ports == "" {
+				t.Error("br-lan device has no ports; the flat form must keep them")
+			}
+		}
+	}
+	if !sawBridge {
+		t.Error("br-lan device not found in parsed sections")
+	}
+}
+
+// TestUCIExportFormatIsNotSilentlyAccepted documents the trap.
+//
+// `uci export network` uses a different grammar. If readUCI ever runs it again,
+// this test makes the failure obvious instead of silently producing zero
+// interfaces on a router.
+func TestUCIExportFormatIsNotSilentlyAccepted(t *testing.T) {
+	exportOutput := `package network
+
+config interface 'loopback'
+	option device 'lo'
+	option proto 'static'
+
+config device
+	option name 'br-lan'
+	option type 'bridge'
+	list ports 'eth1'
+`
+	entries, err := parsers.ParseUCI([]byte(exportOutput))
+	if err != nil {
+		// Rejecting it outright is fine and is what the parser does today.
+		return
+	}
+	// If it is accepted, it must not pretend to have found a usable bridge: the
+	// flat "network.brlan.name" keys do not exist in this grammar.
+	for _, e := range entries {
+		if e.Option == "name" && e.Value == "br-lan" {
+			t.Fatalf("ParseUCI accepted `uci export` output as if it were `uci show` output; " +
+				"readUCI must run `uci show network`")
+		}
+	}
 }

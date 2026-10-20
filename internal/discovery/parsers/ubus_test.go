@@ -148,3 +148,98 @@ func TestCIDR(t *testing.T) {
 		t.Fatalf("bad mask must fall back to /32, got %q", got)
 	}
 }
+
+// TestUbusInterfaceDumpArrayForm covers the shape a real iStoreOS 25.12.5 router
+// returns: "interface" is an ARRAY of objects that carry their own name, not an
+// object keyed by name.
+//
+// The object form was the only one handled at first, so on a real router ubus
+// decoding failed with `cannot unmarshal array into Go struct field
+// rawInterfaceDump.interface of type map[...]` and the whole OpenWrt collector
+// reported itself broken - taking interfaces, bridge membership and every
+// topology edge with it.
+func TestUbusInterfaceDumpArrayForm(t *testing.T) {
+	// Trimmed from `ubus call network.interface dump` on an iStoreOS 25.12.5 box.
+	const arrayForm = `{
+	"interface": [
+		{
+			"interface": "lan",
+			"up": true,
+			"available": true,
+			"device": "br-lan",
+			"l3_device": "br-lan",
+			"proto": "static",
+			"ipv4-address": [{"address": "192.168.100.1", "mask": 24}],
+			"ipv6-address": [],
+			"route": [],
+			"dns-server": []
+		},
+		{
+			"interface": "wan",
+			"up": false,
+			"available": false,
+			"device": "eth0",
+			"l3_device": "eth0",
+			"proto": "dhcp",
+			"ipv4-address": [],
+			"ipv6-address": [],
+			"route": [],
+			"dns-server": ["223.5.5.5"]
+		}
+	]
+}`
+
+	dump, err := ParseUbusInterfaceDump([]byte(arrayForm))
+	if err != nil {
+		t.Fatalf("array form rejected: %v", err)
+	}
+	if len(dump.Interfaces) != 2 {
+		t.Fatalf("parsed %d interfaces, want 2", len(dump.Interfaces))
+	}
+	lan, ok := dump.Interfaces["lan"]
+	if !ok {
+		t.Fatal("lan interface missing")
+	}
+	if lan.Device != "br-lan" {
+		t.Errorf("lan device = %q, want br-lan", lan.Device)
+	}
+	if !lan.Up {
+		t.Error("lan should be up")
+	}
+	wan, ok := dump.Interfaces["wan"]
+	if !ok {
+		t.Fatal("wan interface missing")
+	}
+	if wan.Up {
+		t.Error("wan should be down")
+	}
+}
+
+// TestUbusInterfaceDumpObjectForm keeps the older object shape working.
+func TestUbusInterfaceDumpObjectForm(t *testing.T) {
+	const objectForm = `{"interface": {"lan": {"up": true, "device": "br-lan", "l3_device": "br-lan", "proto": "static"}}}`
+	dump, err := ParseUbusInterfaceDump([]byte(objectForm))
+	if err != nil {
+		t.Fatalf("object form rejected: %v", err)
+	}
+	if len(dump.Interfaces) != 1 {
+		t.Fatalf("parsed %d interfaces, want 1", len(dump.Interfaces))
+	}
+	if dump.Interfaces["lan"].Device != "br-lan" {
+		t.Error("lan device wrong")
+	}
+}
+
+// TestUbusInterfaceDumpEmpty covers a router with no logical interfaces.
+func TestUbusInterfaceDumpEmpty(t *testing.T) {
+	for _, input := range []string{`{"interface": null}`, `{"interface": []}`, `{"interface": {}}`, `{}`} {
+		dump, err := ParseUbusInterfaceDump([]byte(input))
+		if err != nil {
+			t.Errorf("%s rejected: %v", input, err)
+			continue
+		}
+		if len(dump.Interfaces) != 0 {
+			t.Errorf("%s produced %d interfaces", input, len(dump.Interfaces))
+		}
+	}
+}

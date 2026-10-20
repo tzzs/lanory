@@ -1,6 +1,7 @@
 package parsers
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -161,11 +162,69 @@ type UbusInterfaceDump struct {
 	Interfaces map[string]*UbusInterface
 }
 
-// rawInterfaceDump is the outer shape of the network.interface dump. Depending
-// on the OpenWrt/netifd version the logical interfaces live either directly at
-// the top level or nested under an "interface" key.
+// rawInterfaceDump is the outer shape of the network.interface dump.
+//
+// The "interface" member has two shapes in the wild:
+//
+//   - an OBJECT keyed by interface name (older netifd, and the fixture):
+//     {"interface": {"lan": {...}, "wan": {...}}}
+//   - an ARRAY of objects that carry their own "interface" name field
+//     (iShereOS/OpenWrt 24.10+):
+//     {"interface": [{"interface": "lan", ...}, {"interface": "wan", ...}]}
+//
+// Decoding straight into a map failed on the array form with
+// "cannot unmarshal array into Go struct field ... of type map", which disabled
+// the whole OpenWrt collector on a real router. The member is decoded as raw
+// JSON below and interpreted according to its first byte.
 type rawInterfaceDump struct {
-	Interfaces map[string]rawInterface `json:"interface"`
+	Interfaces json.RawMessage `json:"interface"`
+}
+
+// decodeInterfaceMember normalises the two shapes of the "interface" member into
+// a name-keyed map.
+func decodeInterfaceMember(raw json.RawMessage) (map[string]rawInterface, error) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || string(trimmed) == "null" {
+		return map[string]rawInterface{}, nil
+	}
+
+	switch trimmed[0] {
+	case '{':
+		var m map[string]rawInterface
+		if err := json.Unmarshal(trimmed, &m); err != nil {
+			return nil, err
+		}
+		return m, nil
+	case '[':
+		// The array form stores the interface name inside each element.
+		var list []struct {
+			rawInterface
+			Name string `json:"interface"`
+		}
+		if err := json.Unmarshal(trimmed, &list); err != nil {
+			return nil, err
+		}
+		out := make(map[string]rawInterface, len(list))
+		for i, item := range list {
+			name := item.Name
+			if name == "" {
+				// No name: fall back to the position so the entry is not lost.
+				name = fmt.Sprintf("#%d", i)
+			}
+			out[name] = item.rawInterface
+		}
+		return out, nil
+	default:
+		return nil, fmt.Errorf("unexpected \"interface\" member: %s", firstBytes(trimmed, 20))
+	}
+}
+
+// firstBytes is a small helper for error messages.
+func firstBytes(b []byte, n int) string {
+	if len(b) < n {
+		return string(b)
+	}
+	return string(b[:n]) + "…"
 }
 
 // ParseUbusInterfaceDump parses the JSON emitted by
@@ -175,8 +234,12 @@ func ParseUbusInterfaceDump(data []byte) (*UbusInterfaceDump, error) {
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("parsers: ubus network.interface dump: %w", err)
 	}
-	out := &UbusInterfaceDump{Interfaces: make(map[string]*UbusInterface, len(raw.Interfaces))}
-	for name, i := range raw.Interfaces {
+	interfaces, err := decodeInterfaceMember(raw.Interfaces)
+	if err != nil {
+		return nil, fmt.Errorf("parsers: ubus network.interface dump: %w", err)
+	}
+	out := &UbusInterfaceDump{Interfaces: make(map[string]*UbusInterface, len(interfaces))}
+	for name, i := range interfaces {
 		iface := &UbusInterface{
 			Name:       name,
 			Up:         i.Up,

@@ -527,18 +527,26 @@ func GroupUCI(entries []UCIEntry) []UCISection {
 // named section without an explicit type uses its own name as the type, which
 // is how "network.brlan=device" becomes type "device".
 func sectionType(entries []UCIEntry, sec UCISection) string {
-	if t, ok := sec.Options["interface"]; ok && t != "" {
-		return t
-	}
-	if t, ok := sec.Options["type"]; ok && t != "" {
-		return t
-	}
+	// The section type comes from the "=type" marker line
+	// (network.lan=interface, network.@device[0]=device), which is authoritative.
+	// Only if that is absent do we fall back to options.
+	//
+	// The order matters: a bridge device has BOTH a type marker ("device") and a
+	// "type 'bridge'" option. Reading the option first made every bridge report
+	// its type as "bridge", so topology lookup by section type "device" found
+	// nothing and the bridge ports were never attached.
 	for _, e := range entries {
 		if e.Option == OptionType && e.Package == sec.Package && e.Section == sec.Section {
 			if e.Value != "" {
 				return e.Value
 			}
 		}
+	}
+	if t, ok := sec.Options["interface"]; ok && t != "" {
+		return t
+	}
+	if t, ok := sec.Options["type"]; ok && t != "" {
+		return t
 	}
 	if sec.Section == "globals" {
 		return "globals"

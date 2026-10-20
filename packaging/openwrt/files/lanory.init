@@ -50,9 +50,17 @@ lanory_ensure_token() {
 	[ -s /etc/lanory/token ] && return 0
 
 	mkdir -p /etc/lanory 2>/dev/null
-	# od is in every busybox; hexdump is not guaranteed.
-	if head -c 32 /dev/urandom 2>/dev/null | od -A n -t x1 2>/dev/null | tr -d ' \n' > /etc/lanory/token.tmp 2>/dev/null \
-		&& [ -s /etc/lanory/token.tmp ]; then
+	# The hex formatter differs between busybox builds: iStoreOS ships hexdump
+	# but not od, other builds are the other way round. Try both.
+	: > /etc/lanory/token.tmp
+	head -c 32 /dev/urandom 2>/dev/null | hexdump -v -e '/1 "%02x"' 2>/dev/null | tr -d ' \n' > /etc/lanory/token.tmp
+	if [ "$(wc -c < /etc/lanory/token.tmp)" -lt 32 ]; then
+		head -c 32 /dev/urandom 2>/dev/null | od -A n -t x1 2>/dev/null | tr -d ' \n' > /etc/lanory/token.tmp
+	fi
+	if [ "$(wc -c < /etc/lanory/token.tmp)" -lt 32 ]; then
+		head -c 32 /dev/urandom 2>/dev/null | od -An -tx1 2>/dev/null | tr -d ' \n' > /etc/lanory/token.tmp
+	fi
+	if [ -s /etc/lanory/token.tmp ]; then
 		mv /etc/lanory/token.tmp /etc/lanory/token
 		chmod 600 /etc/lanory/token
 		umask 077
@@ -61,6 +69,19 @@ lanory_ensure_token() {
 	else
 		rm -f /etc/lanory/token.tmp
 		logger -t lanory "could not generate an access token; the UI will be open to the LAN"
+	fi
+}
+
+# lanory_yaml_bool <uci-value> <default> — a YAML boolean, not a UCI one.
+#
+# UCI stores 1/0. YAML 1.2 does accept 1/0 as booleans, but go-yaml v3 decodes
+# into a *bool field and rejects an int, which is what broke the first start on
+# a real router ("cannot unmarshal !!int `1` into bool"). Emit true/false.
+lanory_yaml_bool() {
+	if [ "$(lanory_bool "$1" "$2")" = "1" ]; then
+		echo true
+	else
+		echo false
 	fi
 }
 
@@ -108,7 +129,7 @@ database:
   path: "$data_dir/lanory.db"
   retention_days: 30
 discovery:
-  enabled: $(lanory_bool "$discovery_enabled" 1)
+  enabled: $(lanory_yaml_bool "$discovery_enabled" 1)
   interval: "$discovery_interval"
   auto_detect_subnets: true
   max_concurrency: 16
@@ -126,7 +147,7 @@ collectors:
   snmp: false
   scan: false
 monitoring:
-  enabled: $(lanory_bool "$monitor_enabled" 1)
+  enabled: $(lanory_yaml_bool "$monitor_enabled" 1)
   interval: 60s
   timeout: 3s
   failure_threshold: 3
@@ -158,6 +179,12 @@ EOF
 	fi
 	mv "$tmp" "$CONFIG_YAML"
 	chmod 644 "$CONFIG_YAML"
+	# apk writes a new conffile as "<name>.apk-new" when the on-disk copy differs
+	# from the packaged one. That happens on the very first upgrade after the
+	# YAML format changed, and the stale file then sits there forever. Since this
+	# script regenerates the YAML from UCI anyway, the packaged copy is the
+	# authoritative one: drop the leftover so `ls /etc/lanory` stays clean.
+	[ -f "$CONFIG_YAML.apk-new" ] && rm -f "$CONFIG_YAML.apk-new"
 }
 
 lanory_running() {
