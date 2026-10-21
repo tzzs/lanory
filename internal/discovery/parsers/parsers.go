@@ -68,9 +68,14 @@ func SplitList(v string) []string {
 	if v == "" {
 		return nil
 	}
-	if isSingleQuotedGroup(v) {
-		v = TrimQuotes(v)
-	}
+	// Do NOT strip an outer quote pair here.
+	//
+	// UCI writes a list as 'eth1' 'eth2' 'eth0', which starts and ends with a
+	// single quote and therefore looks like one quoted string. Trimming the
+	// outer pair first turned it into eth1' 'eth2' 'eth0, and the per-field
+	// trim below then produced "eth1'" and "'eth0" - names that match no real
+	// interface, so bridge membership silently disappeared on a real router.
+	// Splitting first and trimming each field is correct for both forms.
 	fields := strings.Fields(v)
 	out := make([]string, 0, len(fields))
 	for _, f := range fields {

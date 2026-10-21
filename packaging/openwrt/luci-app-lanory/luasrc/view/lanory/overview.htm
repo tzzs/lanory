@@ -1,13 +1,44 @@
+<%#
 -- Licensed to the public under the MIT License.
 
-local fs = require "nixio.fs"
-local uci = require "luci.model.uci".cursor()
-local port = uci:get("lanory", "main", "port") or "8787"
+-- Lanory overview, rendered natively inside LuCI.
+--
+-- The data comes from the Lanory REST API on the loopback address. uhttpd's
+-- proxy_prefix was tried first so the whole React UI could be embedded, but it
+-- does not work in this iStoreOS build: the pre-existing /apps proxy returns 404
+-- too, which means the module is not compiled in. Rendering the data natively
+-- keeps the integration working on stock firmware.
+-%>
 
-local running = luci.sys.exec("pidof lanory 2>/dev/null") or ""
-local is_running = running:match("%d") ~= nil
+<%
+	local sys = require "luci.sys"
+	local port = (require "luci.model.uci").cursor():get("lanory", "main", "port") or "8787"
+	local running = (sys.exec("pidof lanory 2>/dev/null") or ""):match("%d") ~= nil
 
-local ll = require("luci.i18n").translate
+	-- Read the token the service generated, so the API call is authenticated.
+	local token = ""
+	local fd = io.open("/etc/lanory/token", "r")
+	if fd then
+		token = fd:read("*l") or ""
+		fd:close()
+	end
+
+	local function api(path)
+		local pipe = io.popen(string.format(
+			"curl -s -m 5 -H 'Authorization: Bearer %s' 'http://127.0.0.1:%s%s'",
+			token, port, path))
+		if not pipe then return nil end
+		local body = pipe:read("*a")
+		pipe:close()
+		if not body or body == "" then return nil end
+		local ok, decoded = pcall(require("luci.jsonc").parse, body)
+		if ok and type(decoded) == "table" then return decoded end
+		return nil
+	end
+
+	local overview = running and api("/api/v1/overview") or nil
+	local counts = overview and overview.counts
+	local ll = require("luci.i18n").translate
 %>
 
 <h2 name="content"><%:Lanory%></h2>
@@ -16,20 +47,75 @@ local ll = require("luci.i18n").translate
 	<div class="cbi-section">
 		<h3><%:Service state%></h3>
 		<p>
-			<% if is_running then %>
+			<% if running then %>
 				<em class="ifacebadge"><%:Running%></em>
 			<% else %>
 				<em class="ifacebadge"><%:Stopped%></em>
 			<% end %>
-		</p>
-		<p>
-			<%:Open the Lanory web UI%>:
-			<a href="http://<%=luci.http.getenv("SERVER_NAME") or "192.168.100.1"%>:<%=port%>/" target="_blank">
-				http://<%=luci.http.getenv("SERVER_NAME") or "192.168.100.1"%>:<%=port%>/
-			</a>
+			&nbsp;<%:Web UI%>: <a href="http://<%=luci.http.getenv("SERVER_NAME") or "192.168.100.1"%>:<%=port%>/" target="_blank">http://<%=luci.http.getenv("SERVER_NAME") or "192.168.100.1"%>:<%=port%>/</a>
 		</p>
 		<p class="cbi-section-descr">
 			<%:Lanory only reads the router's own state (interfaces, bridge FDB, ARP/NDP, DHCP leases). It never modifies WAN, LAN, DHCP, firewall, DNS or routes.%>
 		</p>
 	</div>
 </div>
+
+<% if not running then %>
+	<div class="cbi-map">
+		<div class="cbi-section">
+			<p><%:Lanory is not running. Start it from the Settings tab.%></p>
+		</div>
+	</div>
+<% elseif not overview then %>
+	<div class="cbi-map">
+		<div class="cbi-section">
+			<p><%:Could not read the Lanory API. Check that the service is running.%></p>
+		</div>
+	</div>
+<% else %>
+	<div class="cbi-map">
+		<div class="cbi-section">
+			<h3><%:Devices%></h3>
+			<table class="cbi-section-table">
+				<tr class="cbi-section-table-titles">
+					<th class="cbi-section-table-cell"><%:Name%></th>
+					<th class="cbi-section-table-cell"><%:Type%></th>
+					<th class="cbi-section-table-cell"><%:IP%></th>
+					<th class="cbi-section-table-cell"><%:MAC%></th>
+					<th class="cbi-section-table-cell"><%:Status%></th>
+				</tr>
+				<% for _, dev in ipairs(overview.recent_new_devices or {}) do %>
+					<tr class="cbi-section-table-row">
+						<td class="cbi-section-table-cell"><%=dev.name%></td>
+						<td class="cbi-section-table-cell"><%=dev.type%></td>
+						<td class="cbi-section-table-cell"><%=dev.primary_ipv4 or "-"%></td>
+						<td class="cbi-section-table-cell"><%=dev.primary_mac or "-"%></td>
+						<td class="cbi-section-table-cell"><%=dev.state%></td>
+					</tr>
+				<% end %>
+			</table>
+		</div>
+	</div>
+
+	<div class="cbi-map">
+		<div class="cbi-section">
+			<h3><%:Interfaces%></h3>
+			<table class="cbi-section-table">
+				<tr class="cbi-section-table-titles">
+					<th class="cbi-section-table-cell"><%:Name%></th>
+					<th class="cbi-section-table-cell"><%:Role%></th>
+					<th class="cbi-section-table-cell"><%:State%></th>
+					<th class="cbi-section-table-cell"><%:Speed%></th>
+				</tr>
+				<% for _, iface in ipairs(overview.interfaces or {}) do %>
+					<tr class="cbi-section-table-row">
+						<td class="cbi-section-table-cell"><%=iface.interface.name%></td>
+						<td class="cbi-section-table-cell"><%=iface.interface.role%></td>
+						<td class="cbi-section-table-cell"><%=iface.interface.carrier and "up" or "down"%></td>
+						<td class="cbi-section-table-cell"><%=iface.interface.speed_mbps%> Mbps</td>
+					</tr>
+				<% end %>
+			</table>
+		</div>
+	</div>
+<% end %>

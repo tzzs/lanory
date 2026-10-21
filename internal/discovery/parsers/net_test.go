@@ -560,3 +560,36 @@ func isErr(got, want error) bool {
 	}
 	return got.Error() == want.Error()
 }
+
+// TestSplitListQuotedFields covers the list syntax UCI actually emits.
+//
+// `uci show network` prints a list as 'eth1' 'eth2' 'eth0'. The whole value
+// starts and ends with a single quote, so treating it as one quoted string and
+// trimming the outer pair first produced "eth1'" and "'eth0" - names that match
+// no interface. On the reference router that silently removed every bridge
+// member, so no port ever carried a bridge id.
+func TestSplitListQuotedFields(t *testing.T) {
+	cases := []struct {
+		in   string
+		want []string
+	}{
+		{"'eth1' 'eth2' 'eth0' 'dheth0'", []string{"eth1", "eth2", "eth0", "dheth0"}},
+		{"eth1 eth2 eth3", []string{"eth1", "eth2", "eth3"}},
+		{"'eth1'", []string{"eth1"}},
+		{"eth1", []string{"eth1"}},
+		{`"eth1" "eth2"`, []string{"eth1", "eth2"}},
+		{"", nil},
+	}
+	for _, tc := range cases {
+		got := SplitList(tc.in)
+		if len(got) != len(tc.want) {
+			t.Errorf("SplitList(%q) = %v, want %v", tc.in, got, tc.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != tc.want[i] {
+				t.Errorf("SplitList(%q)[%d] = %q, want %q", tc.in, i, got[i], tc.want[i])
+			}
+		}
+	}
+}
