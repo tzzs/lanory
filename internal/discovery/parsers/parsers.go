@@ -79,7 +79,11 @@ func SplitList(v string) []string {
 	fields := strings.Fields(v)
 	out := make([]string, 0, len(fields))
 	for _, f := range fields {
-		f = TrimQuotes(f)
+		// A field may carry a quote on one side only: splitting
+		// "'eth1' 'eth2'" on whitespace yields "eth1'" and "'eth2".
+		// TrimQuotes requires both ends to be quoted, so it leaves those
+		// untouched; trim each side independently here.
+		f = strings.Trim(f, `'"`)
 		if f != "" {
 			out = append(out, f)
 		}
