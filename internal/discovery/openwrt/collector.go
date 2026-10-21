@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -833,7 +834,27 @@ func isVirtual(name, ubusType string) bool {
 		// Container bridges are virtual; an OpenWrt LAN bridge is not.
 		return parsers.LooksVirtualByName(name)
 	}
-	return parsers.LooksVirtualByName(name)
+	if parsers.LooksVirtualByName(name) {
+		return true
+	}
+	// A name is not always enough: iStoreOS creates "dheth0", a veth for its
+	// DHCP helper, which no name rule can recognise. The kernel does say so:
+	// a software device lives under /sys/devices/virtual/net, while a real
+	// port lives under a platform device. A bridge is also virtual by that
+	// test, but it is a real forwarding device and is handled above.
+	return isUnderVirtualSysfs(name)
+}
+
+// isUnderVirtualSysfs reports whether an interface is a software device.
+//
+// The check is skipped when sysfs is not available (macOS during development,
+// a container without /sys), where the name-based heuristics are all we have.
+func isUnderVirtualSysfs(name string) bool {
+	real, err := filepath.EvalSymlinks(filepath.Join("/sys/class/net", name))
+	if err != nil {
+		return false
+	}
+	return strings.Contains(real, "/devices/virtual/net/")
 }
 
 func adminState(up bool) model.AdminState {

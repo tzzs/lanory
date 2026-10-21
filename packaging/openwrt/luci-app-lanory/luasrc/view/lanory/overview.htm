@@ -37,6 +37,7 @@
 	end
 
 	local overview = running and api("/api/v1/overview") or nil
+	local monitoring = running and api("/api/v1/monitoring/status") or nil
 	local counts = overview and overview.counts
 	local ll = require("luci.i18n").translate
 %>
@@ -107,12 +108,18 @@
 					<th class="cbi-section-table-cell"><%:State%></th>
 					<th class="cbi-section-table-cell"><%:Speed%></th>
 				</tr>
-				<% for _, iface in ipairs(overview.interfaces or {}) do %>
+				<%
+					-- monitoring/status carries the live carrier and speed; the
+					-- overview payload only has the stored row.
+					local rows = (monitoring and monitoring.interfaces) or (overview and overview.interfaces) or {}
+					for _, iface in ipairs(rows) do
+						local it = iface.interface or {}
+				%>
 					<tr class="cbi-section-table-row">
-						<td class="cbi-section-table-cell"><%=iface.interface.name%></td>
-						<td class="cbi-section-table-cell"><%=iface.interface.role%></td>
-						<td class="cbi-section-table-cell"><%=iface.interface.carrier and "up" or "down"%></td>
-						<td class="cbi-section-table-cell"><%=iface.interface.speed_mbps%> Mbps</td>
+						<td class="cbi-section-table-cell"><%=it.name%></td>
+						<td class="cbi-section-table-cell"><%=it.role or "-"%></td>
+						<td class="cbi-section-table-cell"><%=it.carrier and "up" or "down"%></td>
+						<td class="cbi-section-table-cell"><%=it.speed_mbps or 0%> Mbps</td>
 					</tr>
 				<% end %>
 			</table>
