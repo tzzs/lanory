@@ -203,3 +203,32 @@ func seedDevice(t *testing.T, store *database.Store, id, name, ipv4 string, typ 
 		}
 	}
 }
+
+// TestEnsureProbesPrefersIPv4 locks the address choice when a device has both.
+//
+// A device discovered over NDP first and ARP later ends up with an IPv6 and an
+// IPv4 address. The router often has no route to the device's global IPv6
+// prefix while the IPv4 address is reachable, so probing the IPv6 address
+// reports a reachable host as offline. The probe must target the IPv4 address.
+func TestEnsureProbesPrefersIPv4(t *testing.T) {
+	store := openTestStore(t)
+	seedDevice(t, store, "dev-both", "dual", "192.0.2.40", model.DeviceTypeDesktop)
+	if err := store.UpsertAddress(&model.DeviceAddress{
+		DeviceID: "dev-both", Address: "2001:db8::40",
+		Family: model.AddressFamilyIPv6, Source: model.SourceNDP,
+	}); err != nil {
+		t.Fatalf("seed v6: %v", err)
+	}
+
+	e := NewEngine(store, nil, nil, nil, DefaultEngineConfig())
+	if _, err := e.EnsureProbes(context.Background(), DefaultAutoProbeConfig()); err != nil {
+		t.Fatalf("EnsureProbes: %v", err)
+	}
+	probes, _ := store.ListProbesByDevice("dev-both")
+	if len(probes) != 1 {
+		t.Fatalf("%d probes, want 1", len(probes))
+	}
+	if probes[0].Target != "192.0.2.40" {
+		t.Errorf("probe target = %q, want the IPv4 address 192.0.2.40", probes[0].Target)
+	}
+}
