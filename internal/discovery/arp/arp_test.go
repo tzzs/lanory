@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/lanory/lanory/internal/discovery"
+	"github.com/lanory/lanory/internal/discovery/parsers"
 	"github.com/lanory/lanory/internal/model"
 )
 
@@ -207,5 +208,50 @@ func writeFile(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
+// TestMergeProcArpMACsFillsMissingLLADDR pins the cross-source fix.
+//
+// On the reference router the same host appears twice with different detail:
+// `ip neigh show` reports "192.168.100.124 dev br-lan FAILED" and omits the
+// lladdr, while /proc/net/arp keeps the MAC with flag 0x0. Without merging, the
+// device is identified only through its IPv6 addresses, its reachable IPv4
+// address is never attached, and the probe targets an unreachable IPv6 address
+// instead - which reports a live host as offline.
+func TestMergeProcArpMACsFillsMissingLLADDR(t *testing.T) {
+	entries := []parsers.NeighborEntry{
+		// FAILED: no MAC from `ip neigh`.
+		{Address: "192.168.100.124", State: model.NeighborFailed},
+		// A complete entry must be left alone.
+		{Address: "192.168.100.116", MAC: "b0:82:e2:61:3e:b7", State: model.NeighborReachable},
+		// An address /proc/net/arp does not know about stays without a MAC.
+		{Address: "192.168.100.222", State: model.NeighborFailed},
+	}
+
+	dir := t.TempDir()
+	procPath := filepath.Join(dir, "arp")
+	procContent := `IP address       HW type     Flags       HW address            Mask     Device
+192.168.100.124  0x1         0x0         8e:0a:79:80:f3:6c     *        br-lan
+192.168.100.116  0x1         0x2         b0:82:e2:61:3e:b7     *        eth2
+`
+	if err := os.WriteFile(procPath, []byte(procContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	c := &Collector{}
+	c.neighPath = procPath
+	// Point the merge at the fixture.
+	mergeProcArpMACs(entries, procPath)
+
+	// parsers.NormalizeMAC returns the colon-separated display form.
+	if entries[0].MAC != "8e:0a:79:80:f3:6c" {
+		t.Errorf("MAC was not filled in: %q", entries[0].MAC)
+	}
+	if entries[1].MAC != "b0:82:e2:61:3e:b7" {
+		t.Errorf("an existing MAC was overwritten: %q", entries[1].MAC)
+	}
+	if entries[2].MAC != "" {
+		t.Errorf("a MAC was invented for an unknown address: %q", entries[2].MAC)
 	}
 }

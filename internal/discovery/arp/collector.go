@@ -148,6 +148,15 @@ func (c *Collector) readNeighbours(ctx context.Context) ([]parsers.NeighborEntry
 			if perr != nil {
 				return nil, fmt.Errorf("arp: parse ip neigh: %w", perr)
 			}
+			// `ip neigh` omits the lladdr of an entry whose resolution
+			// failed, while /proc/net/arp keeps the MAC. Both were observed
+			// on the reference router for the same host: "ip neigh" showed
+			// "192.168.100.124 dev br-lan FAILED" with no lladdr, and
+			// /proc/net/arp showed the MAC with flag 0x0. Losing that MAC
+			// leaves the device identified only by its IPv6 addresses, so
+			// its reachable IPv4 address never gets attached to it and the
+			// probe targets the wrong one.
+			mergeProcArpMACs(entries, procArp)
 			return entries, nil
 		}
 	}
@@ -163,6 +172,35 @@ func (c *Collector) readNeighbours(ctx context.Context) ([]parsers.NeighborEntry
 		return parseProcArp(data), nil
 	}
 	return nil, nil
+}
+
+// mergeProcArpMACs fills in the MAC that /proc/net/arp knows about an address
+// `ip neigh show` omitted.
+//
+// It only ever adds information: an entry that already has a MAC is left
+// alone, and an address that is not in /proc/net/arp is left alone.
+func mergeProcArpMACs(entries []parsers.NeighborEntry, procArpPath string) {
+	if procArpPath == "" {
+		procArpPath = procArp
+	}
+	data, ok, err := discovery.ReadFileCapped(procArpPath, 0)
+	if err != nil || !ok || len(data) == 0 {
+		return
+	}
+	byAddr := map[string]string{}
+	for _, e := range parseProcArp(data) {
+		if e.MAC != "" {
+			byAddr[e.Address] = e.MAC
+		}
+	}
+	for i := range entries {
+		if entries[i].MAC != "" {
+			continue
+		}
+		if mac, found := byAddr[entries[i].Address]; found {
+			entries[i].MAC = mac
+		}
+	}
 }
 
 // parseArpTable parses the legacy `arp -n` output.
@@ -196,7 +234,17 @@ func parseArpTable(data []byte) []parsers.NeighborEntry {
 	return out
 }
 
-// parseProcArp parses /proc/net/arp: "<ip> <hexmac> <flags> <iface>".
+// parseProcArp parses /proc/net/arp.
+//
+// The real layout is a header line followed by:
+//
+//	IP address       HW type     Flags       HW address            Mask     Device
+//	192.168.100.124  0x1         0x0         8e:0a:79:80:f3:6c     *        br-lan
+//
+// so the fields are ip, hwtype, flags, mac, mask, device. An earlier version
+// used the field order of a different file ("<ip> <hexmac> <flags> <iface>") and
+// silently read nothing at all, which is how the MAC of a FAILED neighbour
+// entry was lost.
 func parseProcArp(data []byte) []parsers.NeighborEntry {
 	var out []parsers.NeighborEntry
 	for i, line := range discovery.Lines(data) {
@@ -204,20 +252,21 @@ func parseProcArp(data []byte) []parsers.NeighborEntry {
 			continue // header
 		}
 		fields := parsers.Fields(line)
-		if len(fields) < 4 {
+		if len(fields) < 6 {
 			continue
 		}
-		mac := fields[1]
+		address, flags, mac := fields[0], fields[2], fields[3]
 		if !parsers.ValidMAC(mac) {
 			continue
 		}
 		e := parsers.NeighborEntry{
-			Address:   fields[0],
+			Address:   address,
 			MAC:       parsers.NormalizeMAC(mac),
-			Interface: fields[3],
+			Interface: fields[5],
 		}
-		// Flag 0x2 = ATF_COM, the entry is complete.
-		if fields[2] == "0x2" {
+		// Flag 0x2 = ATF_COM, the entry is complete. Anything else means the
+		// address could not be resolved, which still names a MAC.
+		if flags == "0x2" {
 			e.State = model.NeighborReachable
 		} else {
 			e.State = model.NeighborStale
