@@ -45,6 +45,18 @@ const zhCN: Dict = {
   'app.demo_badge': '演示数据',
 
   // ---- navigation ----
+  'token.title': '需要访问令牌',
+  'token.subtitle': 'Lanory 的 API 需要认证，请输入访问令牌',
+  'token.label': '访问令牌',
+  'token.placeholder': '粘贴 /etc/lanory/token 的内容',
+  'token.submit': '进入',
+  'token.empty': '请输入访问令牌',
+  'token.clear': '清除已保存的令牌并重新输入',
+  'token.how_title': '如何获取令牌？',
+  'token.how_body': '令牌在首次安装时自动生成，存放在路由器上：',
+  'token.how_command': 'ssh root@<路由器地址> \'cat /etc/lanory/token\'',
+  'token.how_note': '令牌只会在系统日志中显示一次。如果忘记了，删除该文件后重启服务即可重新生成。',
+
   'nav.overview': '总览',
   'nav.topology': '网络拓扑',
   'nav.devices': '设备',
@@ -368,6 +380,18 @@ const en: Dict = {
   'app.refresh': 'Refresh',
   'app.demo_banner': 'Demo mode: the data below is simulated, not a real scan.',
   'app.demo_badge': 'Demo data',
+
+  'token.title': 'Access token required',
+  'token.subtitle': 'The Lanory API requires authentication',
+  'token.label': 'Access token',
+  'token.placeholder': 'Paste the contents of /etc/lanory/token',
+  'token.submit': 'Continue',
+  'token.empty': 'Enter the access token',
+  'token.clear': 'Clear the saved token and enter it again',
+  'token.how_title': 'Where do I find the token?',
+  'token.how_body': 'It is generated on first install and stored on the router:',
+  'token.how_command': "ssh root@<router> 'cat /etc/lanory/token'",
+  'token.how_note': 'The token is logged only once. If you lost it, delete the file and restart the service to generate a new one.',
 
   'nav.overview': 'Overview',
   'nav.topology': 'Topology',

@@ -7,6 +7,7 @@ import { useHealth } from '@/hooks/useApi'
 import { useRealtime, type RealtimeEvent } from '@/hooks/useRealtime'
 import { Sidebar, TopBar } from '@/components/Sidebar'
 import { AlertBanner } from '@/components/AlertBanner'
+import { TokenPrompt, useTokenGate } from '@/components/TokenPrompt'
 
 /** Applies SSE events to the query cache. */
 function useInvalidate() {
@@ -66,18 +67,29 @@ function RealtimeSync() {
 export function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => initTheme(), [])
 
+  // The API requires a bearer token. When it rejects the current one the app
+  // shows the token prompt instead of an empty page, so a first-time visitor
+  // knows what to do rather than staring at a blank screen.
+  const { required, recheck } = useTokenGate()
+
   return (
     <BrowserRouter>
       <div className="flex h-full">
-        <Sidebar />
+        {required ? null : <Sidebar />}
         <div className="flex min-w-0 flex-1 flex-col">
-          <TopBar />
+          {required ? null : <TopBar />}
           <AlertBanner />
-          <main className="min-h-0 flex-1 overflow-auto">{children}</main>
+          <main className="min-h-0 flex-1 overflow-auto">
+            {required ? (
+              <TokenPrompt onAuthenticated={() => void recheck()} />
+            ) : (
+              children
+            )}
+          </main>
         </div>
       </div>
-      <DemoModeSync />
-      <RealtimeSync />
+      {required ? null : <DemoModeSync />}
+      {required ? null : <RealtimeSync />}
     </BrowserRouter>
   )
 }
