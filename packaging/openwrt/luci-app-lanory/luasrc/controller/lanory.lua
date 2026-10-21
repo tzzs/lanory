@@ -46,8 +46,12 @@ local function lanory_json(path)
 	if not body or body == "" then
 		return nil
 	end
-	local ok, decoded = pcall(require("luci.jsonc").parse, body)
-	if ok and type(decoded) == "table" then
+	local ok, jsonc = pcall(require, "luci.jsonc")
+	if not ok or not jsonc then
+		return nil
+	end
+	local pok, decoded = pcall(function() return jsonc.parse(body) end)
+	if pok and type(decoded) == "table" then
 		return decoded
 	end
 	return nil
