@@ -62,13 +62,24 @@ function index()
 		return
 	end
 
-	local page = entry({"admin", "network", "lanory"}, firstchild(), _("Lanory"), 60)
+	-- The menu lives under Services, not under Network.
+	--
+	-- Two reasons, both observed on iStoreOS 25.12.5:
+	--
+	--  1. iStoreOS's Docker plugin registers "admin/network" as an ALIAS to
+	--     admin/services/dockerman/networks. Anything mounted under
+	--     admin/network by a third-party package therefore never appears in the
+	--     menu, even though it is registered and satisfied in the index.
+	--  2. Every other daemon-style application on this firmware - appfilter,
+	--     ddnsto, linkease, openclash, oled - lives under Services. Lanory is a
+	--     background service with its own UI, so that is where a user looks.
+	local page = entry({"admin", "services", "lanory"}, firstchild(), _("Lanory"), 60)
 	page.dependent = false
 	page.acl_depends = { "luci-app-lanory" }
 
-	entry({"admin", "network", "lanory", "overview"}, template("lanory/overview"), _("Overview"), 10)
-	entry({"admin", "network", "lanory", "devices"}, template("lanory/devices"), _("Devices"), 20)
-	entry({"admin", "network", "lanory", "config"}, cbi("lanory"), _("Settings"), 30)
+	entry({"admin", "services", "lanory", "overview"}, template("lanory/overview"), _("Overview"), 10)
+	entry({"admin", "services", "lanory", "devices"}, template("lanory/devices"), _("Devices"), 20)
+	entry({"admin", "services", "lanory", "config"}, cbi("lanory"), _("Settings"), 30)
 end
 
 -- action_scan triggers a discovery run.

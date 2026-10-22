@@ -145,8 +145,94 @@ def check_ipk(path: str, binary_path: str | None) -> None:
         check_binary(name, data_tar, "usr/bin/lanory", binary_path)
 
 
+def check_luci_apk(path: str) -> None:
+    """Check the LuCI companion package.
+
+    It is a pure-Lua package, so the checks are the format ones that apk-tools
+    enforces, plus the presence of the LuCI sources the menu entry needs.
+    """
+    name = os.path.basename(path)
+    raw = gzip.open(path, "rb").read()
+    ok(f"{name}: single gzip stream")
+
+    tar = tarfile.open(fileobj=io.BytesIO(raw))
+    names = tar.getnames()
+
+    if not names or names[0] != ".PKGINFO":
+        fail(f"{name}: .PKGINFO must be the first entry, found {names[0] if names else 'nothing'}")
+        return
+    ok(f"{name}: .PKGINFO is the first entry")
+
+    info = tar.extractfile(".PKGINFO").read().decode()
+    fields: dict[str, list[str]] = {}
+    for line in info.splitlines():
+        if " = " in line:
+            k, v = line.split(" = ", 1)
+            fields.setdefault(k.strip(), []).append(v.strip())
+
+    for required in ["pkgname", "pkgver", "arch", "size"]:
+        if required not in fields:
+            fail(f"{name}: .PKGINFO is missing {required}")
+    if fields.get("pkgname", [None])[0] != "luci-app-lanory":
+        fail(f"{name}: pkgname is {fields.get('pkgname', ['?'])[0]}, want luci-app-lanory")
+    else:
+        ok(f"{name}: pkgname is luci-app-lanory")
+
+    # arch must be "noarch", not "all": apk rejects an arch-less dependency on a
+    # package with an architecture when the value is "all".
+    if fields.get("arch", [None])[0] != "noarch":
+        fail(f"{name}: arch is {fields.get('arch', ['?'])[0]}, want noarch")
+    else:
+        ok(f"{name}: arch is noarch")
+
+    if "datahash" not in fields:
+        fail(f"{name}: .PKGINFO has no datahash; apk-tools rejects the package")
+    else:
+        ok(f"{name}: datahash is present")
+
+    for script in (".post-install", ".pre-deinstall"):
+        if script not in names:
+            fail(f"{name}: missing {script}")
+        else:
+            info_m = tar.getmember(script)
+            if not info_m.mode & 0o111:
+                fail(f"{name}: {script} is not executable")
+            else:
+                ok(f"{name}: {script} present and executable")
+
+    required_files = [
+        "usr/lib/lua/luci/controller/lanory.lua",
+        "usr/lib/lua/luci/model/cbi/lanory.lua",
+        "usr/lib/lua/luci/view/lanory/overview.htm",
+        "usr/lib/lua/luci/view/lanory/devices.htm",
+    ]
+    for required in required_files:
+        if required in names:
+            ok(f"{name}: ships {required}")
+        else:
+            fail(f"{name}: does not ship {required}")
+
+    # A file whose directory was never registered is rejected with "no dirent in
+    # archive". A directory may be recorded with or without a trailing slash
+    # (Python's tarfile writes it without), so compare both forms.
+    dirs = {n.rstrip("/") for n in names if tar.getmember(n).isdir()}
+    missing = []
+    for required in required_files:
+        parent = required.rsplit("/", 1)[0]
+        if parent not in dirs:
+            missing.append(parent)
+    if missing:
+        for d in missing:
+            fail(f"{name}: directory entry {d} is missing; apk rejects with 'no dirent in archive'")
+    else:
+        ok(f"{name}: every file has its directory entry")
+
+
 def check_apk(path: str, binary_path: str | None) -> None:
     name = os.path.basename(path)
+    if "luci-app-lanory" in name:
+        check_luci_apk(path)
+        return
     try:
         raw = gzip.open(path, "rb").read()
     except OSError as exc:

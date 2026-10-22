@@ -13,7 +13,7 @@ WEB_DIR     := web
 PKG_DIR     := packaging/openwrt
 
 .PHONY: all build test test-race bench lint fmt vet clean web web-dev install uninstall \
-        packages apk-sign apk-keygen apk-sdk apk-check package-check check run dev demo
+        packages packages-luci packages-all apk-sign apk-keygen apk-sdk apk-check package-check check run dev demo
 
 all: build
 
@@ -100,6 +100,14 @@ package-check:
 ## (no OpenWrt SDK needed: the binary is already static, the rest is text)
 packages: release
 	python3 $(PKG_DIR)/mkpackage.py --all --binary-dir dist --version $(VERSION) --out dist/packages
+
+## packages-luci: build only the LuCI companion package (pure Lua, no SDK)
+packages-luci:
+	python3 $(PKG_DIR)/mkpackage.py --luci --no-service --version $(VERSION) --out dist/packages
+
+## packages-all: service packages for every architecture plus the LuCI package
+packages-all: release
+	python3 $(PKG_DIR)/mkpackage.py --all --binary-dir dist --version $(VERSION) --out dist/packages --luci
 
 ## apk-sign: sign the built packages with a local RSA key
 ## (LANORY_KEY=/path/to/key.key, defaults to ~/.lanory/lanory.key)
