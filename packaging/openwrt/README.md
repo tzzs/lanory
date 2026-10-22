@@ -51,7 +51,7 @@ Treat the version numbers in `Makefile` as the target, not as a test result.
 | `/var/lib/lanory/lanory.db` | SQLite database (WAL), preserved on upgrade *and* uninstall |
 | `/usr/share/lanory/README.md` | short deployment note for the device |
 
-Optional: `luci-app-lanory` adds a menu entry under **Network → Lanory**.
+Optional: `luci-app-lanory` adds a menu entry under **Services → Lanory**.
 
 ## Package names
 
@@ -185,6 +185,13 @@ cp -a /path/to/lanory/packaging/openwrt/. package/lanory/
 # 3. (optional) add the LuCI companion.
 mkdir -p package/luci-app-lanory
 cp -a /path/to/lanory/packaging/openwrt/luci-app-lanory/. package/luci-app-lanory/
+
+`cp -a` copies the whole directory, `root/` included, so the package ships
+`/usr/share/rpcd/acl.d/luci-app-lanory.json` (the ACL group the menu node
+declares) and `/usr/share/luci/menu.d/luci-app-lanory.json`. Without the ACL
+file the `luci-app-lanory` access group does not exist, `depends.acl` is
+unsatisfied, and the menu entry is dropped from the tree - see the LuCI
+companion's `root/` directory.
 
 # 4. Build.
 ./scripts/feeds update -a && ./scripts/feeds install -a
@@ -365,6 +372,9 @@ schedule. If you want to reduce writes further:
 | DHCP hostnames missing | `/tmp/dhcp.leases` exists and is readable |
 | memory grows | lower `discovery.max_concurrency`, raise the intervals |
 | 401/403 from a vendor adapter | the adapter stopped after one rejected attempt. Lanory does not retry with another password |
+| no Lanory entry under Services | the ACL group is missing: `ls /usr/share/rpcd/acl.d/luci-app-lanory.json`; then clear `/tmp/luci-indexcache*` and reload uhttpd |
+| LuCI logs "no Lua runtime installed" | `apk info -e luci-lua-runtime`; the controller needs it and the package declares it |
+| LuCI page renders but the API calls fail | `apk info -e curl`; the controller and both templates shell out to `curl` on 127.0.0.1 |
 
 ## Unverified claims
 
@@ -380,6 +390,9 @@ environment:
 - that the SDK buildroot compiles the Go module (`route B`);
 - that procd restarts the binary correctly after a crash;
 - that the LuCI page renders on those LuCI versions;
+- that the `luci-app-lanory` entry appears in the menu on your target. The
+  ACL group, the menu node and the dependency set are all in the package and
+  checked by `make package-check`, but no LuCI has rendered them here;
 - that the dependency set is sufficient on a minimal image (`CONFIG_ALL=n`);
 - that `luci.mk` resolves at the assumed path in your SDK tree; the Makefile
   notes the alternative `$(TOPDIR)/feeds/luci/luci.mk`.

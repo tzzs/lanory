@@ -10,9 +10,12 @@
 # The build was NOT executed in the development environment that produced this
 # file. Verify it against the LuCI version that ships with your OpenWrt 25.12 /
 # iStoreOS 25.12.5 release.
+#
+# Layout: root/ holds what is installed verbatim (the rpcd ACL group and the
+# menu.d node), luasrc/ is installed by luci.mk under $(LUCI_LIBRARYDIR).
 
 LUCI_TITLE:=LuCI support for Lanory
-LUCI_DEPENDS:=+luci-base +lanory
+LUCI_DEPENDS:=+luci-base +luci-lua-runtime +curl +lanory
 LUCI_PKGARCH:=all
 
 PKG_NAME:=luci-app-lanory
@@ -32,41 +35,11 @@ define Package/luci-app-lanory/description
  its own web UI on port 8787 and works without LuCI.
 endef
 
-# The postinst registers the Lanory UI as a reverse proxy on the LuCI port.
-#
-# Three things were established by testing against a real iStoreOS 25.12.5
-# router, and each of them broke the first attempt:
-#
-#  1. The proxy prefix belongs on the existing "main" uhttpd section. A separate
-#     uhttpd section with only proxy_prefix and no home/listen is ignored
-#     entirely, and one that also binds :80 collides with main and kills uhttpd
-#     ("Address in use" -> "No sockets bound, unable to continue").
-#  2. `uci set uhttpd.@uhttpd[-1].home=/lanory` must not be used. Before
-#     `uci add` has created a new section, @uhttpd[-1] IS the main section, so
-#     this silently rewrites home from /www to /lanory and takes LuCI down until
-#     the value is restored by hand.
-#  3. home must not be set to a non-existent directory: uhttpd refuses to start
-#     with "Invalid directory /lanory". A pure proxy needs no home at all.
-#
-# The change is additive and reversible: prerm removes the option again.
 define Package/luci-app-lanory/postinst
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] || {
-	. /lib/functions.sh
-	config_load lanory
-	local port
-	config_get port main port 8787
-
-	# Idempotent: only add the option when it is not already there.
-	if ! uci -q get uhttpd.main.proxy_prefix >/dev/null 2>&1; then
-		uci -q set uhttpd.main.proxy_prefix="/lanory=http://127.0.0.1:$port"
-		uci commit uhttpd
-		# Reload only when uhttpd is actually running; an image build has no
-		# running uhttpd and the reload would fail harmlessly.
-		[ -x /etc/init.d/uhttpd ] && /etc/init.d/uhttpd reload >/dev/null 2>&1
-	fi
-
-	# Flush the LuCI menu cache so the entry appears without a manual restart.
+	# Flush the LuCI menu caches so the entry appears without a manual restart.
+	rm -f /tmp/luci-indexcache* 2>/dev/null
 	rm -rf /tmp/luci-modulecache/* 2>/dev/null
 }
 exit 0
@@ -75,11 +48,8 @@ endef
 define Package/luci-app-lanory/prerm
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] || {
-	if uci -q get uhttpd.main.proxy_prefix >/dev/null 2>&1; then
-		uci -q delete uhttpd.main.proxy_prefix
-		uci commit uhttpd
-		[ -x /etc/init.d/uhttpd ] && /etc/init.d/uhttpd reload >/dev/null 2>&1
-	fi
+	rm -f /tmp/luci-indexcache* 2>/dev/null
+	rm -rf /tmp/luci-modulecache/* 2>/dev/null
 }
 exit 0
 endef

@@ -23,6 +23,7 @@ import glob
 import gzip
 import hashlib
 import io
+import json
 import os
 import sys
 import tarfile
@@ -200,7 +201,29 @@ def check_luci_apk(path: str) -> None:
             else:
                 ok(f"{name}: {script} present and executable")
 
+    # The menu node's ACL group must come from a file rpcd reads. Without it the
+    # group does not exist, `depends.acl` is unsatisfied and the entry is
+    # dropped from the menu - the exact bug that made the package invisible.
+    acl_path = "usr/share/rpcd/acl.d/luci-app-lanory.json"
+    if acl_path in names:
+        acl = json.loads(tar.extractfile(acl_path).read().decode())
+        if "luci-app-lanory" in acl:
+            ok(f"{name}: rpcd ACL grants the luci-app-lanory access group")
+        else:
+            fail(f"{name}: rpcd ACL has no luci-app-lanory group; the menu node stays unsatisfied")
+    else:
+        fail(f"{name}: ships no rpcd ACL file; the luci-app-lanory group does not exist")
+
+    deps = " ".join(fields.get("depend", []))
+    for needed in ("luci-lua-runtime", "curl"):
+        if needed in deps:
+            ok(f"{name}: depends on {needed}")
+        else:
+            fail(f"{name}: does not depend on {needed}; the LuCI pages break without it")
+
     required_files = [
+        "usr/share/rpcd/acl.d/luci-app-lanory.json",
+        "usr/share/luci/menu.d/luci-app-lanory.json",
         "usr/lib/lua/luci/controller/lanory.lua",
         "usr/lib/lua/luci/model/cbi/lanory.lua",
         "usr/lib/lua/luci/view/lanory/overview.htm",

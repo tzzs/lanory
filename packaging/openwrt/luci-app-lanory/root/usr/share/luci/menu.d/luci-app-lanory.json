@@ -1,0 +1,12 @@
+{
+	"admin/services/lanory": {
+		"title": "Lanory",
+		"order": 60,
+		"action": {
+			"type": "firstchild"
+		},
+		"depends": {
+			"acl": [ "luci-app-lanory" ]
+		}
+	}
+}

@@ -8,9 +8,16 @@
 -- does not work in this iStoreOS build: the pre-existing /apps proxy returns 404
 -- too, which means the module is not compiled in. Rendering the data natively
 -- keeps the integration working on stock firmware.
+--
+-- The theme header and footer are required, not decoration: a template() node
+-- renders only this file's bytes, so without them the response is a bare
+-- fragment with no <body>, no menu and no CSS - it looks like a page opened
+-- outside LuCI. The theme variable is the one dispatcher resolves for the
+-- running theme (argon on iStoreOS, bootstrap on stock OpenWrt).
 -%>
 
 <%
+	local template = require "luci.template"
 	local sys = require "luci.sys"
 	local uci = require "luci.model.uci"
 	local port = uci.cursor():get("lanory", "main", "port") or "8787"
@@ -42,8 +49,9 @@
 	local overview = running and api("/api/v1/overview") or nil
 	local monitoring = running and api("/api/v1/monitoring/status") or nil
 	local counts = overview and overview.counts
-	local ll = require("luci.i18n").translate
 %>
+
+<% template.render("themes/" .. theme .. "/header") %>
 
 <h2 name="content"><%:Lanory%></h2>
 
@@ -129,3 +137,5 @@
 		</div>
 	</div>
 <% end %>
+
+<% template.render("themes/" .. theme .. "/footer") %>

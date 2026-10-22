@@ -2,9 +2,14 @@
 -- Licensed to the public under the MIT License.
 
 -- Lanory device list, rendered inside LuCI.
+--
+-- Same contract as overview.htm: a template() node renders only this file, so
+-- the theme header and footer are what put the page inside the LuCI chrome
+-- (menu, sidebar, CSS). Without them the response is a bare fragment.
 -%>
 
 <%
+	local template = require "luci.template"
 	local sys = require "luci.sys"
 	local uci = require "luci.model.uci"
 	local port = uci.cursor():get("lanory", "main", "port") or "8787"
@@ -32,6 +37,8 @@
 
 	local list = api("/api/v1/devices?limit=200")
 %>
+
+<% template.render("themes/" .. theme .. "/header") %>
 
 <h2 name="content"><%:Lanory — Devices%></h2>
 
@@ -66,3 +73,5 @@
 		</div>
 	</div>
 <% end %>
+
+<% template.render("themes/" .. theme .. "/footer") %>

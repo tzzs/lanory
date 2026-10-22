@@ -1,0 +1,11 @@
+{
+	"luci-app-lanory": {
+		"description": "Grant access to the Lanory status pages",
+		"read": {
+			"uci": [ "lanory" ]
+		},
+		"write": {
+			"uci": [ "lanory" ]
+		}
+	}
+}

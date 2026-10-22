@@ -205,6 +205,32 @@ else
 	fail "luci app does not depend on lanory"
 fi
 
+# The menu node declares an ACL group. That group only exists if a file rpcd
+# reads declares it; otherwise depends.acl is unsatisfied and the entry is
+# dropped from the menu tree.
+ACL_JSON="$DIR/luci-app-lanory/root/usr/share/rpcd/acl.d/luci-app-lanory.json"
+if [ -f "$ACL_JSON" ] && grep -q '"luci-app-lanory"' "$ACL_JSON"; then
+	pass "rpcd ACL file grants the luci-app-lanory group"
+else
+	fail "luci-app-lanory ACL group is not declared; the menu entry will not appear"
+fi
+
+MENU_JSON="$DIR/luci-app-lanory/root/usr/share/luci/menu.d/luci-app-lanory.json"
+if [ -f "$MENU_JSON" ] && grep -q 'admin/services/lanory' "$MENU_JSON"; then
+	pass "menu.d registers admin/services/lanory"
+else
+	fail "menu.d does not register admin/services/lanory"
+fi
+
+# The Lua controller must not re-declare acl_depends: that field is only
+# consulted when the Lua runtime processes the controller, and LuCI 25.12 does
+# not install it by default.
+if grep -q 'acl_depends' "$DIR/luci-app-lanory/luasrc/controller/lanory.lua"; then
+	fail "controller still declares acl_depends; the node vanishes without the Lua runtime"
+else
+	pass "controller does not re-declare acl_depends"
+fi
+
 # ---------------------------------------------------------------------------
 say "generated YAML"
 # ---------------------------------------------------------------------------

@@ -73,9 +73,14 @@ function index()
 	--  2. Every other daemon-style application on this firmware - appfilter,
 	--     ddnsto, linkease, openclash, oled - lives under Services. Lanory is a
 	--     background service with its own UI, so that is where a user looks.
+	--
+	-- The node itself is declared in root/usr/share/luci/menu.d/luci-app-lanory.json
+	-- so it exists even without the Lua runtime, and so its ACL group comes from
+	-- root/usr/share/rpcd/acl.d/luci-app-lanory.json. This controller only
+	-- registers the leaf pages; re-declaring the acl dependency here would make
+	-- the node vanish whenever the Lua runtime is absent (LuCI 25.12 does not
+	-- install it by default), because depends.acl is then only seen from Lua.
 	local page = entry({"admin", "services", "lanory"}, firstchild(), _("Lanory"), 60)
-	page.dependent = false
-	page.acl_depends = { "luci-app-lanory" }
 
 	entry({"admin", "services", "lanory", "overview"}, template("lanory/overview"), _("Overview"), 10)
 	entry({"admin", "services", "lanory", "devices"}, template("lanory/devices"), _("Devices"), 20)
