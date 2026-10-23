@@ -160,6 +160,34 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
 )
 Input.displayName = 'Input'
 
+// Form field wrapper with consistent spacing between label and input
+export function Field({
+  label,
+  description,
+  children,
+  className,
+}: {
+  label?: React.ReactNode
+  description?: React.ReactNode
+  children: React.ReactNode
+  className?: string
+}) {
+  return (
+    <div className={className}>
+      {label ? (
+        <label className="block mb-1.5">
+          <span className="text-xs text-muted">{label}</span>
+        </label>
+      ) : null}
+      {children}
+      {description ? (
+        <p className="mt-1.5 text-[11px] text-muted">{description}</p>
+      ) : null}
+    </div>
+  )
+}
+
+
 export const Select = React.forwardRef<HTMLSelectElement, React.SelectHTMLAttributes<HTMLSelectElement>>(
   ({ className, ...props }, ref) => (
     <select
@@ -184,7 +212,7 @@ export function Checkbox({ className, label, id, ...props }: CheckboxProps) {
   const generated = React.useId()
   const inputId = id ?? generated
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2.5">
       <input
         id={inputId}
         type="checkbox"
@@ -196,7 +224,7 @@ export function Checkbox({ className, label, id, ...props }: CheckboxProps) {
         {...props}
       />
       {label ? (
-        <label htmlFor={inputId} className="text-sm text-fg select-none cursor-pointer">
+        <label htmlFor={inputId} className="text-sm text-fg select-none cursor-pointer leading-relaxed">
           {label}
         </label>
       ) : null}

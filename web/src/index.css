@@ -40,12 +40,20 @@ body,
   height: 100%;
 }
 
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
 body {
   margin: 0;
   background: var(--bg);
   color: var(--fg);
   font-family: theme('fontFamily.sans');
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* React Flow surface: keep the canvas neutral in both themes. */

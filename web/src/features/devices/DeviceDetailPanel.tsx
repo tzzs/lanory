@@ -11,7 +11,7 @@ import {
   useCreateDevice as useCreateDeviceLocal,
   useDevice as useDeviceDetail,
 } from '@/hooks/useApi'
-import { CardHeader, CardTitle, Button, Badge, Input, Select, Modal, FieldRow, StatusDot, EmptyState, Skeleton } from '@/components/ui'
+import { CardHeader, CardTitle, Button, Badge, Input, Select, Modal, FieldRow, StatusDot, EmptyState, Skeleton, Field } from '@/components/ui'
 import {
   deviceIcon,
   deviceStateLabel,
@@ -120,60 +120,51 @@ export function AddDeviceForm({
         </p>
       ) : null}
 
-      <label className="block">
-        <span className="text-xs text-muted">{t('device.name')} *</span>
-        <Input className="mt-1" value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
-      </label>
+      <Field label={`${t('device.name')} *`}>
+        <Input className="" value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
+      </Field>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="block">
-          <span className="text-xs text-muted">{t('device.type')}</span>
-          <Select className="mt-1" value={type} onChange={(e) => setType(e.target.value as DeviceType)}>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label={t('device.type')}>
+          <Select className="" value={type} onChange={(e) => setType(e.target.value as DeviceType)}>
             {DEVICE_TYPE_OPTIONS.map((option) => (
               <option key={option} value={option}>
                 {deviceTypeLabel(option)}
               </option>
             ))}
           </Select>
-        </label>
-        <label className="block">
-          <span className="text-xs text-muted">{t('device.hostname')}</span>
-          <Input className="mt-1" value={hostname} onChange={(e) => setHostname(e.target.value)} />
-        </label>
+        </Field>
+        <Field label={t('device.hostname')}>
+          <Input className="" value={hostname} onChange={(e) => setHostname(e.target.value)} />
+        </Field>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="block">
-          <span className="text-xs text-muted">IPv4</span>
-          <Input className="mt-1 font-mono" value={ipv4} onChange={(e) => setIpv4(e.target.value)} placeholder="192.168.1.10" />
-        </label>
-        <label className="block">
-          <span className="text-xs text-muted">IPv6</span>
-          <Input className="mt-1 font-mono" value={ipv6} onChange={(e) => setIpv6(e.target.value)} placeholder="fd00::1" />
-        </label>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="IPv4">
+          <Input className="font-mono" value={ipv4} onChange={(e) => setIpv4(e.target.value)} placeholder="192.168.1.10" />
+        </Field>
+        <Field label="IPv6">
+          <Input className="font-mono" value={ipv6} onChange={(e) => setIpv6(e.target.value)} placeholder="fd00::1" />
+        </Field>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="block">
-          <span className="text-xs text-muted">MAC</span>
-          <Input className="mt-1 font-mono" value={mac} onChange={(e) => setMac(e.target.value)} placeholder="AA:BB:CC:DD:EE:FF" />
-        </label>
-        <label className="block">
-          <span className="text-xs text-muted">{t('device.manufacturer')}</span>
-          <Input className="mt-1" value={manufacturer} onChange={(e) => setManufacturer(e.target.value)} />
-        </label>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="MAC">
+          <Input className="font-mono" value={mac} onChange={(e) => setMac(e.target.value)} placeholder="AA:BB:CC:DD:EE:FF" />
+        </Field>
+        <Field label={t('device.manufacturer')}>
+          <Input className="" value={manufacturer} onChange={(e) => setManufacturer(e.target.value)} />
+        </Field>
       </div>
 
-      <label className="block">
-        <span className="text-xs text-muted">{t('device.model')}</span>
-        <Input className="mt-1" value={model} onChange={(e) => setModel(e.target.value)} />
-      </label>
+      <Field label={t('device.model')}>
+        <Input className="" value={model} onChange={(e) => setModel(e.target.value)} />
+      </Field>
 
       {!isEdit ? (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="block">
-            <span className="text-xs text-muted">{t('device.interface')}</span>
-            <Select className="mt-1" value={parentId} onChange={(e) => setParentId(e.target.value)}>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label={t('device.interface')}>
+            <Select className="" value={parentId} onChange={(e) => setParentId(e.target.value)}>
               <option value="">{t('app.none')}</option>
               {(parentCandidates?.devices ?? []).map((candidate) => (
                 <option key={candidate.id} value={candidate.id}>
@@ -181,22 +172,20 @@ export function AddDeviceForm({
                 </option>
               ))}
             </Select>
-          </label>
-          <label className="block">
-            <span className="text-xs text-muted">{t('device.edges')}</span>
-            <Select className="mt-1" value={connectionType} onChange={(e) => setConnectionType(e.target.value as EdgeType)}>
+          </Field>
+          <Field label={t('device.edges')}>
+            <Select className="" value={connectionType} onChange={(e) => setConnectionType(e.target.value as EdgeType)}>
               <option value="physical_link">{t('edge.physical_link')}</option>
               <option value="wireless_assoc">{t('edge.wireless_assoc')}</option>
               <option value="user_defined">{t('edge.user_defined')}</option>
             </Select>
-          </label>
+          </Field>
         </div>
       ) : null}
 
-      <label className="block">
-        <span className="text-xs text-muted">{t('device.description')}</span>
-        <Input className="mt-1" value={description} onChange={(e) => setDescription(e.target.value)} />
-      </label>
+      <Field label={t('device.description')}>
+        <Input className="" value={description} onChange={(e) => setDescription(e.target.value)} />
+      </Field>
 
       {!isEdit ? (
         <p className="text-[11px] text-muted">
@@ -479,10 +468,9 @@ function MergeDeviceModal({
         </>
       }
     >
-      <div className="space-y-3">
-        <label className="block">
-          <span className="text-xs text-muted">{t('devices.merge_source')}</span>
-          <Select className="mt-1" value={sourceId} onChange={(e) => setSourceId(e.target.value)}>
+      <div className="space-y-4">
+        <Field label={t('devices.merge_source')}>
+          <Select className="" value={sourceId} onChange={(e) => setSourceId(e.target.value)}>
             <option value="">{t('app.none')}</option>
             {candidates.map((candidate) => (
               <option key={candidate.id} value={candidate.id}>
@@ -491,7 +479,7 @@ function MergeDeviceModal({
               </option>
             ))}
           </Select>
-        </label>
+        </Field>
         <p className="text-[11px] text-muted">
           {t('devices.merge_target')}: {device.name}
         </p>

@@ -6,6 +6,9 @@ import {
   Controls,
   MiniMap,
   useReactFlow,
+  useNodesInitialized,
+  applyNodeChanges,
+  applyEdgeChanges,
   type Node,
   type Edge,
   type NodeMouseHandler,
@@ -16,9 +19,9 @@ import {
 import '@xyflow/react/dist/style.css'
 import { LayoutGrid, Save, Maximize2, Plus, Link2, RefreshCw } from 'lucide-react'
 import { t } from '@/i18n'
-import { useTopology, useSaveLayout, useAutoLayout, useCreateEdge } from '@/hooks/useApi'
+import { useTopology, useSaveLayout, useCreateEdge, useMonitoring } from '@/hooks/useApi'
 import { useUIStore } from '@/stores/ui'
-import { Button, Card, Badge, Modal, Select, Input, EmptyState, ErrorState, Skeleton } from '@/components/ui'
+import { Button, Card, Badge, Modal, Select, Input, EmptyState, ErrorState, Skeleton, Field } from '@/components/ui'
 import { LanoryNode } from '@/features/topology/LanoryNode'
 import { buildFlow, type TopologyNodeData, type TopologyEdgeData } from '@/features/topology/graph'
 import { AddDeviceForm } from '@/features/devices/AddDeviceForm'
@@ -33,7 +36,7 @@ const UNVERIFIED_THRESHOLD = 0.6
 function TopologyCanvas() {
   const { data, isLoading, isError, error, refetch } = useTopology()
   const saveLayout = useSaveLayout()
-  const autoLayout = useAutoLayout()
+  const monitoring = useMonitoring()
   const selectDevice = useUIStore((s) => s.selectDevice)
   const selectEdge = useUIStore((s) => s.selectEdge)
   const selectedEdgeId = useUIStore((s) => s.selectedEdgeId)
@@ -44,56 +47,39 @@ function TopologyCanvas() {
   const [addOpen, setAddOpen] = useState(false)
   const [addLinkOpen, setAddLinkOpen] = useState(false)
   const [dirty, setDirty] = useState(false)
-  const [algorithm, setAlgorithm] = useState<'tree' | 'layered' | 'force'>('tree')
+  const initialized = useNodesInitialized()
+  const detailPanelOpen = useUIStore(s => s.detailPanelOpen)
 
   const { fitView } = useReactFlow()
   const hasFitted = useRef(false)
 
   // Rebuild the graph whenever the payload changes.
   useEffect(() => {
-    if (!data) return
-    const built = buildFlow(data, { unverifiedThreshold: UNVERIFIED_THRESHOLD })
+    if (!data || dirty) return
+    const built = buildFlow(data, { unverifiedThreshold: UNVERIFIED_THRESHOLD, interfaces: monitoring.data?.interfaces.map(s => s.interface) })
     setNodes(built.nodes)
     setEdges(built.edges)
     setDirty(false)
-  }, [data])
+  }, [data, dirty, monitoring.data])
 
   // Fit the view once on first data, but never again so the user's zoom and
   // pan survive subsequent polls.
   useEffect(() => {
-    if (!data || hasFitted.current || nodes.length === 0) return
-    hasFitted.current = true
+    if (!data || !initialized || hasFitted.current || nodes.length === 0) return
     const raf = requestAnimationFrame(() => {
-      fitView({ padding: 0.15, duration: 240 })
+      const connected = nodes.filter(n => n.parentId || n.data.group || edges.some(e => e.source === n.id || e.target === n.id))
+      void fitView({ nodes: connected.length ? connected : nodes, padding: 0.15, duration: 0 }).then(() => { hasFitted.current = true })
     })
     return () => cancelAnimationFrame(raf)
-  }, [data, nodes.length, fitView])
+  }, [data, initialized, nodes, edges, fitView])
 
-  const onNodesChange: OnNodesChange = useCallback((changes) => {
-    setNodes((current) => {
-      const next = current.map((node) => {
-        const change = changes.find((c) => c.type === 'position' && c.id === node.id)
-        if (change && change.type === 'position' && change.position) {
-          return { ...node, position: change.position }
-        }
-        if (change && change.type === 'select') {
-          return { ...node, selected: change.selected }
-        }
-        return node
-      })
-      if (changes.some((c) => c.type === 'position')) setDirty(true)
-      return next
-    })
+  const onNodesChange: OnNodesChange<Node<TopologyNodeData>> = useCallback((changes) => {
+    setNodes(current => applyNodeChanges(changes, current))
+    if (changes.some(c => c.type === 'position' && c.dragging)) setDirty(true)
   }, [])
 
-  const onEdgesChange: OnEdgesChange = useCallback((changes) => {
-    setEdges((current) =>
-      current.map((edge) => {
-        const change = changes.find((c) => c.type === 'select' && c.id === edge.id)
-        if (change && change.type === 'select') return { ...edge, selected: change.selected }
-        return edge
-      }),
-    )
+  const onEdgesChange: OnEdgesChange<Edge<TopologyEdgeData>> = useCallback((changes) => {
+    setEdges(current => applyEdgeChanges(changes, current))
   }, [])
 
   const onNodeClick: NodeMouseHandler = useCallback(
@@ -109,6 +95,7 @@ function TopologyCanvas() {
   const onEdgeClick: EdgeMouseHandler = useCallback(
     (_event, edge) => {
       const data = edge.data as TopologyEdgeData
+      if (data.derived) return
       selectEdge(data.edgeId)
       setDetailPanelOpen(true)
     },
@@ -116,29 +103,25 @@ function TopologyCanvas() {
   )
 
   const onSaveLayout = useCallback(() => {
-    const payload: LayoutNode[] = nodes.map((node) => ({
+    const payload: LayoutNode[] = nodes.filter(n => !n.data.annotation).map((node) => ({
       node_id: node.id,
-      x: node.position.x,
-      y: node.position.y,
+      x: node.position.x + (nodes.find(n => n.id === node.parentId)?.position.x ?? 0),
+      y: node.position.y + (nodes.find(n => n.id === node.parentId)?.position.y ?? 0),
       pinned: !node.draggable,
     }))
-    saveLayout.mutate({ nodes: payload })
-    setDirty(false)
+    saveLayout.mutate({ nodes: payload }, { onSuccess: () => setDirty(false) })
   }, [nodes, saveLayout])
 
-  const onAutoLayout = useCallback(async () => {
-    const result = await autoLayout.mutateAsync({ algorithm })
-    const positions = new Map(result.layout.map((l) => [l.node_id, l]))
-    setNodes((current) =>
-      current.map((node) => {
-        const pos = positions.get(node.id)
-        return pos ? { ...node, position: { x: pos.x, y: pos.y } } : node
-      }),
-    )
+  const onAutoLayout = useCallback(() => {
+    if (!data) return
+    hasFitted.current = false
+    const built = buildFlow({ ...data, layout: data.layout.filter(p => p.pinned) }, { unverifiedThreshold: UNVERIFIED_THRESHOLD, interfaces: monitoring.data?.interfaces.map(s => s.interface) })
+    setNodes(built.nodes)
+    setEdges(built.edges)
     setDirty(true)
-    const raf = requestAnimationFrame(() => fitView({ padding: 0.15, duration: 240 }))
-    return () => cancelAnimationFrame(raf)
-  }, [algorithm, autoLayout, fitView])
+  }, [data, monitoring.data])
+
+  const unplaced = nodes.filter(n => n.data.kind === 'device' && !n.parentId && !edges.some(e => e.source === n.id || e.target === n.id) && !data?.nodes.find(item => item.id === n.id)?.device?.is_self)
 
   const selectedEdge = useMemo(
     () => edges.find((e) => e.id === selectedEdgeId) ?? null,
@@ -153,7 +136,7 @@ function TopologyCanvas() {
     )
   }
 
-  if (isError) {
+  if (isError && !data) {
     return (
       <ErrorState
         title={t('app.error')}
@@ -189,21 +172,12 @@ function TopologyCanvas() {
   return (
     <div className="flex h-full min-h-0">
       <div className="relative min-w-0 flex-1">
+        <div className="pointer-events-none absolute bottom-5 left-14 z-10 max-w-sm rounded-md border border-border bg-surface/95 px-3 py-2 text-[11px] text-muted">{t('topology.hierarchy_hint')}</div>
         {/* toolbar */}
         <div className="absolute left-4 top-4 z-10 flex flex-wrap items-center gap-2">
-          <Select
-            className="w-auto min-w-[130px] bg-surface"
-            value={algorithm}
-            onChange={(e) => setAlgorithm(e.target.value as typeof algorithm)}
-            aria-label={t('topology.auto_layout')}
-          >
-            <option value="tree">{t('topology.layout_tree')}</option>
-            <option value="layered">{t('topology.layout_layered')}</option>
-            <option value="force">{t('topology.layout_force')}</option>
-          </Select>
-          <Button size="sm" onClick={() => void onAutoLayout()} disabled={autoLayout.isPending}>
+          <Button size="sm" onClick={onAutoLayout}>
             <LayoutGrid size={14} aria-hidden="true" />
-            {t('topology.auto_layout')}
+            {t('topology.reset_layout')}
           </Button>
           <Button size="sm" onClick={onSaveLayout} disabled={!dirty || saveLayout.isPending}>
             <Save size={14} aria-hidden="true" />
@@ -213,6 +187,7 @@ function TopologyCanvas() {
             <Maximize2 size={14} aria-hidden="true" />
             {t('topology.fit_view')}
           </Button>
+          {unplaced.length ? <Button size="sm" variant="ghost" onClick={() => void fitView({ nodes: unplaced, padding: 0.2, duration: 0 })}>{t('topology.view_unmapped', { count: unplaced.length })}</Button> : null}
           <div className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
           <Button size="sm" variant="ghost" onClick={() => setAddOpen(true)}>
             <Plus size={14} aria-hidden="true" />
@@ -228,6 +203,8 @@ function TopologyCanvas() {
             </Badge>
           ) : null}
         </div>
+
+        {saveLayout.isError ? <div role="alert" className="absolute left-4 top-16 z-10 rounded-md border border-danger/30 bg-surface px-3 py-2 text-xs text-danger">{saveLayout.error instanceof Error ? saveLayout.error.message : t('app.error')}</div> : null}
 
         <ReactFlow
           nodes={nodes}
@@ -263,7 +240,7 @@ function TopologyCanvas() {
         </ReactFlow>
       </div>
 
-      {selectedEdge ? <EdgeInspector edge={selectedEdge} /> : <DeviceInspector />}
+      {detailPanelOpen ? selectedEdge ? <EdgeInspector edge={selectedEdge} /> : <DeviceInspector /> : null}
 
       <Modal
         open={addOpen}
@@ -334,10 +311,9 @@ function AddLinkModal({ open, onClose }: { open: boolean; onClose: () => void })
         </>
       }
     >
-      <div className="space-y-3">
-        <label className="block">
-          <span className="text-xs text-muted">{t('devices.merge_target')}</span>
-          <Select className="mt-1" value={sourceId} onChange={(e) => setSourceId(e.target.value)}>
+      <div className="space-y-4">
+        <Field label={t('devices.merge_target')}>
+          <Select className="" value={sourceId} onChange={(e) => setSourceId(e.target.value)}>
             <option value="">{t('app.none')}</option>
             {devices.map((node) => (
               <option key={node.id} value={node.id}>
@@ -345,10 +321,9 @@ function AddLinkModal({ open, onClose }: { open: boolean; onClose: () => void })
               </option>
             ))}
           </Select>
-        </label>
-        <label className="block">
-          <span className="text-xs text-muted">{t('devices.merge_source')}</span>
-          <Select className="mt-1" value={targetId} onChange={(e) => setTargetId(e.target.value)}>
+        </Field>
+        <Field label={t('devices.merge_source')}>
+          <Select className="" value={targetId} onChange={(e) => setTargetId(e.target.value)}>
             <option value="">{t('app.none')}</option>
             {devices.map((node) => (
               <option key={node.id} value={node.id}>
@@ -356,19 +331,17 @@ function AddLinkModal({ open, onClose }: { open: boolean; onClose: () => void })
               </option>
             ))}
           </Select>
-        </label>
-        <label className="block">
-          <span className="text-xs text-muted">{t('device.edges')}</span>
-          <Select className="mt-1" value={edgeType} onChange={(e) => setEdgeType(e.target.value)}>
+        </Field>
+        <Field label={t('device.edges')}>
+          <Select className="" value={edgeType} onChange={(e) => setEdgeType(e.target.value)}>
             <option value="user_defined">{t('edge.user_defined')}</option>
             <option value="physical_link">{t('edge.physical_link')}</option>
             <option value="wireless_assoc">{t('edge.wireless_assoc')}</option>
           </Select>
-        </label>
-        <label className="block">
-          <span className="text-xs text-muted">{t('device.interface')}</span>
-          <Input className="mt-1 font-mono" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="eth1" />
-        </label>
+        </Field>
+        <Field label={t('device.interface')} description="Optional">
+          <Input className="font-mono" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="eth1" />
+        </Field>
       </div>
     </Modal>
   )

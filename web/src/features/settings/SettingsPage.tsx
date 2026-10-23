@@ -4,7 +4,7 @@ import { t } from '@/i18n'
 import { useSettings, usePatchSettings, useDiscoveryStatus, useHealth } from '@/hooks/useApi'
 import { useUIStore } from '@/stores/ui'
 import { setTheme, type ThemeMode } from '@/lib/theme'
-import { Card, CardHeader, CardTitle, CardBody, Button, Input, Checkbox, Badge, Skeleton, FieldRow, ErrorState } from '@/components/ui'
+import { Card, CardHeader, CardTitle, CardBody, Button, Input, Checkbox, Badge, Skeleton, FieldRow, ErrorState, Field } from '@/components/ui'
 import { formatBytes, formatRelativeTime } from '@/lib/devices'
 
 const THEME_OPTIONS: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
@@ -128,26 +128,24 @@ export function SettingsPage() {
             checked={bool('discovery.enabled', true)}
             onChange={(e) => setBool('discovery.enabled', e.target.checked)}
           />
-          <label className="block">
-            <span className="text-xs text-muted">{t('settings.discovery_interval')}</span>
+          <Field label={t('settings.discovery_interval')}>
             <Input
-              className="mt-1 max-w-[200px] font-mono"
+              className="max-w-[200px] font-mono"
               value={values['discovery.interval'] ?? '10m'}
               onChange={(e) => set('discovery.interval', e.target.value)}
               placeholder="10m"
             />
-          </label>
-          <label className="block">
-            <span className="text-xs text-muted">{t('settings.retention')}</span>
+          </Field>
+          <Field label={t('settings.retention')}>
             <Input
-              className="mt-1 max-w-[200px] font-mono"
+              className="max-w-[200px] font-mono"
               type="number"
               min={1}
               max={365}
               value={values['database.retention_days'] ?? '30'}
               onChange={(e) => set('database.retention_days', e.target.value)}
             />
-          </label>
+          </Field>
 
           {discovery.data?.last_job ? (
             <dl className="divide-y divide-border border-t border-border pt-2">
@@ -206,36 +204,33 @@ export function SettingsPage() {
             checked={bool('monitoring.enabled', true)}
             onChange={(e) => setBool('monitoring.enabled', e.target.checked)}
           />
-          <div className="grid gap-3 sm:grid-cols-3">
-            <label className="block">
-              <span className="text-xs text-muted">{t('settings.monitoring_interval')}</span>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field label={t('settings.monitoring_interval')}>
               <Input
-                className="mt-1 font-mono"
+                className="font-mono"
                 value={values['monitoring.interval'] ?? '60s'}
                 onChange={(e) => set('monitoring.interval', e.target.value)}
                 placeholder="60s"
               />
-            </label>
-            <label className="block">
-              <span className="text-xs text-muted">{t('settings.failure_threshold')}</span>
+            </Field>
+            <Field label={t('settings.failure_threshold')}>
               <Input
-                className="mt-1 font-mono"
+                className="font-mono"
                 type="number"
                 min={1}
                 max={20}
                 value={values['monitoring.failure_threshold'] ?? '3'}
                 onChange={(e) => set('monitoring.failure_threshold', e.target.value)}
               />
-            </label>
-            <label className="block">
-              <span className="text-xs text-muted">{t('monitoring.probe_timeout' in values ? 'monitoring.probe_timeout' : 'settings.monitoring_interval')}</span>
+            </Field>
+            <Field label={t('monitoring.probe_timeout' in values ? 'monitoring.probe_timeout' : 'settings.monitoring_interval')}>
               <Input
-                className="mt-1 font-mono"
+                className="font-mono"
                 value={values['monitoring.timeout'] ?? '3s'}
                 onChange={(e) => set('monitoring.timeout', e.target.value)}
                 placeholder="3s"
               />
-            </label>
+            </Field>
           </div>
         </CardBody>
       </Card>

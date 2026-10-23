@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { KeyRound, LogIn } from 'lucide-react'
 import { t } from '@/i18n'
 import { readToken, writeToken } from '@/lib/api'
-import { Button, Card, CardBody, CardHeader, CardTitle, Input } from '@/components/ui'
+import { Button, Card, CardBody, CardHeader, CardTitle, Input, Field } from '@/components/ui'
 
 /**
  * Token prompt.
@@ -47,16 +47,15 @@ export function TokenPrompt({ onAuthenticated }: { onAuthenticated?: () => void 
         </CardHeader>
         <CardBody className="space-y-4">
           <form
-            className="space-y-3"
+            className="space-y-4"
             onSubmit={(e) => {
               e.preventDefault()
               submit()
             }}
           >
-            <label className="block">
-              <span className="text-xs text-muted">{t('token.label')}</span>
+            <Field label={t('token.label')} description={t('token.description')}>
               <Input
-                className="mt-1 font-mono"
+                className="font-mono"
                 type="password"
                 autoComplete="current-password"
                 autoFocus
@@ -64,7 +63,7 @@ export function TokenPrompt({ onAuthenticated }: { onAuthenticated?: () => void 
                 onChange={(e) => setValue(e.target.value)}
                 placeholder={t('token.placeholder')}
               />
-            </label>
+            </Field>
             {error ? (
               <p role="alert" className="text-xs text-danger">
                 {error}
@@ -107,10 +106,24 @@ export function TokenPrompt({ onAuthenticated }: { onAuthenticated?: () => void 
 /**
  * useTokenGate tracks whether the API has rejected the current token.
  *
- * The gate is driven by the API itself rather than by a guess: the app calls the
- * health endpoint on mount, and only shows the prompt when the API says
+ * The gate is driven by the API itself rather than by a guess: the app calls a
+ * protected endpoint on mount, and only shows the prompt when the API answers
  * "unauthorized". A deployment with authentication switched off therefore never
  * sees the prompt at all.
+ *
+ * The probe has to be an authenticated route. Probing /api/v1/health looks
+ * natural but is wrong: health is the one endpoint that is public by design
+ * (a watchdog must be able to check liveness without a token), so it answers
+ * 200 whether or not authentication is on. The gate would then never fire and
+ * the page would render its data views, each failing with a 401 that surfaces
+ * as a bare "Something went wrong" with no hint that a token is what is
+ * missing — which is exactly what happened on the router.
+ *
+ * /api/v1/overview is a representative protected route: it is the one every
+ * page loads, it is a plain GET, and it carries no side effects. A HEAD keeps
+ * the probe cheap. A 401 therefore means "the API rejected the current token",
+ * and any other answer means the request was allowed (or the route is missing,
+ * which is not this component's business).
  */
 export function useTokenGate() {
   const [required, setRequired] = useState(false)
@@ -118,12 +131,15 @@ export function useTokenGate() {
 
   const recheck = useCallback(async () => {
     try {
-      const res = await fetch('/api/v1/health', { cache: 'no-store' })
-      if (res.status === 401) {
-        setRequired(true)
-      } else {
-        setRequired(false)
-      }
+      // Send the stored token if there is one: a token that used to work but
+      // was regenerated on the router must bring the prompt back too.
+      const token = readToken()
+      const res = await fetch('/api/v1/overview', {
+        method: 'HEAD',
+        cache: 'no-store',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      setRequired(res.status === 401)
     } catch {
       // The API is unreachable; do not claim a token is needed.
       setRequired(false)
