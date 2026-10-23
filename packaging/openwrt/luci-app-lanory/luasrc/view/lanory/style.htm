@@ -1,0 +1,21 @@
+<script>document.documentElement.classList.add('lanory-embedded-host');</script>
+<style>
+/* Only the embedded application owns this viewport. Other LuCI pages retain
+   their native navigation, footer and scrolling. The sidebar scrolls itself. */
+html.lanory-embedded-host,html.lanory-embedded-host body{height:100%;overflow:hidden!important}
+.lanory-embedded-host .main{height:100vh;height:100dvh;overflow:hidden!important}
+.lanory-embedded-host .main-right{height:100%;min-height:0;overflow:hidden!important}
+.lanory-embedded-host .main-right>header::after{display:none!important}
+.lanory-embedded-host #maincontent{min-height:0!important;padding-bottom:0!important;overflow:hidden!important}
+.lanory-embedded-host #maincontent>.container{padding-bottom:0!important}
+.lanory-embedded-host #tabmenu,.lanory-embedded-host #maincontent footer,.lanory-embedded-host .main-right>footer{display:none!important}
+.ln-host{display:flex;flex-direction:column;box-sizing:border-box;min-width:0;min-height:0;margin:0!important;padding-top:0;overflow:hidden}
+.ln-host-heading{display:flex;flex:0 0 auto;min-height:28px;align-items:center;justify-content:space-between;gap:12px;margin:0 0 8px}
+.ln-host-heading h2{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;line-height:20px;font-weight:600;letter-spacing:normal;margin:0!important;padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;color:inherit!important}
+.ln-host-actions{display:flex;align-items:center;gap:14px;font-size:12px;flex-shrink:0;white-space:nowrap}
+.ln-host-actions a{display:inline-flex;align-items:center;min-height:28px}
+#ln-host-status{flex:0 0 auto;padding:12px 16px;background:rgba(128,128,128,.08);border-radius:6px;margin-bottom:10px}
+#ln-host-status[hidden],#ln-app[hidden]{display:none!important}
+#ln-app{display:block;flex:1 1 0;box-sizing:border-box;width:100%;height:0;min-width:0;min-height:0;border:1px solid rgba(128,128,128,.18);border-radius:8px;background:transparent}
+@media(max-width:600px){.ln-host-actions{gap:10px;font-size:11px}}
+</style>
