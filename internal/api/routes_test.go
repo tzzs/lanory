@@ -12,6 +12,7 @@ import (
 
 	"github.com/lanory/lanory/internal/database"
 	"github.com/lanory/lanory/internal/model"
+	"github.com/lanory/lanory/internal/topology"
 )
 
 // errorsIs is the matching helper used by the assertions above.
@@ -1077,5 +1078,63 @@ func TestHealthUptimeGrows(t *testing.T) {
 	getJSON(t, app, "/api/v1/health", &second)
 	if second.UptimeSeconds <= first.UptimeSeconds {
 		t.Errorf("uptime did not grow: %d then %d", first.UptimeSeconds, second.UptimeSeconds)
+	}
+}
+
+// The production engine emits graph IDs and synthetic network/segment nodes,
+// while the old store provider used raw device IDs. Save must accept its own
+// GET payload and reject an unknown node before writing any part of a layout.
+func TestSaveProductionTopologyLayout(t *testing.T) {
+	app := newTestApp(t)
+	app.SetTopology(topology.NewService(app.store, nil))
+	var graph model.Topology
+	getJSON(t, app, "/api/v1/topology", &graph)
+	nodes := make([]map[string]any, 0, len(graph.Nodes))
+	for i, n := range graph.Nodes {
+		nodes = append(nodes, map[string]any{"node_id": n.ID, "x": i * 220, "y": 100, "pinned": false})
+	}
+	body, _ := json.Marshal(map[string]any{"nodes": nodes})
+	assertStatus(t, do(t, app, http.MethodPost, "/api/v1/topology/layout", string(body)), http.StatusOK)
+	stored, err := app.store.ListLayout()
+	if err != nil || len(stored) != len(graph.Nodes) {
+		t.Fatalf("saved %d of %d positions: %v", len(stored), len(graph.Nodes), err)
+	}
+	before := stored[0].X
+	bad, _ := json.Marshal(map[string]any{"nodes": []map[string]any{{"node_id": stored[0].NodeID, "x": 9999}, {"node_id": "missing-node", "x": 1}}})
+	assertStatus(t, do(t, app, http.MethodPost, "/api/v1/topology/layout", string(bad)), http.StatusNotFound)
+	stored, _ = app.store.ListLayout()
+	if stored[0].X != before {
+		t.Fatal("invalid layout partially changed a known node")
+	}
+}
+
+// Only the dedicated embedding entry may be framed, and only by the same host.
+func TestEmbedFramePolicy(t *testing.T) {
+	app := newTestApp(t)
+	for _, tc := range []struct{ path, host, policy string }{
+		{"/embed/", "192.168.100.1:8787", "frame-ancestors http://192.168.100.1:* https://192.168.100.1:*"},
+		{"/embed/topology", "[fd00::1]:8787", "frame-ancestors http://[fd00::1]:* https://[fd00::1]:*"},
+		{"/embed/devices", "router.lan:8787", "frame-ancestors http://router.lan:* https://router.lan:*"},
+		{"/embed/", "bad;host", ""},
+		{"/topology", "192.168.100.1:8787", ""},
+		{"/embedded", "192.168.100.1:8787", ""},
+		{"/api/v1/health", "192.168.100.1:8787", ""},
+	} {
+		t.Run(tc.path+tc.host, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			req.Host = tc.host
+			rec := httptest.NewRecorder()
+			app.Handler().ServeHTTP(rec, req)
+			if got := rec.Header().Get("Content-Security-Policy"); got != tc.policy {
+				t.Errorf("frame policy = %q, want %q", got, tc.policy)
+			}
+			want := "DENY"
+			if tc.policy != "" {
+				want = ""
+			}
+			if got := rec.Header().Get("X-Frame-Options"); got != want {
+				t.Errorf("X-Frame-Options = %q, want %q", got, want)
+			}
+		})
 	}
 }

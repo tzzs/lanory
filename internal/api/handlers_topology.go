@@ -332,9 +332,8 @@ type layoutNode struct {
 
 // handleSaveLayout serves POST /api/v1/topology/layout.
 //
-// Positions are persisted per node. A node that is not a known device is
-// rejected with 404 rather than stored, because the UI cannot resolve an
-// unknown node later.
+// Positions are persisted for known topology nodes, including logical networks
+// and unresolved segments. Raw device IDs are accepted for older API clients.
 func (a *App) handleSaveLayout(w http.ResponseWriter, r *http.Request) {
 	var body saveLayoutRequest
 	if err := decodeJSON(r, &body); err != nil {
@@ -350,17 +349,34 @@ func (a *App) handleSaveLayout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	saved := 0
+	graph, err := a.topo.Build()
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	known := map[string]bool{}
+	if graph != nil {
+		for _, node := range graph.Nodes {
+			known[node.ID] = true
+		}
+	}
+	// Validate all node identities before changing any saved coordinates.
 	for _, n := range body.Nodes {
 		nodeID := strings.TrimSpace(n.NodeID)
 		if nodeID == "" {
 			badRequestField(w, "nodes", "node_id must not be empty")
 			return
 		}
-		if _, err := a.store.GetDevice(nodeID); err != nil {
-			storeError(w, err, "node device")
-			return
+		if !known[nodeID] {
+			if _, err := a.store.GetDevice(nodeID); err != nil {
+				storeError(w, err, "topology node")
+				return
+			}
 		}
+	}
+	saved := 0
+	for _, n := range body.Nodes {
+		nodeID := strings.TrimSpace(n.NodeID)
 		l := &model.TopologyLayout{NodeID: nodeID}
 		if n.X != nil {
 			l.X = *n.X

@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"net/url"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -33,9 +34,24 @@ func securityHeaders(next http.Handler) http.Handler {
 		// The API never returns attacker controllable content types, so
 		// nosniff is safe and blocks MIME confusion.
 		h.Set("X-Content-Type-Options", "nosniff")
-		// The UI is never framed; clickjacking a network dashboard is a real
-		// risk when it is reachable from the LAN.
+		// Only the explicit embed entry may be framed by this router's own
+		// web interface (LuCI uses a different port). Standalone and API
+		// responses retain DENY. Never grant arbitrary LAN sites access.
 		h.Set("X-Frame-Options", "DENY")
+		if r.URL.Path == "/embed" || strings.HasPrefix(r.URL.Path, "/embed/") {
+			host := (&url.URL{Host: r.Host}).Hostname()
+			// Parsing again rejects whitespace, quotes and CSP delimiters in
+			// an untrusted Host header. IPv6 source expressions need brackets.
+			candidate, err := url.Parse("http://" + r.Host)
+			if err == nil && candidate.Host == r.Host && candidate.Hostname() == host &&
+				host != "" && !strings.ContainsAny(host, " ;'\"\\\t\r\n") {
+				if strings.Contains(host, ":") {
+					host = "[" + host + "]"
+				}
+				h.Del("X-Frame-Options")
+				h.Set("Content-Security-Policy", "frame-ancestors http://"+host+":* https://"+host+":*")
+			}
+		}
 		// Do not leak the full URL (which can carry a token in a query) to
 		// third parties.
 		h.Set("Referrer-Policy", "no-referrer")
