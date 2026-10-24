@@ -59,7 +59,7 @@ describe('LuCI session handshake', () => {
     history.replaceState(null, '', '/embed/')
     vi.stubGlobal('parent', { postMessage: vi.fn() })
     vi.spyOn(document, 'referrer', 'get').mockReturnValue('http://localhost/cgi-bin/luci/')
-    const ready = expect(initializeEmbeddedSession()).rejects.toThrow('LuCI session unavailable')
+    const ready = expect(initializeEmbeddedSession()).rejects.toThrow('sign in again')
     await vi.advanceTimersByTimeAsync(12_000)
     await ready
     expect(readToken()).toBeNull()
