@@ -58,10 +58,25 @@ function LanoryNodeComponent({ data, selected }: NodeProps) {
   const nodeData = data as TopologyNodeData
   const Icon = ICONS[nodeData.icon] ?? (nodeData.kind === 'unresolved' ? CircleDashed : HelpCircle)
 
+  if (nodeData.annotation) return <div className="text-sm font-semibold text-muted">{nodeData.label}</div>
+
+  if (nodeData.group) return (
+    <div className="h-full w-full rounded-xl border border-dashed border-muted/50 bg-surface-2/60">
+      <Handle type="target" position={Position.Top} className="!bg-muted" />
+      <div className="flex items-start justify-between gap-6 border-b border-dashed border-border px-6 py-4">
+        <div>
+          <p className="text-sm font-semibold text-fg">{nodeData.label}</p>
+          <p className="mt-1 text-xs text-muted">{nodeData.subtitle}</p>
+        </div>
+        <span className="shrink-0 rounded-md border border-border bg-surface px-2 py-1 text-xs text-fg">{t('topology.clients', { count: nodeData.memberCount ?? 0 })}</span>
+      </div>
+    </div>
+  )
+
   return (
     <div
       className={cn(
-        'group relative w-[168px] rounded-lg border border-border bg-surface px-3 py-2.5 shadow-sm transition-shadow',
+        'group relative w-[200px] rounded-lg border border-border bg-surface px-3 py-2.5 shadow-sm transition-shadow',
         'hover:shadow-md',
         selected && 'ring-2 ring-accent',
         nodeData.kind !== 'unresolved' && `ring-1 ${STATE_RING[nodeData.state] ?? 'ring-border'}`,
@@ -82,7 +97,7 @@ function LanoryNodeComponent({ data, selected }: NodeProps) {
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <span className="truncate text-[13px] font-medium text-fg">{nodeData.label}</span>
+            <span title={nodeData.label} className="truncate text-[13px] font-medium text-fg">{nodeData.label}</span>
             {nodeData.isManual ? (
               <span className="shrink-0 rounded bg-accent/15 px-1 text-[9px] font-medium text-accent">
                 {t('devices.manual_badge')}
@@ -90,7 +105,7 @@ function LanoryNodeComponent({ data, selected }: NodeProps) {
             ) : null}
           </div>
           <p className="truncate font-mono text-[10px] text-muted">
-            {nodeData.primaryIp || nodeData.primaryMac || t('app.unknown')}
+            {nodeData.subtitle || nodeData.primaryIp || nodeData.primaryMac || t('app.unknown')}
           </p>
         </div>
       </div>

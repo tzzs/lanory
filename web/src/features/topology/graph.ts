@@ -12,7 +12,8 @@
 import { MarkerType, type Edge, type Node } from '@xyflow/react'
 import { EDGE_STATUS_COLORS, confidenceBand, formatEdgeLabel, formatConfidence } from '@/lib/devices'
 import { t } from '@/i18n'
-import type { Topology as TopologyPayload, TopologyNode as LanoryNode, TopologyEdge as LanoryEdge } from '@/types/api'
+import { hierarchy, edgePort, segmentPort } from './hierarchy'
+import type { Topology as TopologyPayload, TopologyNode as LanoryNode, TopologyEdge as LanoryEdge, NetworkInterface } from '@/types/api'
 
 export interface TopologyNodeData extends Record<string, unknown> {
   nodeId: string
@@ -27,6 +28,10 @@ export interface TopologyNodeData extends Record<string, unknown> {
   isManual?: boolean
   isLocked?: boolean
   demo?: boolean
+  annotation?: boolean
+  group?: boolean
+  subtitle?: string
+  memberCount?: number
 }
 
 export interface TopologyEdgeData extends Record<string, unknown> {
@@ -42,11 +47,13 @@ export interface TopologyEdgeData extends Record<string, unknown> {
   port?: string
   speedMbps?: number
   evidenceCount: number
+  derived?: boolean
 }
 
 export interface BuildOptions {
   /** Threshold under which an edge is drawn dashed. */
   unverifiedThreshold: number
+  interfaces?: NetworkInterface[]
 }
 
 /** Icon key per device type, resolved to a component in the node renderer. */
@@ -80,10 +87,11 @@ export function iconKeyForDeviceType(type: string | undefined): string {
 }
 
 export function buildFlow(payload: TopologyPayload, options: BuildOptions): { nodes: Node<TopologyNodeData>[]; edges: Edge<TopologyEdgeData>[] } {
+  const tree = hierarchy(payload, options.interfaces)
   const nodes: Node<TopologyNodeData>[] = []
   const nodeIndex = new Map<string, number>()
 
-  payload.nodes.forEach((node: LanoryNode, i: number) => {
+  payload.nodes.forEach((node: LanoryNode) => {
     const kind = node.unresolved ? 'unresolved' : node.kind === 'network' ? 'network' : 'device'
     const label = node.unresolved
       ? t('topology.unresolved_segment')
@@ -92,7 +100,7 @@ export function buildFlow(payload: TopologyPayload, options: BuildOptions): { no
         : node.device?.name ?? 'device'
 
     const data: TopologyNodeData = {
-      nodeId: node.id,
+      nodeId: node.device?.id ?? node.id,
       label,
       kind,
       icon: iconKeyForDeviceType(node.device?.type),
@@ -104,17 +112,32 @@ export function buildFlow(payload: TopologyPayload, options: BuildOptions): { no
       isManual: node.device?.is_manual,
       isLocked: node.device?.is_locked,
       demo: node.device?.discovery_sources?.includes('demo'),
+      group: tree.groups.has(node.id),
+      subtitle: node.unresolved ? t('topology.segment_hint') : node.kind === 'network' ? [node.network?.cidr, node.network?.role?.toUpperCase()].filter(Boolean).join(' · ') : undefined,
+      memberCount: tree.groups.get(node.id)?.length,
+
     }
 
+    if (node.unresolved) data.label = [segmentPort(payload, node), t('topology.unresolved_segment')].filter(Boolean).join(' · ')
+    if (tree.uplink?.node === node.id) {
+      const iface = tree.uplink.interface
+      data.label = `WAN · ${iface?.name ?? node.network?.name ?? ''}`
+      data.icon = 'cable'
+      data.state = iface?.carrier ? 'online' : iface ? 'offline' : node.state
+      data.subtitle = [node.network?.cidr, iface?.speed_mbps ? formatEdgeLabel({ speedMbps: iface.speed_mbps }) : undefined].filter(Boolean).join(' · ')
+    }
+    if (node.kind === 'network' && tree.uplink?.node !== node.id) data.icon = node.unresolved ? 'unresolved' : 'network'
     const layout = payload.layout.find((l) => l.node_id === node.id)
 
     nodes.push({
       id: node.id,
       type: 'lanory',
-      position: layout ? { x: layout.x, y: layout.y } : { x: (i % 4) * 220, y: Math.floor(i / 4) * 140 },
+      position: tree.positions.get(node.id) ?? { x: 0, y: 0 },
+      ...(tree.groups.has(node.id) ? { style: tree.size.get(node.id), zIndex: -1 } : {}),
+      ...(tree.groups.has(tree.parent.get(node.id) ?? '') ? { parentId: tree.parent.get(node.id), extent: 'parent' as const } : {}),
       data,
       // Pinned positions are not draggable so a stray drag cannot lose them.
-      draggable: !layout?.pinned,
+      draggable: !layout?.pinned && !(tree.groups.get(node.id) ?? []).some(id => payload.layout.some(p => p.node_id === id && p.pinned)),
     })
     nodeIndex.set(node.id, nodes.length - 1)
   })
@@ -124,11 +147,12 @@ export function buildFlow(payload: TopologyPayload, options: BuildOptions): { no
     if (!nodeIndex.has(edge.source_id) || !nodeIndex.has(edge.target_id)) return
 
     const band = confidenceBand(edge.confidence)
-    const dashed = edge.unverified || edge.confidence < options.unverifiedThreshold || !edge.user_confirmed && edge.edge_type !== 'physical_link' && band === 'low'
+    const dashed = (!edge.user_confirmed && edge.edge_type === 'observed_mac_port') || edge.unverified || edge.confidence < options.unverifiedThreshold || !edge.user_confirmed && edge.edge_type !== 'physical_link' && band === 'low'
 
-    const sourceNode = payload.nodes.find((n) => n.id === edge.source_id)
-    const port = edge.source_interface_id ?? edge.target_interface_id
-    const speed = resolveSpeed(payload, edge)
+    const group = tree.parent.get(edge.target_id)
+    if (edge.edge_type === 'observed_mac_port' && group && tree.groups.has(group) && !edge.user_confirmed) return
+    const port = options.interfaces?.find(i => i.id === edge.source_interface_id)?.name ?? edgePort(payload, edge)
+    const speed = options.interfaces?.find(i => i.id === edge.source_interface_id)?.speed_mbps || resolveSpeed(payload, edge)
 
     const data: TopologyEdgeData = {
       edgeId: edge.id,
@@ -142,7 +166,7 @@ export function buildFlow(payload: TopologyPayload, options: BuildOptions): { no
       label: formatEdgeLabel({
         port,
         speedMbps: speed,
-        label: edge.label,
+        label: edge.label === port ? undefined : edge.label,
       }),
       port,
       speedMbps: speed,
@@ -180,9 +204,40 @@ export function buildFlow(payload: TopologyPayload, options: BuildOptions): { no
       },
       animated: edge.status === 'reachable',
     })
-    void sourceNode
   })
 
+  if (tree.uplink) {
+    const iface = tree.uplink.interface
+    const label = formatEdgeLabel({ port: iface?.name, speedMbps: iface?.speed_mbps })
+    edges.push({ id: 'presentation-wan-uplink', source: tree.uplink.node, target: tree.uplink.router, type: 'smoothstep', label,
+      style: { stroke: 'var(--accent)', strokeWidth: 1.5 },
+      labelStyle: { fill: 'var(--muted)', fontSize: 11 }, labelBgStyle: { fill: 'var(--surface)' },
+      data: { edgeId: '', edgeType: 'wan_interface', confidence: 1, confidenceBand: 'high', status: iface?.carrier ? 'link_up' : 'link_down', userConfirmed: false, locked: false, unverified: false, label, port: iface?.name, speedMbps: iface?.speed_mbps, evidenceCount: 0, derived: true },
+    })
+  }
+  // A shared port is an observed grouping, not a confirmed switch or AP.
+  for (const [id, members] of tree.groups) {
+    const source = tree.parent.get(id)
+    if (!source || !nodeIndex.has(source)) continue
+    const port = segmentPort(payload, tree.byId.get(id)!)
+    const speed = options.interfaces?.find(i => i.name === port)?.speed_mbps
+    const label = formatEdgeLabel({ port, speedMbps: speed })
+    edges.push({
+      id: `group-${id}`, source, target: id, type: 'smoothstep',
+      label,
+      style: { stroke: 'var(--muted)', strokeWidth: 1.5, strokeDasharray: '5 4' },
+      labelStyle: { fill: 'var(--fg)', fontSize: 11 },
+      labelBgStyle: { fill: 'var(--surface)' },
+      data: { edgeId: '', edgeType: 'observed_mac_port', confidence: 0, confidenceBand: 'low', status: 'unverified', userConfirmed: false, locked: false, unverified: true, label, port, speedMbps: speed, evidenceCount: members.length, derived: true },
+    })
+  }
+  if (tree.unplaced.length && payload.nodes.some(n => n.children?.length)) {
+    const first = tree.positions.get(tree.unplaced[0])!
+    nodes.push({ id: 'presentation-unplaced', type: 'lanory', position: { x: first.x, y: first.y - 60 }, draggable: false, selectable: false,
+      data: { nodeId: '', kind: 'network', icon: 'network', state: 'unknown', label: t('topology.unplaced'), annotation: true } })
+  }
+  // React Flow requires parent nodes to precede their children.
+  nodes.sort((a, b) => Number(!!a.parentId) - Number(!!b.parentId))
   return { nodes, edges }
 }
 

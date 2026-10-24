@@ -1,15 +1,13 @@
 import { Link } from 'react-router-dom'
+import { NetworkSummary } from './NetworkSummary'
 import {
   MonitorSmartphone,
   Wifi,
   WifiOff,
   HelpCircle,
-  Network,
-  ArrowUpRight,
-  Radio,
 } from 'lucide-react'
 import { t } from '@/i18n'
-import { useOverview } from '@/hooks/useApi'
+import { useOverview, useMonitoring } from '@/hooks/useApi'
 import {
   Card,
   CardHeader,
@@ -28,7 +26,7 @@ import {
   formatSpeed,
   sourceLabel,
 } from '@/lib/devices'
-import type { Device, NetworkEvent, InterfaceStatus, Overview } from '@/types/api'
+import type { Device, NetworkEvent, InterfaceStatus } from '@/types/api'
 
 /* -------------------------------------------------------------------------- */
 /* Stat tile                                                                  */
@@ -143,73 +141,9 @@ function EventMiniRow({ event }: { event: NetworkEvent }) {
 /* Mini topology (simplified tree)                                            */
 /* -------------------------------------------------------------------------- */
 
-function MiniTopology({ overview }: { overview: Overview }) {
-  // A deliberately simplified view: WAN -> router -> LAN. The full interactive
-  // graph lives on the Topology page.
-  const wan = overview.interfaces.find((i) => i.role === 'wan')
-  const lan = overview.interfaces.filter((i) => i.role === 'lan')
-
-  return (
-    <div className="flex flex-col items-center gap-3 py-4">
-      <div className="flex flex-col items-center gap-1.5">
-        <div className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-surface-2">
-          <Radio size={18} className="text-muted" aria-hidden="true" />
-        </div>
-        <span className="text-[11px] text-muted">{t('type.internet')}</span>
-      </div>
-
-      <div className="h-6 w-px bg-border" aria-hidden="true" />
-
-      <Card className="w-full max-w-md p-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-accent/12">
-              <Network size={17} className="text-accent" aria-hidden="true" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-fg">{t('type.router')}</p>
-              <p className="text-[11px] text-muted">
-                {wan ? `WAN ${formatSpeed(wan.interface.speed_mbps)}` : t('overview.never_scanned')}
-              </p>
-            </div>
-          </div>
-          <Link to="/topology">
-            <Button variant="ghost" size="sm">
-              <ArrowUpRight size={14} aria-hidden="true" />
-              {t('overview.view_all')}
-            </Button>
-          </Link>
-        </div>
-
-        {lan.length > 0 ? (
-          <div className="mt-3 divide-y divide-border border-t border-border">
-            {lan.map((status) => (
-              <InterfaceRow key={status.interface.id} status={status} />
-            ))}
-          </div>
-        ) : null}
-      </Card>
-
-      <div className="flex flex-wrap items-center justify-center gap-2">
-        <Badge>
-          <MonitorSmartphone size={11} aria-hidden="true" />
-          {overview.counts.total} {t('overview.total_devices')}
-        </Badge>
-        <Badge tone="success">{overview.counts.online} {t('state.online')}</Badge>
-        {overview.counts.offline > 0 ? (
-          <Badge tone="danger">{overview.counts.offline} {t('state.offline')}</Badge>
-        ) : null}
-      </div>
-    </div>
-  )
-}
-
-/* -------------------------------------------------------------------------- */
-/* Page                                                                       */
-/* -------------------------------------------------------------------------- */
-
 export function OverviewPage() {
-  const { data, isLoading, isError, error, refetch } = useOverview()
+  const { data, isLoading, error, refetch } = useOverview()
+  const monitoring = useMonitoring()
 
   if (isLoading) {
     return (
@@ -225,7 +159,7 @@ export function OverviewPage() {
     )
   }
 
-  if (isError || !data) {
+  if (!data) {
     return (
       <ErrorState
         title={t('app.error')}
@@ -264,11 +198,13 @@ export function OverviewPage() {
           <CardTitle>{t('nav.topology')}</CardTitle>
           <span className="text-xs text-muted">
             {t('overview.last_scan')}:{' '}
-            {data.last_scan_at ? formatRelativeTime(data.last_scan_at) : t('overview.never_scanned')}
+            {formatRelativeTime(data.last_scan_at) === '—'
+              ? t('overview.never_scanned')
+              : formatRelativeTime(data.last_scan_at)}
           </span>
         </CardHeader>
         <CardBody className="p-0">
-          <MiniTopology overview={data} />
+          <NetworkSummary overview={data} />
         </CardBody>
       </Card>
 
@@ -336,11 +272,11 @@ export function OverviewPage() {
             <CardTitle>{t('overview.lan_wan')}</CardTitle>
           </CardHeader>
           <CardBody className="p-0 px-4 pb-2">
-            {data.interfaces.length === 0 ? (
+            {(monitoring.data?.interfaces ?? data.interfaces).length === 0 ? (
               <EmptyState title={t('overview.no_devices')} className="py-8" />
             ) : (
               <div className="divide-y divide-border">
-                {data.interfaces.map((status) => (
+                {(monitoring.data?.interfaces ?? data.interfaces).map((status) => (
                   <InterfaceRow key={status.interface.id} status={status} />
                 ))}
               </div>

@@ -1,4 +1,3 @@
-import { useNavigate } from 'react-router-dom'
 import { t } from '@/i18n'
 import { useUIStore } from '@/stores/ui'
 import { useDevice } from '@/hooks/useApi'
@@ -11,7 +10,7 @@ import { deviceIcon, formatTimestamp, formatRelativeTime, formatMac, formatSpeed
  */
 export function DeviceInspector() {
   const selectedDeviceId = useUIStore((s) => s.selectedDeviceId)
-  const navigate = useNavigate()
+  const selectDevice = useUIStore(s => s.selectDevice)
 
   if (!selectedDeviceId) {
     return (
@@ -23,7 +22,7 @@ export function DeviceInspector() {
     )
   }
 
-  return <DeviceInspectorBody deviceId={selectedDeviceId} onClose={() => void navigate('/topology')} />
+  return <DeviceInspectorBody deviceId={selectedDeviceId} onClose={() => selectDevice(null)} />
 }
 
 function DeviceInspectorBody({ deviceId, onClose }: { deviceId: string; onClose: () => void }) {
