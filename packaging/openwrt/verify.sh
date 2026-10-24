@@ -231,6 +231,20 @@ else
 	pass "controller does not re-declare acl_depends"
 fi
 
+# The standard header initializes LuCI's JavaScript runtime as well as the
+# theme. Rendering themes/*/header directly leaves L undefined and the menu
+# hidden on LuCI 25.12, even though the HTML and CSS look complete.
+for view in overview; do
+	VIEW="$DIR/luci-app-lanory/luasrc/view/lanory/$view.htm"
+	for part in header footer; do
+		if grep -qF "<%+$part%>" "$VIEW"; then
+			pass "$view includes the standard LuCI $part"
+		else
+			fail "$view bypasses the standard LuCI $part"
+		fi
+	done
+done
+
 # ---------------------------------------------------------------------------
 say "generated YAML"
 # ---------------------------------------------------------------------------

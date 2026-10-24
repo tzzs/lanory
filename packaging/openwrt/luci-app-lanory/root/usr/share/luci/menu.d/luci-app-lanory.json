@@ -3,10 +3,13 @@
 		"title": "Lanory",
 		"order": 60,
 		"action": {
-			"type": "firstchild"
+			"type": "template",
+			"path": "lanory/overview"
 		},
 		"depends": {
-			"acl": [ "luci-app-lanory" ]
+			"acl": [
+				"luci-app-lanory"
+			]
 		}
 	}
 }

@@ -227,7 +227,7 @@ def check_luci_apk(path: str) -> None:
         "usr/lib/lua/luci/controller/lanory.lua",
         "usr/lib/lua/luci/model/cbi/lanory.lua",
         "usr/lib/lua/luci/view/lanory/overview.htm",
-        "usr/lib/lua/luci/view/lanory/devices.htm",
+        "usr/lib/lua/luci/view/lanory/style.htm",
     ]
     for required in required_files:
         if required in names:

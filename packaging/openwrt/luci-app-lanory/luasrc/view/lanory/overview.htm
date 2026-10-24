@@ -1,141 +1,89 @@
-<%#
--- Licensed to the public under the MIT License.
-
--- Lanory overview, rendered natively inside LuCI.
---
--- The data comes from the Lanory REST API on the loopback address. uhttpd's
--- proxy_prefix was tried first so the whole React UI could be embedded, but it
--- does not work in this iStoreOS build: the pre-existing /apps proxy returns 404
--- too, which means the module is not compiled in. Rendering the data natively
--- keeps the integration working on stock firmware.
---
--- The theme header and footer are required, not decoration: a template() node
--- renders only this file's bytes, so without them the response is a bare
--- fragment with no <body>, no menu and no CSS - it looks like a page opened
--- outside LuCI. The theme variable is the one dispatcher resolves for the
--- running theme (argon on iStoreOS, bootstrap on stock OpenWrt).
--%>
-
 <%
-	local template = require "luci.template"
-	local sys = require "luci.sys"
-	local uci = require "luci.model.uci"
-	local port = uci.cursor():get("lanory", "main", "port") or "8787"
-	local pid = sys.exec("pidof lanory 2>/dev/null") or ""
-	local running = pid:match("%d") ~= nil
-
-	-- Read the token the service generated, so the API call is authenticated.
-	local token = ""
-	local fd = io.open("/etc/lanory/token", "r")
-	if fd then
-		token = fd:read("*l") or ""
-		fd:close()
-	end
-
-	local function api(path)
-		local pipe = io.popen(string.format(
-			"curl -s -m 5 -H 'Authorization: Bearer %s' 'http://127.0.0.1:%s%s'",
-			token, port, path))
-		if not pipe then return nil end
-		local body = pipe:read("*a")
-		pipe:close()
-		if not body or body == "" then return nil end
-		local jsonc = require("luci.jsonc")
-		local ok, decoded = pcall(function() return jsonc.parse(body) end)
-		if ok and type(decoded) == "table" then return decoded end
-		return nil
-	end
-
-	local overview = running and api("/api/v1/overview") or nil
-	local monitoring = running and api("/api/v1/monitoring/status") or nil
-	local counts = overview and overview.counts
+local uci = require "luci.model.uci"
+local json = require "luci.jsonc"
+local port = tonumber(uci.cursor():get("lanory", "main", "port")) or 8787
+local running = (require("luci.sys").exec("pidof lanory 2>/dev/null") or ""):match("%d") ~= nil
+local zh = (luci.i18n.context.lang or ""):match("^zh") ~= nil
+local function tr(cn, en) return zh and cn or en end
+local function js(v) return json.stringify(v):gsub("<", "\\u003c") end
+luci.http.header("Cache-Control", "no-store")
 %>
-
-<% template.render("themes/" .. theme .. "/header") %>
-
-<h2 name="content"><%:Lanory%></h2>
-
-<div class="cbi-map">
-	<div class="cbi-section">
-		<h3><%:Service state%></h3>
-		<p>
-			<% if running then %>
-				<em class="ifacebadge"><%:Running%></em>
-			<% else %>
-				<em class="ifacebadge"><%:Stopped%></em>
-			<% end %>
-			&nbsp;<%:Web UI%>: <a href="http://<%=luci.http.getenv("SERVER_NAME") or "192.168.100.1"%>:<%=port%>/" target="_blank">http://<%=luci.http.getenv("SERVER_NAME") or "192.168.100.1"%>:<%=port%>/</a>
-		</p>
-		<p class="cbi-section-descr">
-			<%:Lanory only reads the router's own state (interfaces, bridge FDB, ARP/NDP, DHCP leases). It never modifies WAN, LAN, DHCP, firewall, DNS or routes.%>
-		</p>
-	</div>
-</div>
-
-<% if not running then %>
-	<div class="cbi-map">
-		<div class="cbi-section">
-			<p><%:Lanory is not running. Start it from the Settings tab.%></p>
-		</div>
-	</div>
-<% elseif not overview then %>
-	<div class="cbi-map">
-		<div class="cbi-section">
-			<p><%:Could not read the Lanory API. Check that the service is running.%></p>
-		</div>
-	</div>
-<% else %>
-	<div class="cbi-map">
-		<div class="cbi-section">
-			<h3><%:Devices%></h3>
-			<table class="cbi-section-table">
-				<tr class="cbi-section-table-titles">
-					<th class="cbi-section-table-cell"><%:Name%></th>
-					<th class="cbi-section-table-cell"><%:Type%></th>
-					<th class="cbi-section-table-cell"><%:IP%></th>
-					<th class="cbi-section-table-cell"><%:MAC%></th>
-					<th class="cbi-section-table-cell"><%:Status%></th>
-				</tr>
-				<% for _, dev in ipairs(overview.recent_new_devices or {}) do %>
-					<tr class="cbi-section-table-row">
-						<td class="cbi-section-table-cell"><%=dev.name%></td>
-						<td class="cbi-section-table-cell"><%=dev.type%></td>
-						<td class="cbi-section-table-cell"><%=dev.primary_ipv4 or "-"%></td>
-						<td class="cbi-section-table-cell"><%=dev.primary_mac or "-"%></td>
-						<td class="cbi-section-table-cell"><%=dev.state%></td>
-					</tr>
-				<% end %>
-			</table>
-		</div>
-	</div>
-
-	<div class="cbi-map">
-		<div class="cbi-section">
-			<h3><%:Interfaces%></h3>
-			<table class="cbi-section-table">
-				<tr class="cbi-section-table-titles">
-					<th class="cbi-section-table-cell"><%:Name%></th>
-					<th class="cbi-section-table-cell"><%:Role%></th>
-					<th class="cbi-section-table-cell"><%:State%></th>
-					<th class="cbi-section-table-cell"><%:Speed%></th>
-				</tr>
-				<%
-					-- monitoring/status carries the live carrier and speed; the
-					-- overview payload only has the stored row.
-					local rows = (monitoring and monitoring.interfaces) or (overview and overview.interfaces) or {}
-					for _, iface in ipairs(rows) do
-						local it = iface.interface or {}
-				%>
-					<tr class="cbi-section-table-row">
-						<td class="cbi-section-table-cell"><%=it.name%></td>
-						<td class="cbi-section-table-cell"><%=it.role or "-"%></td>
-						<td class="cbi-section-table-cell"><%=it.carrier and "up" or "down"%></td>
-						<td class="cbi-section-table-cell"><%=it.speed_mbps or 0%> Mbps</td>
-					</tr>
-				<% end %>
-			</table>
-		</div>
-	</div>
-<% end %>
-
-<% template.render("themes/" .. theme .. "/footer") %>
+<%+header%>
+<%+lanory/style%>
+<section class="ln-host">
+ <div class="ln-host-heading">
+  <h2><%=tr("Lanory · 网绘", "Lanory")%></h2>
+  <div class="ln-host-actions">
+   <a id="ln-standalone" target="_blank" rel="noopener noreferrer"><%=tr("独立窗口 ↗", "Open standalone ↗")%></a>
+   <a href="<%=luci.dispatcher.build_url('admin','services','lanory','config')%>"><%=tr("服务设置", "Service settings")%></a>
+  </div>
+ </div>
+ <div id="ln-host-status" role="status"><%=running and tr("正在连接 Lanory…", "Connecting to Lanory…") or tr("Lanory 未运行，请在服务设置中启用服务。", "Lanory is stopped. Enable it in Service settings.")%></div>
+ <iframe id="ln-app" title="Lanory" referrerpolicy="origin" hidden></iframe>
+</section>
+<script>
+(function () {
+ 'use strict';
+ var frame = document.getElementById('ln-app');
+ var status = document.getElementById('ln-host-status');
+ var host = frame.parentElement;
+ var origin = new URL('http://' + location.host);
+ origin.port = <%=js(tostring(port))%>;
+ origin = origin.origin;
+ var standalone = document.getElementById('ln-standalone');
+ standalone.href = origin + '/';
+ if (!<%=running and 'true' or 'false'%>) return;
+ if (location.protocol === 'https:') {
+  status.textContent = <%=js(tr("当前 Lanory 使用 HTTP。请从独立窗口打开，或通过 HTTP 访问 iStoreOS 使用内嵌页面。", "Lanory currently uses HTTP. Open the standalone window, or access iStoreOS over HTTP to use the embedded app."))%>;
+  return;
+ }
+ var session;
+ var ready = false;
+ function showError() {
+  status.hidden = false;
+  resize();
+  status.textContent = <%=js(tr("无法连接 Lanory 或登录会话已过期，请刷新页面或重新登录 iStoreOS。", "Lanory is unavailable or the login session expired. Reload this page or sign in to iStoreOS again."))%>;
+ }
+ function route(value) {
+  return typeof value === 'string' && /^\/(?:topology|devices(?:\/[^?#\s]+)?|monitoring|events|settings)?(?:\?[^#]*)?$/.test(value) ? value : '/';
+ }
+ function resize() {
+  var viewportHeight = window.visualViewport ? Math.min(window.innerHeight, window.visualViewport.height) : window.innerHeight;
+  host.style.height = Math.max(0, viewportHeight - host.getBoundingClientRect().top - 12) + 'px';
+ }
+ window.addEventListener('resize', resize);
+ if (window.visualViewport) window.visualViewport.addEventListener('resize', resize);
+ if (window.ResizeObserver) new ResizeObserver(resize).observe(host.querySelector('.ln-host-heading'));
+ // Start at the top even when returning through browser history. Only the
+ // frame's app content should scroll, never the surrounding LuCI viewport.
+ for (var ancestor = host.parentElement; ancestor; ancestor = ancestor.parentElement) ancestor.scrollTop = 0;
+ window.addEventListener('message', function (event) {
+  if (event.source !== frame.contentWindow || event.origin !== origin || !event.data) return;
+  if (event.data.type === 'lanory:ready') {
+   if (!session) session = fetch(<%=js(luci.dispatcher.build_url('admin','services','lanory','session'))%>, {
+    method: 'POST', credentials: 'same-origin', cache: 'no-store',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ token: <%=js(luci.dispatcher.context.authtoken or '')%> }).toString()
+   }).then(function (response) {
+    if (!response.ok || !(response.headers.get('content-type') || '').includes('application/json')) throw new Error('session');
+    return response.json();
+   });
+   session.then(function (data) {
+    if (!data.token) throw new Error('credential');
+    frame.contentWindow.postMessage({ type: 'lanory:session', token: data.token }, origin);
+    ready = true; status.hidden = true; resize();
+   }).catch(showError);
+  } else if (event.data.type === 'lanory:route') {
+   var path = route(event.data.path);
+   history.replaceState(null, '', location.pathname + location.search + '#' + path);
+   standalone.href = origin + path;
+  }
+ });
+ var initial = route(location.hash.slice(1));
+ frame.hidden = false;
+ frame.src = origin + '/embed' + initial;
+ resize();
+ setTimeout(function () { if (!ready) showError(); }, 15000);
+}());
+</script>
+<%+footer%>

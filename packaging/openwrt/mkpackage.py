@@ -589,12 +589,12 @@ LUCI_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "luci-app-l
 
 # Where each source file goes on the router.
 LUCI_LAYOUT = [
+    ("luasrc/view/lanory/style.htm", "usr/lib/lua/luci/view/lanory/style.htm", 0o644),
     ("root/usr/share/rpcd/acl.d/luci-app-lanory.json", "usr/share/rpcd/acl.d/luci-app-lanory.json", 0o644),
     ("root/usr/share/luci/menu.d/luci-app-lanory.json", "usr/share/luci/menu.d/luci-app-lanory.json", 0o644),
     ("luasrc/controller/lanory.lua", "usr/lib/lua/luci/controller/lanory.lua", 0o644),
     ("luasrc/model/cbi/lanory.lua", "usr/lib/lua/luci/model/cbi/lanory.lua", 0o644),
     ("luasrc/view/lanory/overview.htm", "usr/lib/lua/luci/view/lanory/overview.htm", 0o644),
-    ("luasrc/view/lanory/devices.htm", "usr/lib/lua/luci/view/lanory/devices.htm", 0o644),
 ]
 
 def build_luci_apk(version: str, out_dir: str) -> str:

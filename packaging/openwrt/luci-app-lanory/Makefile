@@ -1,7 +1,7 @@
 # luci-app-lanory — optional LuCI integration.
 #
 # This package is OPTIONAL. Lanory serves its own web UI on port 8787 and does not
-# need LuCI at all; this package only adds a menu entry and a small status page
+# need LuCI at all; this package adds a menu entry, the shared application host and service settings
 # inside LuCI for users who prefer to keep everything under one roof.
 #
 # It is built separately from luci (the LuCI SDK must be present):
@@ -31,7 +31,7 @@ include $(TOPDIR)/rules.mk
 include ../../luci.mk
 
 define Package/luci-app-lanory/description
- LuCI status and configuration page for Lanory (网绘). Optional: Lanory serves
+ LuCI shared application and service configuration for Lanory (网绘). Optional: Lanory serves
  its own web UI on port 8787 and works without LuCI.
 endef
 

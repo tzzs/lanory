@@ -11,52 +11,6 @@ local function lanory_port()
 	return "8787"
 end
 
--- lanory_api performs a GET against the Lanory REST API.
---
--- The token is read from the router itself rather than from the session: the
--- operator has already authenticated to LuCI, and asking for a second secret
--- inside the router's own UI would be theatre, not security.
-local function lanory_api(path)
-	local port = lanory_port()
-	local token = ""
-
-	local fd = io.open("/etc/lanory/token", "r")
-	if fd then
-		token = fd:read("*l") or ""
-		fd:close()
-	end
-
-	local cmd = string.format(
-		"curl -s -m 5 -H 'Authorization: Bearer %s' 'http://127.0.0.1:%s%s'",
-		token, port, path)
-
-	local pipe = io.popen(cmd)
-	if not pipe then
-		return nil
-	end
-	local out = pipe:read("*a")
-	pipe:close()
-	return out
-end
-
--- lanory_json decodes a Lanory API response, returning nil when the call
--- failed or the body is not JSON.
-local function lanory_json(path)
-	local body = lanory_api(path)
-	if not body or body == "" then
-		return nil
-	end
-	local ok, jsonc = pcall(require, "luci.jsonc")
-	if not ok or not jsonc then
-		return nil
-	end
-	local pok, decoded = pcall(function() return jsonc.parse(body) end)
-	if pok and type(decoded) == "table" then
-		return decoded
-	end
-	return nil
-end
-
 function index()
 	if not nixio.fs.access("/etc/config/lanory") then
 		return
@@ -80,34 +34,43 @@ function index()
 	-- registers the leaf pages; re-declaring the acl dependency here would make
 	-- the node vanish whenever the Lua runtime is absent (LuCI 25.12 does not
 	-- install it by default), because depends.acl is then only seen from Lua.
-	local page = entry({"admin", "services", "lanory"}, firstchild(), _("Lanory"), 60)
+	entry({"admin", "services", "lanory"}, template("lanory/overview"), _("Lanory"), 60)
 
-	entry({"admin", "services", "lanory", "overview"}, template("lanory/overview"), _("Overview"), 10)
-	entry({"admin", "services", "lanory", "devices"}, template("lanory/devices"), _("Devices"), 20)
-	entry({"admin", "services", "lanory", "config"}, cbi("lanory"), _("Settings"), 30)
+	-- Child routes stay addressable but untitled: React owns the only tab bar.
+	entry({"admin", "services", "lanory", "overview"}, template("lanory/overview"))
+	-- Preserve old bookmarks without maintaining a second device page.
+	entry({"admin", "services", "lanory", "devices"}, call("action_devices"))
+	entry({"admin", "services", "lanory", "session"}, post("action_session")).leaf = true
+	entry({"admin", "services", "lanory", "config"}, cbi("lanory"))
 end
 
--- action_scan triggers a discovery run.
---
--- This is a write action, so it is a POST and the page reloads afterwards.
-function action_scan()
-	luci.http.prepare_content("application/json")
-	local port = lanory_port()
-	local token = ""
-	local fd = io.open("/etc/lanory/token", "r")
-	if fd then
-		token = fd:read("*l") or ""
-		fd:close()
-	end
+-- The dispatcher enforces an authenticated LuCI session and its CSRF token
+-- before this POST handler. The credential is never placed in HTML or a URL.
+function action_session()
+ local http = require "luci.http"
+ http.header("Cache-Control", "no-store")
+ http.header("Pragma", "no-cache")
+ http.prepare_content("application/json")
+ local access = require("luci.util").ubus("session", "access", {
+  ubus_rpc_session = luci.dispatcher.context.authsession,
+  scope = "access-group", object = "luci-app-lanory", ["function"] = "write"
+ })
+ if not access or not access.access then
+  http.status(403, "Forbidden")
+  http.write_json({ error = "Lanory write permission required" })
+  return
+ end
+ local fd = io.open("/etc/lanory/token", "r")
+ local token = fd and fd:read("*l") or ""
+ if fd then fd:close() end
+ if token == "" then
+  http.status(503, "Service Unavailable")
+  http.write_json({ error = "Lanory credential unavailable" })
+  return
+ end
+ http.write_json({ token = token })
+end
 
-	local pipe = io.popen(string.format(
-		"curl -s -m 10 -X POST -H 'Authorization: Bearer %s' " ..
-		"-H 'X-Requested-With: XMLHttpRequest' -H 'Content-Type: application/json' " ..
-		"-d '{}' 'http://127.0.0.1:%s/api/v1/discovery/scan'", token, port))
-	local out = ""
-	if pipe then
-		out = pipe:read("*a") or ""
-		pipe:close()
-	end
-	luci.http.write(out)
+function action_devices()
+ luci.http.redirect(luci.dispatcher.build_url("admin", "services", "lanory", "overview") .. "#/devices")
 end
