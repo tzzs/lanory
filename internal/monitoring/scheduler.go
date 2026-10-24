@@ -746,6 +746,7 @@ func (e *Engine) Status(recentLimit int) (model.MonitoringStatus, error) {
 	for _, s := range statuses {
 		out.Interfaces = append(out.Interfaces, model.InterfaceStatus{
 			Interface: s.Interface,
+			Role:      s.Interface.Role,
 			Status:    s.Status,
 			Reason:    s.Reason,
 		})

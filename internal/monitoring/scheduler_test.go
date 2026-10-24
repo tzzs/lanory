@@ -679,3 +679,27 @@ func TestReloadReschedules(t *testing.T) {
 	}
 	t.Fatal("probe added after Start was never scheduled")
 }
+
+func TestStatusPreservesInterfaceRole(t *testing.T) {
+	root := t.TempDir()
+	writeIface(t, root, "eth3", "1", "up", "100")
+	interfaces := newFakeLinkStore(model.NetworkInterface{
+		ID: "wan-interface", Name: "eth3", Role: model.InterfaceRoleWAN,
+	})
+	e := NewEngine(testStore(t), nil, NewExecutor(DefaultExecutorConfig()), nil, engineCfg())
+	e.link.observer = newLinkObserverWithRoot(root, interfaces, nil)
+	status, err := e.Status(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(status.Interfaces) != 1 {
+		t.Fatalf("interfaces = %d, want 1", len(status.Interfaces))
+	}
+	got := status.Interfaces[0]
+	if got.Interface.Role != model.InterfaceRoleWAN {
+		t.Fatalf("observed interface role = %q, want wan", got.Interface.Role)
+	}
+	if got.Role != model.InterfaceRoleWAN {
+		t.Fatalf("monitoring summary role = %q, want wan", got.Role)
+	}
+}
