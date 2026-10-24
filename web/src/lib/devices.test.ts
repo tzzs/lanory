@@ -86,11 +86,23 @@ describe('formatRelativeTime', () => {
   it('handles missing and invalid input', () => {
     expect(formatRelativeTime(undefined)).toBe('—')
     expect(formatRelativeTime('not-a-date')).toBe('—')
+    expect(formatRelativeTime('0001-01-01T00:00:00Z')).toBe('—')
   })
 
   it('renders a relative string for a past timestamp', () => {
     const past = new Date(Date.now() - 5 * 60_000).toISOString()
     const result = formatRelativeTime(past)
     expect(result).toMatch(/minute|分钟/)
+  })
+
+  it.each([
+    [30_000, '30 seconds ago'],
+    [300_000, '5 minutes ago'],
+    [7_200_000, '2 hours ago'],
+    [259_200_000, '3 days ago'],
+    [5_184_000_000, '2 months ago'],
+    [-300_000, 'in 5 minutes'],
+  ])('preserves time direction for offset %s', (offset, expected) => {
+    expect(formatRelativeTime(new Date(Date.now() - offset).toISOString(), 'en')).toBe(expected)
   })
 })

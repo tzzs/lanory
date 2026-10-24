@@ -184,10 +184,11 @@ export function formatDuration(seconds: number): string {
 
 /** Relative time from an ISO timestamp, e.g. "3 minutes ago". */
 export function formatRelativeTime(iso: string | undefined, locale = getLocale()): string {
-  if (!iso) return '—'
+  // Go serializes an unset time.Time as year 0001, not an empty string.
+  if (!iso || iso.startsWith('0001-01-01T00:00:00')) return '—'
   const then = new Date(iso).getTime()
   if (Number.isNaN(then)) return '—'
-  const diffMs = Date.now() - then
+  const diffMs = then - Date.now()
   const abs = Math.abs(diffMs)
   const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' })
   if (abs < 45_000) return rtf.format(Math.round(diffMs / 1000), 'second')

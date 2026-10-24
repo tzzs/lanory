@@ -66,8 +66,15 @@ function authHeaders(): Record<string, string> {
 }
 
 const TOKEN_KEY = 'lanory.token'
+let sessionToken: string | null = null
+
+/** LuCI bootstrap credentials stay in memory and never replace standalone login. */
+export function setSessionToken(token: string | null): void {
+  sessionToken = token
+}
 
 export function readToken(): string | null {
+  if (sessionToken !== null) return sessionToken
   try {
     return localStorage.getItem(TOKEN_KEY)
   } catch {
