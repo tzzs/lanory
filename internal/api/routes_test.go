@@ -1138,3 +1138,38 @@ func TestEmbedFramePolicy(t *testing.T) {
 		})
 	}
 }
+
+// A reverse-proxy prefix moves the embed entry, and the policy has to follow it:
+// a prefixed /embed served with DENY looks like a working page that silently
+// refuses to render inside the LuCI frame.
+func TestEmbedFramePolicyUnderBasePath(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.Server.BasePath = "/lanory"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("validate config: %v", err)
+	}
+	app := newTestAppWithConfig(t, cfg)
+	for _, tc := range []struct{ path, policy string }{
+		{"/lanory/embed/", "frame-ancestors http://192.168.100.1:* https://192.168.100.1:*"},
+		{"/lanory/embed/topology", "frame-ancestors http://192.168.100.1:* https://192.168.100.1:*"},
+		{"/lanory/topology", ""},
+		{"/embed/", ""},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			req.Host = "192.168.100.1:8787"
+			rec := httptest.NewRecorder()
+			app.Handler().ServeHTTP(rec, req)
+			if got := rec.Header().Get("Content-Security-Policy"); got != tc.policy {
+				t.Errorf("frame policy = %q, want %q", got, tc.policy)
+			}
+			want := "DENY"
+			if tc.policy != "" {
+				want = ""
+			}
+			if got := rec.Header().Get("X-Frame-Options"); got != want {
+				t.Errorf("X-Frame-Options = %q, want %q", got, want)
+			}
+		})
+	}
+}

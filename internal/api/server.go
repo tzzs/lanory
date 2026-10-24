@@ -396,7 +396,7 @@ func (a *App) routes() http.Handler {
 
 	var h http.Handler = root
 	h = recoverPanic(h)
-	h = securityHeaders(h)
+	h = securityHeaders(base, h)
 	h = requestLogger(h)
 	h = requestTimeout(defaultRequestTimeout, isStreamRequest)(h)
 	h = limitBody(h)

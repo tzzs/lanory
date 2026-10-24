@@ -28,7 +28,10 @@ import (
 // securityHeaders sets the response headers that keep a browser from helping
 // an attacker. Lanory serves its own single-page app and a JSON API, so it can
 // afford a strict policy.
-func securityHeaders(next http.Handler) http.Handler {
+func securityHeaders(basePath string, next http.Handler) http.Handler {
+	// The embed entry sits under the reverse-proxy prefix when one is configured,
+	// so compare against the same prefixed path the router serves.
+	embedRoot := strings.TrimSuffix(basePath, "/") + "/embed"
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		// The API never returns attacker controllable content types, so
@@ -38,7 +41,7 @@ func securityHeaders(next http.Handler) http.Handler {
 		// web interface (LuCI uses a different port). Standalone and API
 		// responses retain DENY. Never grant arbitrary LAN sites access.
 		h.Set("X-Frame-Options", "DENY")
-		if r.URL.Path == "/embed" || strings.HasPrefix(r.URL.Path, "/embed/") {
+		if r.URL.Path == embedRoot || strings.HasPrefix(r.URL.Path, embedRoot+"/") {
 			host := (&url.URL{Host: r.Host}).Hostname()
 			// Parsing again rejects whitespace, quotes and CSP delimiters in
 			// an untrusted Host header. IPv6 source expressions need brackets.
