@@ -60,8 +60,12 @@ is explainability — but it is another reason not to expose the UI beyond the L
 ### Token
 
 `auth.enabled: true` requires `Authorization: Bearer <token>` on every endpoint
-except `/api/v1/health` (so a monitor can check liveness) and the SSE stream, which
-accepts the token as a query parameter because `EventSource` cannot set headers.
+except `/api/v1/health`, which stays public so a monitor can check liveness
+without the secret. The SSE stream is **not** exempt: it is protected like every
+other route, and the browser client reads it with `fetch` and the same
+`Authorization` header rather than with `EventSource`, which cannot set headers.
+A token in a query string is refused, because URLs end up in logs and in the
+`Referer` header.
 
 Generate a strong token:
 
@@ -261,3 +265,14 @@ Being explicit about what is missing is part of the security posture:
 | no audit log of who changed what | a shared token cannot attribute changes | reverse proxy logs |
 | Demo Mode can be enabled on a real deployment | a user could confuse simulated with real data | the flag is always reported; the UI banner is mandatory |
 | no automatic security updates | a router may run an old build | subscribe to releases; the package has no updater by design |
+
+## LuCI embedding
+
+Only the `/embed` frontend entry permits framing, restricted by CSP to HTTP(S)
+parents on the same hostname. Other frontend and API routes keep DENY. The LuCI
+credential bridge requires an authenticated session, LuCI's POST CSRF token and
+write permission for the `luci-app-lanory` access group. It returns a no-store JSON
+response; the host sends it only to the specific Lanory frame and its exact
+origin. The child checks the parent source and origin, and stores the credential
+only in memory. It does not overwrite the standalone localStorage token. LuCI
+and Lanory remain trusted parts of the same router administration boundary.

@@ -313,3 +313,42 @@ Some baseline files are not `gofmt` clean (alignment in `internal/model`,
 `internal/discovery`, `internal/config`). CI therefore checks formatting only on
 files changed in the range. Formatting the whole tree is a single mechanical
 commit nobody has made yet.
+
+### Topology presentation
+
+`web/src/features/topology/hierarchy.ts` derives the default presentation from
+`TopologyNode.children`, with observed edges as a compatibility fallback. Shared
+ports appear as unresolved segment containers, not invented switches or APs.
+Terminal cards retain their real device IDs for the inspector. Port observations
+within a container are represented by containment, while stored edges remain
+available in device details and evidence. Other logical networks and unplaced
+devices stay in a separate region without fabricated connections.
+
+The Reset layout button recomputes a local arrangement and keeps pinned devices
+fixed. Save persists absolute coordinates; the renderer converts members to
+container-relative positions. Unsaved moves survive polling. The overview uses
+the same topology observations and the monitoring endpoint's live port speeds.
+The standalone and LuCI entries share the React app and horizontal navigation.
+LuCI renders only the standard header/footer, an iframe host and native service
+settings. The root LuCI menu opens the shared host directly; child routes have
+no menu titles, so LuCI does not render a second tab bar. The host-scoped
+`lanory-embedded-host` class also suppresses the native tab container and footer
+while this app is mounted. The host flexes into the remaining visual viewport,
+without a fixed minimum iframe height; only React main content scrolls. Native
+sidebar scrolling and non-Lanory LuCI pages remain independent. `/embed/…` uses the same routes with a BrowserRouter basename; the
+host remembers the selected page in its URL fragment and sizes the frame to the
+available viewport. Legacy LuCI device bookmarks redirect to `overview#/devices`.
+
+The embed bootstrap waits for an exact-source, exact-origin message from the
+same router's LuCI parent before mounting data views. LuCI supplies the bearer
+credential through a session-authenticated, CSRF-protected POST endpoint that
+also requires write access to the Lanory ACL group. Its response is `no-store`;
+the credential travels through targeted postMessage and remains in frame memory,
+never in the URL, HTML source or localStorage. Independent login is unchanged.
+The `/embed` HTML alone permits framing by HTTP(S) origins on the same hostname;
+standalone and API routes retain `X-Frame-Options: DENY`. Background pages close
+their SSE connection and reconnect with their last event ID when visible.
+
+The bundled Lanory listener uses HTTP. An HTTPS LuCI host shows an explicit
+standalone/HTTP-access fallback instead of attempting a mixed-content iframe.
+Do not claim HTTPS embedding support without a TLS-capable proxy or listener.
