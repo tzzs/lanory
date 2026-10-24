@@ -731,9 +731,15 @@ func (e *Engine) Status(recentLimit int) (model.MonitoringStatus, error) {
 		return out, fmt.Errorf("monitoring: list probes: %w", err)
 	}
 	for _, p := range probes {
-		ps := model.ProbeStatus{Probe: p}
+		// Recent is never nil. It is serialised straight to JSON, where a nil
+		// slice becomes null; a probe that has never run has no results, and a
+		// client that reads recent.length would throw on null and take the
+		// whole page down.
+		ps := model.ProbeStatus{Probe: p, Recent: []model.ProbeResult{}}
 		if recent, err := e.store.RecentProbeResults(p.ID, recentLimit); err == nil {
-			ps.Recent = recent
+			if recent != nil {
+				ps.Recent = recent
+			}
 			ps.LossPct, ps.AvgLatencyMS = lossAndLatency(recent)
 		}
 		out.Probes = append(out.Probes, ps)

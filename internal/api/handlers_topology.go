@@ -35,6 +35,12 @@ func (a *App) handleTopology(w http.ResponseWriter, r *http.Request) {
 	if topo.Layout == nil {
 		topo.Layout = []model.TopologyLayout{}
 	}
+	// Nodes embed a Device, whose own lists would otherwise marshal as null.
+	for i := range topo.Nodes {
+		if topo.Nodes[i].Device != nil {
+			normalizeDevice(topo.Nodes[i].Device)
+		}
+	}
 	writeJSON(w, http.StatusOK, topo)
 }
 
@@ -53,6 +59,10 @@ func (a *App) handleTopologyEvidence(w http.ResponseWriter, r *http.Request) {
 	}
 	if ev.Unmapped == nil {
 		ev.Unmapped = []model.DeviceEvidence{}
+	}
+	// Evidence entries embed a Device too.
+	for i := range ev.Unmapped {
+		normalizeDevice(&ev.Unmapped[i].Device)
 	}
 	writeJSON(w, http.StatusOK, ev)
 }

@@ -343,10 +343,10 @@ export function DeviceDetailPanel({ onClose }: { onClose: () => void }) {
             {t('device.sources')}
           </h4>
           <div className="flex flex-wrap gap-1.5">
-            {device.discovery_sources.length === 0 ? (
+            {(device.discovery_sources ?? []).length === 0 ? (
               <span className="text-xs text-muted">—</span>
             ) : (
-              device.discovery_sources.map((source) => (
+              (device.discovery_sources ?? []).map((source) => (
                 <Badge key={source}>{t(`source.${source}`)}</Badge>
               ))
             )}

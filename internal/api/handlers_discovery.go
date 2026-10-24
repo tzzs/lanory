@@ -121,6 +121,14 @@ func (a *App) handleMonitoringStatus(w http.ResponseWriter, r *http.Request) {
 	if status.Probes == nil {
 		status.Probes = []model.ProbeStatus{}
 	}
+	// Each probe's Recent is a list too, and a probe that has never run has
+	// none. Left nil it marshals as null where the contract promises an array,
+	// and the monitoring page reads recent.length on every probe.
+	for i := range status.Probes {
+		if status.Probes[i].Recent == nil {
+			status.Probes[i].Recent = []model.ProbeResult{}
+		}
+	}
 	if status.Interfaces == nil {
 		status.Interfaces = []model.InterfaceStatus{}
 	}

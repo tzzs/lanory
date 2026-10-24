@@ -159,6 +159,15 @@ Node kinds: `device`, `network`. Network nodes carry `network` and no `device`.
 }
 ```
 
+**List fields are always arrays, never `null`.** `recent` is `[]` for a probe
+that has never run, and `discovery_sources` is `[]` for a device no collector
+has observed yet. A nil Go slice marshals to `null`, which is not what this
+contract says and not what a client can iterate: reading `recent.length` on
+`null` throws during render, and an uncaught render error unmounts the whole
+app. The handlers normalise every list on the way out, and the TypeScript mirror
+still declares these fields nullable so a client cannot rely on the
+normalisation alone.
+
 `GET /api/v1/monitoring/probes` → `{"probes":[ProbeTarget...]}`
 `POST /api/v1/monitoring/probes` body:
 

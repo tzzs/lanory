@@ -144,7 +144,7 @@ function DeviceRow({ device, onSelect }: { device: Device; onSelect: (id: string
       <TD className="text-muted">{deviceTypeLabel(device.type)}</TD>
       <TD className="font-mono text-xs">{device.primary_ipv4 || '—'}</TD>
       <TD className="font-mono text-xs">{device.primary_mac ? device.primary_mac.toUpperCase() : '—'}</TD>
-      <TD className="text-muted">{device.discovery_sources.map((s) => t(`source.${s}`)).join(', ') || '—'}</TD>
+      <TD className="text-muted">{(device.discovery_sources ?? []).map((s) => t(`source.${s}`)).join(', ') || '—'}</TD>
       <TD>
         <span className="text-xs">{deviceStateLabel(device.state)}</span>
       </TD>

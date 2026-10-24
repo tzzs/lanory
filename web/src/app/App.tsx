@@ -1,8 +1,9 @@
 import { Suspense, lazy } from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClient } from '@/lib/queryClient'
 import { AppShell } from '@/app/AppShell'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { OverviewPage } from '@/features/overview/OverviewPage'
 import { DevicesPage } from '@/features/devices/DevicesPage'
 import { MonitoringPage } from '@/features/monitoring/MonitoringPage'
@@ -29,18 +30,30 @@ export function App() {
     <QueryClientProvider client={queryClient}>
       <AppShell>
         <Suspense fallback={<RouteFallback />}>
-          <Routes>
-            <Route path="/" element={<OverviewPage />} />
-            <Route path="/topology" element={<TopologyPage />} />
-            <Route path="/devices" element={<DevicesPage />} />
-            <Route path="/devices/:id" element={<DevicesPage />} />
-            <Route path="/monitoring" element={<MonitoringPage />} />
-            <Route path="/events" element={<EventsPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+          {/* The boundary lives inside the shell and is keyed on the path, so a
+              crash in one page keeps the navigation usable and navigating away
+              clears the error. Without it a single bad value blanks the app. */}
+          <RoutedContent />
         </Suspense>
       </AppShell>
     </QueryClientProvider>
+  )
+}
+
+function RoutedContent() {
+  const { pathname } = useLocation()
+  return (
+    <ErrorBoundary resetKey={pathname}>
+      <Routes>
+        <Route path="/" element={<OverviewPage />} />
+        <Route path="/topology" element={<TopologyPage />} />
+        <Route path="/devices" element={<DevicesPage />} />
+        <Route path="/devices/:id" element={<DevicesPage />} />
+        <Route path="/monitoring" element={<MonitoringPage />} />
+        <Route path="/events" element={<EventsPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </ErrorBoundary>
   )
 }

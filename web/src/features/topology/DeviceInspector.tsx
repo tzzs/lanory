@@ -144,7 +144,7 @@ function DeviceInspectorBody({ deviceId, onClose }: { deviceId: string; onClose:
         <div className="flex flex-wrap gap-1.5">
           {device.is_manual ? <Badge tone="accent">{t('devices.manual_badge')}</Badge> : null}
           {device.is_locked ? <Badge>{t('topology.locked')}</Badge> : null}
-          {device.discovery_sources.map((source) => (
+          {(device.discovery_sources ?? []).map((source) => (
             <Badge key={source}>{t(`source.${source}`)}</Badge>
           ))}
         </div>

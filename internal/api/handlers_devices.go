@@ -292,9 +292,7 @@ func (a *App) handleListDevices(w http.ResponseWriter, r *http.Request) {
 		devices = []model.Device{}
 	}
 	for i := range devices {
-		if devices[i].DiscoverySources == nil {
-			devices[i].DiscoverySources = []model.DiscoverySource{}
-		}
+		normalizeDevice(&devices[i])
 	}
 
 	writeJSON(w, http.StatusOK, model.DeviceList{
@@ -570,9 +568,21 @@ func (a *App) handleGetDevice(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, detail)
 }
 
+// normalizeDevice replaces nil slices on a device with empty ones so the JSON
+// contract ("empty lists are []") holds. A nil Go slice marshals as null, and
+// clients read these fields as arrays.
+func normalizeDevice(d *model.Device) {
+	if d.DiscoverySources == nil {
+		d.DiscoverySources = []model.DiscoverySource{}
+	}
+}
+
 // normalizeDeviceDetail replaces nil slices with empty ones so the JSON
 // contract ("empty lists are []") holds even for a device with no addresses.
 func normalizeDeviceDetail(d *model.DeviceDetail) {
+	if d.Device != nil {
+		normalizeDevice(d.Device)
+	}
 	if d.Addresses == nil {
 		d.Addresses = []model.DeviceAddress{}
 	}

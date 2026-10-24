@@ -99,7 +99,12 @@ export interface Device {
   primary_ipv4?: string
   primary_ipv6?: string
   primary_mac?: string
-  discovery_sources: DiscoverySource[]
+  /**
+   * Sources that have observed the device. The API normalises this to `[]`,
+   * but it is declared nullable because a nil Go slice marshals to `null` and
+   * a client must survive that rather than take the page down.
+   */
+  discovery_sources: DiscoverySource[] | null
   is_gateway: boolean
   is_self: boolean
   first_seen: string
@@ -402,7 +407,13 @@ export interface DiscoveryStatus {
 
 export interface ProbeStatus {
   probe: ProbeTarget
-  recent: ProbeResult[]
+  /**
+   * Recent results, newest first. The API normalises this to `[]` for a probe
+   * that has never run, but it is declared nullable because a nil Go slice
+   * marshals to `null` and any client must survive that rather than take the
+   * whole page down.
+   */
+  recent: ProbeResult[] | null
   loss_pct: number
   avg_latency_ms: number
 }

@@ -245,13 +245,13 @@ export function MonitoringPage() {
       </section>
 
       {/* latency trend for the first few probes */}
-      {data.probes.some((p) => p.recent.length >= 2) ? (
+      {data.probes.some((p) => (p.recent?.length ?? 0) >= 2) ? (
         <section>
           <h2 className="mb-2 text-sm font-semibold text-fg">{t('monitoring.latency')}</h2>
           <Card>
             <CardBody className="space-y-3">
               {data.probes
-                .filter((p) => p.recent.length >= 2)
+                .filter((p) => (p.recent?.length ?? 0) >= 2)
                 .slice(0, 6)
                 .map((status) => (
                   <div key={status.probe.id} className="flex items-center justify-between gap-4">
@@ -263,7 +263,7 @@ export function MonitoringPage() {
                       </p>
                     </div>
                     <Sparkline
-                      values={[...status.recent].reverse().map((r) => r.latency_ms)}
+                      values={[...(status.recent ?? [])].reverse().map((r) => r.latency_ms)}
                       label={`${status.probe.name} ${t('monitoring.latency')}`}
                     />
                   </div>

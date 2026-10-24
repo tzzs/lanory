@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"encoding/json"
 	"net"
 	"path/filepath"
 	"sync"
@@ -582,6 +583,65 @@ func TestStatusAggregatesProbesAndLoss(t *testing.T) {
 	}
 	if status.GeneratedAt.IsZero() {
 		t.Fatal("generated_at is zero")
+	}
+}
+
+// TestStatusRecentIsNeverNilForANeverRunProbe locks the JSON contract on the
+// production path.
+//
+// Status is what cmd/lanory injects as the MonitoringProvider, so it, not the
+// store-only fallback in internal/api, decides what /monitoring/status sends.
+// A probe that has never run has no results; a nil slice would marshal as null
+// and a client reading recent.length would throw during render, blanking the
+// whole page. The engine therefore always hands back a non-nil slice.
+func TestStatusRecentIsNeverNilForANeverRunProbe(t *testing.T) {
+	s := testStore(t)
+	p := newProbe(t, s, model.ProbeTarget{
+		Name: "never run", Kind: model.ProbeKindNetwork, Target: "192.0.2.9",
+		Protocol: model.ProbeICMP, Interval: 60, Timeout: 2, Enabled: true,
+		FailureThreshold: 3, RecoverConfirm: 1, State: model.StateUnknown,
+	})
+
+	e := NewEngine(s, nil, NewExecutor(DefaultExecutorConfig()), nil, engineCfg())
+	status, err := e.Status(20)
+	if err != nil {
+		t.Fatalf("status: %v", err)
+	}
+
+	var found bool
+	for _, ps := range status.Probes {
+		if ps.Probe.ID != p.ID {
+			continue
+		}
+		found = true
+		if ps.Recent == nil {
+			t.Fatal("recent is nil for a probe that never ran; it marshals to null and breaks clients")
+		}
+		if len(ps.Recent) != 0 {
+			t.Fatalf("recent = %d results, want 0", len(ps.Recent))
+		}
+	}
+	if !found {
+		t.Fatalf("probe %q missing from status", p.ID)
+	}
+
+	// And the wire form must be [], not null.
+	raw, err := json.Marshal(status)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var decoded struct {
+		Probes []struct {
+			Recent json.RawMessage `json:"recent"`
+		} `json:"probes"`
+	}
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	for i, ps := range decoded.Probes {
+		if string(ps.Recent) == "null" {
+			t.Fatalf("probes[%d].recent is null, want []", i)
+		}
 	}
 }
 
