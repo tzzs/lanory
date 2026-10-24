@@ -1,11 +1,13 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { BrowserRouter } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { initTheme } from '@/lib/theme'
 import { useUIStore } from '@/stores/ui'
 import { useHealth } from '@/hooks/useApi'
 import { useRealtime, type RealtimeEvent } from '@/hooks/useRealtime'
-import { Sidebar, TopBar } from '@/components/Sidebar'
+import { Navigation } from '@/components/Navigation'
+import { isEmbedded } from '@/lib/embed'
+import { t } from '@/i18n'
 import { AlertBanner } from '@/components/AlertBanner'
 import { TokenPrompt, useTokenGate } from '@/components/TokenPrompt'
 
@@ -57,7 +59,14 @@ function DemoModeSync() {
 function RealtimeSync() {
   const setRealtimeConnected = useUIStore((s) => s.setRealtimeConnected)
   const invalidate = useInvalidate()
+  const [visible, setVisible] = useState(!document.hidden)
+  useEffect(() => {
+    const update = () => setVisible(!document.hidden)
+    document.addEventListener('visibilitychange', update)
+    return () => document.removeEventListener('visibilitychange', update)
+  }, [])
   useRealtime({
+    enabled: visible,
     onEvent: invalidate,
     onConnectionChange: setRealtimeConnected,
   })
@@ -70,17 +79,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // The API requires a bearer token. When it rejects the current one the app
   // shows the token prompt instead of an empty page, so a first-time visitor
   // knows what to do rather than staring at a blank screen.
-  const { required, recheck } = useTokenGate()
+  const { required, checked, recheck } = useTokenGate()
+  const embedded = isEmbedded()
 
   return (
-    <BrowserRouter>
-      <div className="flex h-full">
-        {required ? null : <Sidebar />}
+    <BrowserRouter basename={embedded ? '/embed' : undefined}>
+      <div className="flex h-full min-w-0">
         <div className="flex min-w-0 flex-1 flex-col">
-          {required ? null : <TopBar />}
+          {required ? null : <Navigation embedded={embedded} />}
           <AlertBanner />
           <main className="min-h-0 flex-1 overflow-auto">
-            {required ? (
+            {!checked ? <div className="p-6 text-sm text-muted" role="status">{t('app.loading')}</div> : required ? (
               <TokenPrompt onAuthenticated={() => void recheck()} />
             ) : (
               children
@@ -88,8 +97,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </main>
         </div>
       </div>
-      {required ? null : <DemoModeSync />}
-      {required ? null : <RealtimeSync />}
+      {!checked || required ? null : <DemoModeSync />}
+      {!checked || required ? null : <RealtimeSync />}
     </BrowserRouter>
   )
 }
