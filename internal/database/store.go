@@ -104,8 +104,12 @@ type DeviceFilter struct {
 	IncludeHidden bool
 	Sort          string // name | ip | last_seen | type
 	Order         string // asc | desc
-	Limit         int
-	Offset        int
+	// OnlineFirst keeps online devices in a leading group regardless of Sort
+	// and Order. It is opt-in because the topology builder and the monitoring
+	// scheduler also call ListDevices and rely on the unfiltered order.
+	OnlineFirst bool
+	Limit       int
+	Offset      int
 }
 
 // ListDevices returns devices matching the filter.
@@ -179,6 +183,11 @@ func (s *Store) ListDevices(f DeviceFilter) ([]model.Device, int, error) {
 		} else {
 			order = "d.last_seen DESC"
 		}
+	}
+	// The state group is a prefix, so Order reverses the order within each
+	// group but never lifts offline devices above online ones.
+	if f.OnlineFirst {
+		order = "CASE WHEN d.state = 'online' THEN 0 ELSE 1 END ASC, " + order
 	}
 
 	var total int

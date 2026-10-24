@@ -240,6 +240,7 @@ func (a *App) handleListDevices(w http.ResponseWriter, r *http.Request) {
 		Interface:     strings.TrimSpace(q.Get("interface")),
 		Sort:          strings.TrimSpace(q.Get("sort")),
 		Order:         strings.TrimSpace(q.Get("order")),
+		OnlineFirst:   q.Get("online_first") == "true",
 		Limit:         limit,
 		Offset:        offset,
 		IncludeHidden: q.Get("include_hidden") == "true",

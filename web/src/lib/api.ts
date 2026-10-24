@@ -150,6 +150,7 @@ export interface DeviceQuery {
   new_since?: string
   sort?: string
   order?: 'asc' | 'desc'
+  online_first?: boolean
   limit?: number
   offset?: number
 }

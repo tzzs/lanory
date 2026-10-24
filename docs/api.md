@@ -42,8 +42,10 @@ response shape without updating this file and the other side.
 
 ## Devices
 
-`GET /api/v1/devices?query=&type=&state=&source=&interface=&sort=&order=&limit=&offset=`
+`GET /api/v1/devices?query=&type=&state=&source=&interface=&sort=&order=&online_first=&limit=&offset=`
 → `{"devices":[Device...],"total":n,"limit":n,"offset":n}`
+
+`sort` is one of `name`, `ip`, `type`, `last_seen` (default `last_seen`), and `order` is `asc` or `desc`. With `online_first=true`, online devices form a leading group: `order` reverses the order *within* each group but never puts offline devices above online ones.
 
 `GET /api/v1/devices/{id}` → `DeviceDetail`
 

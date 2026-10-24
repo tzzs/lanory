@@ -179,6 +179,7 @@ export function DevicesPage() {
       interface: filters.iface || undefined,
       sort,
       order,
+      online_first: true,
       limit: 200,
     }),
     [filters, sort, order],
