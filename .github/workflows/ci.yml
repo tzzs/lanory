@@ -84,7 +84,10 @@ jobs:
 
       - name: go test -race
         # The race detector catches the concurrency bugs that matter most in the
-        # discovery/topology/SSE paths.
+        # discovery/topology/SSE paths. Unlike the static build, race testing
+        # requires cgo even though production builds keep it disabled.
+        env:
+          CGO_ENABLED: "1"
         run: go test ./... -count=1 -race -timeout 15m
 
   # ---------------------------------------------------------------------------
