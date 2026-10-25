@@ -637,9 +637,41 @@ type TopologyNode struct {
 	PrimaryIP   string            `json:"primary_ip,omitempty"`
 	PrimaryMAC  string            `json:"primary_mac,omitempty"`
 	Children    []string          `json:"children,omitempty"`
+	// Addresses lists every address observed for the node, one entry per
+	// address. A router is the canonical multi-homed case: 192.168.100.1 on the
+	// LAN side and 192.168.1.4 on the WAN side are the same device, and a
+	// consumer that only receives PrimaryIP cannot tell which side it is
+	// looking at.
+	Addresses []NodeAddress `json:"addresses,omitempty"`
 	// Unresolved marks a synthetic segment node that groups devices without a
 	// known intermediate.
 	Unresolved bool `json:"unresolved,omitempty"`
+}
+
+// NodeAddress is one address of a topology node, tagged with the interface and
+// the logical side it belongs to.
+//
+// Side is what makes a multi-homed node legible: a router's LAN address and its
+// WAN address live in different subnets and mean different things, so the UI can
+// group addresses by Side instead of printing an undifferentiated list.
+type NodeAddress struct {
+	Address string `json:"address"`
+	// Family is ipv4 or ipv6.
+	Family AddressFamily `json:"family"`
+	// PrefixLength is the CIDR prefix length, 0 when unknown.
+	PrefixLength int `json:"prefix_length,omitempty"`
+	// CIDR is the network this address belongs to (network address/prefix), so
+	// addresses on the same subnet share a value and can be grouped by it.
+	CIDR string `json:"cidr,omitempty"`
+	// Interface is the local interface carrying the address, when it is a local
+	// address. Empty for addresses observed on a remote device.
+	Interface string `json:"interface,omitempty"`
+	// Side is lan, wan or unknown: the role of the interface the address was
+	// observed on. A remote device address has no interface, so its side is
+	// unknown.
+	Side InterfaceRole `json:"side"`
+	// IsPrimary marks the address the node's PrimaryIP was taken from.
+	IsPrimary bool `json:"is_primary,omitempty"`
 }
 
 // TopologyEvidence is the payload of GET /topology/evidence.

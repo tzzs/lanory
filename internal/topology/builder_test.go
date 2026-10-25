@@ -545,6 +545,165 @@ func TestNetworkNodeForBridge(t *testing.T) {
 	}
 }
 
+// A router is multi-homed: the same device owns the LAN gateway address and the
+// address it was given on the WAN side. Both must reach the node, tagged with the
+// interface and side that carry them, and each must report the subnet it lives
+// in so a consumer can group them.
+func TestMultiHomedRouterAddresses(t *testing.T) {
+	const router = "router-1"
+	interfaces := routerInterfaces(router)
+	for i := range interfaces {
+		switch interfaces[i].Name {
+		case "br-lan":
+			interfaces[i].Addresses = []model.DeviceAddress{{
+				Address:      "192.168.100.1",
+				Family:       model.AddressFamilyIPv4,
+				PrefixLength: 24,
+				InterfaceID:  interfaces[i].ID,
+			}}
+		case "eth0":
+			interfaces[i].Addresses = []model.DeviceAddress{{
+				Address:      "192.168.1.4",
+				Family:       model.AddressFamilyIPv4,
+				PrefixLength: 24,
+				InterfaceID:  interfaces[i].ID,
+			}}
+		}
+	}
+
+	store := &fakeStore{
+		devices:    []model.Device{routerDevice(t, router)},
+		interfaces: interfaces,
+	}
+	g, err := NewBuilder(store).Build()
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+
+	n := nodeByID(g, deviceNodeID(router))
+	if n == nil {
+		t.Fatal("router node missing")
+	}
+
+	byAddr := map[string]model.NodeAddress{}
+	for _, a := range n.Addresses {
+		byAddr[a.Address] = a
+	}
+
+	lan, ok := byAddr["192.168.100.1"]
+	if !ok {
+		t.Fatalf("LAN address missing from %+v", n.Addresses)
+	}
+	if lan.Side != model.InterfaceRoleLAN {
+		t.Errorf("LAN address side = %q, want lan", lan.Side)
+	}
+	if lan.Interface != "br-lan" {
+		t.Errorf("LAN address interface = %q, want br-lan", lan.Interface)
+	}
+	if lan.CIDR != "192.168.100.0/24" {
+		t.Errorf("LAN address cidr = %q, want 192.168.100.0/24", lan.CIDR)
+	}
+
+	wan, ok := byAddr["192.168.1.4"]
+	if !ok {
+		t.Fatalf("WAN address missing from %+v", n.Addresses)
+	}
+	if wan.Side != model.InterfaceRoleWAN {
+		t.Errorf("WAN address side = %q, want wan", wan.Side)
+	}
+	if wan.Interface != "eth0" {
+		t.Errorf("WAN address interface = %q, want eth0", wan.Interface)
+	}
+	if wan.CIDR != "192.168.1.0/24" {
+		t.Errorf("WAN address cidr = %q, want 192.168.1.0/24", wan.CIDR)
+	}
+
+	// The two addresses belong to different networks: that is the whole point
+	// of the side tag, and it is what makes them groupable.
+	if lan.CIDR == wan.CIDR {
+		t.Error("the LAN and WAN addresses must report distinct subnets")
+	}
+
+	// Exactly one address is the primary, and it matches PrimaryIP.
+	var primaries []string
+	for _, a := range n.Addresses {
+		if a.IsPrimary {
+			primaries = append(primaries, a.Address)
+		}
+	}
+	if len(primaries) != 1 || primaries[0] != n.PrimaryIP {
+		t.Errorf("primaries = %v, primary ip = %q", primaries, n.PrimaryIP)
+	}
+}
+
+// Two devices on the same subnet report the same CIDR, so the UI can group them;
+// a device on another subnet reports a different one.
+func TestAddressesGroupBySubnet(t *testing.T) {
+	const router = "router-1"
+	store := &fakeStore{
+		devices: []model.Device{
+			routerDevice(t, router),
+			wireDevice("d-a", "02:11:22:33:44:a1", "192.168.100.20", "a", model.DeviceTypeDesktop),
+			wireDevice("d-b", "02:11:22:33:44:a2", "192.168.100.21", "b", model.DeviceTypeLaptop),
+			wireDevice("d-c", "02:11:22:33:44:a3", "192.168.1.77", "c", model.DeviceTypeIoT),
+		},
+		interfaces: routerInterfaces(router),
+		addresses: map[string][]model.DeviceAddress{
+			"d-a": {{Address: "192.168.100.20", Family: model.AddressFamilyIPv4, PrefixLength: 24}},
+			"d-b": {{Address: "192.168.100.21", Family: model.AddressFamilyIPv4, PrefixLength: 24}},
+			"d-c": {{Address: "192.168.1.77", Family: model.AddressFamilyIPv4, PrefixLength: 24}},
+		},
+	}
+	g, err := NewBuilder(store).Build()
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+
+	cidrOfDevice := func(id string) string {
+		n := nodeByID(g, deviceNodeID(id))
+		if n == nil || len(n.Addresses) == 0 {
+			t.Fatalf("no addresses for %s", id)
+		}
+		return n.Addresses[0].CIDR
+	}
+
+	if a, b := cidrOfDevice("d-a"), cidrOfDevice("d-b"); a != b || a != "192.168.100.0/24" {
+		t.Errorf("same-subnet devices disagree: %q vs %q", a, b)
+	}
+	if c := cidrOfDevice("d-c"); c != "192.168.1.0/24" {
+		t.Errorf("d-c cidr = %q, want 192.168.1.0/24", c)
+	}
+	// A remote device address is not tied to a local interface, so it has no
+	// side. Claiming one would be a guess.
+	if side := nodeByID(g, deviceNodeID("d-a")).Addresses[0].Side; side != model.InterfaceRoleUnknown {
+		t.Errorf("remote address side = %q, want unknown", side)
+	}
+}
+
+// Link-local IPv6 addresses are per-interface plumbing and must not be listed.
+func TestLinkLocalAddressesAreSkipped(t *testing.T) {
+	const router = "router-1"
+	interfaces := routerInterfaces(router)
+	for i := range interfaces {
+		if interfaces[i].Name == "br-lan" {
+			interfaces[i].Addresses = []model.DeviceAddress{
+				{Address: "192.168.100.1", Family: model.AddressFamilyIPv4, PrefixLength: 24, InterfaceID: interfaces[i].ID},
+				{Address: "fe80::1", Family: model.AddressFamilyIPv6, PrefixLength: 64, InterfaceID: interfaces[i].ID},
+			}
+		}
+	}
+	store := &fakeStore{devices: []model.Device{routerDevice(t, router)}, interfaces: interfaces}
+	g, err := NewBuilder(store).Build()
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	for _, a := range nodeByID(g, deviceNodeID(router)).Addresses {
+		if isLinkLocal(a.Address) {
+			t.Errorf("link-local address %q must not be listed", a.Address)
+		}
+	}
+}
+
 func TestDepthAndChildren(t *testing.T) {
 	g := &Graph{Nodes: []Node{
 		{ID: "a", Kind: NodeKindDevice},

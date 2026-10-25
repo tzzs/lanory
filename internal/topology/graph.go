@@ -63,6 +63,13 @@ type Node struct {
 	// PrimaryIP and PrimaryMAC are the cached display values.
 	PrimaryIP  string
 	PrimaryMAC string
+	// Addresses lists every address observed for this node, tagged with the
+	// interface and side that carries it. A router is the canonical
+	// multi-homed case: the same box owns 192.168.100.1 on the LAN side and
+	// 192.168.1.4 on the WAN side. Keeping the whole list (rather than only
+	// PrimaryIP) is what lets the UI group a node's addresses by subnet and
+	// explain which side of the box each one belongs to.
+	Addresses []model.NodeAddress
 	// Children lists the nodes grouped under this one, top to bottom.
 	Children []string
 	// Parent is the node this one hangs under. Empty means a root. The
