@@ -17,6 +17,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -239,9 +240,24 @@ func ParseLLDPJSON(data []byte) ([]Neighbour, error) {
 		return nil, fmt.Errorf("lldp: parse json: %w", err)
 	}
 	var out []Neighbour
-	for ifaceName, iface := range raw.LLDP {
+	// Go randomises map iteration, so iterating raw.LLDP directly reports the
+	// same neighbours in a different order on every run. That flaps the topology
+	// view and makes reconciliation unstable, so both map levels are sorted.
+	ifaceNames := make([]string, 0, len(raw.LLDP))
+	for ifaceName := range raw.LLDP {
+		ifaceNames = append(ifaceNames, ifaceName)
+	}
+	sort.Strings(ifaceNames)
+	for _, ifaceName := range ifaceNames {
+		iface := raw.LLDP[ifaceName]
 		// The inner key is the neighbour's chassis name, not the interface.
-		for _, entry := range iface.Interface {
+		neighbourKeys := make([]string, 0, len(iface.Interface))
+		for key := range iface.Interface {
+			neighbourKeys = append(neighbourKeys, key)
+		}
+		sort.Strings(neighbourKeys)
+		for _, key := range neighbourKeys {
+			entry := iface.Interface[key]
 			n := Neighbour{Interface: ifaceName}
 			if len(entry.Chassis) > 0 {
 				ch := entry.Chassis[0]

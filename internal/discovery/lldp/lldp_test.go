@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -49,6 +50,40 @@ const lldpJSON = `{
     }
   }
 }`
+
+// lldpJSONMulti holds two neighbours on one interface, so the parser's inner
+// (per-interface) map order is observable too.
+const lldpJSONMulti = `{
+  "lldp": {
+    "eth0": {
+      "interface": {
+        "zeta-ap": {
+          "chassis": [{"id": {"type": "local", "value": "zeta-ap"}, "name": "zeta-ap"}],
+          "port": [{"id": {"type": "local", "value": "wlan0"}}]
+        },
+        "alpha-ap": {
+          "chassis": [{"id": {"type": "local", "value": "alpha-ap"}, "name": "alpha-ap"}],
+          "port": [{"id": {"type": "local", "value": "wlan0"}}]
+        }
+      }
+    }
+  }
+}`
+
+// neighbourOrder renders the parsed neighbours as an "interface/name" list,
+// which is the order the parser is supposed to pin down.
+func neighbourOrder(t *testing.T, data string) string {
+	t.Helper()
+	neighbours, err := ParseLLDPJSON([]byte(data))
+	if err != nil {
+		t.Fatalf("ParseLLDPJSON: %v", err)
+	}
+	parts := make([]string, 0, len(neighbours))
+	for _, n := range neighbours {
+		parts = append(parts, n.Interface+"/"+n.SystemName)
+	}
+	return strings.Join(parts, ",")
+}
 
 func writeTemp(t *testing.T, content string) string {
 	t.Helper()
@@ -124,6 +159,34 @@ func TestCollectNeighbours(t *testing.T) {
 	}
 	if xiaomi.systemName != "Xiaomi Router" {
 		t.Errorf("system name = %q", xiaomi.systemName)
+	}
+}
+
+// TestParseLLDPJSONIsDeterministic pins the ordering: map iteration is
+// randomised, so an unsorted parser reports the same neighbours in a different
+// order on every run, which flaps the topology view and makes the ordering
+// assertion in TestCollectNeighbours meaningless rather than flaky.
+func TestParseLLDPJSONIsDeterministic(t *testing.T) {
+	cases := []struct {
+		name string
+		data string
+		want string
+	}{
+		{"interfaces", lldpJSON, "eth1/Xiaomi Router,eth2/client-desktop"},
+		{"neighbours on one interface", lldpJSONMulti, "eth0/alpha-ap,eth0/zeta-ap"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			first := neighbourOrder(t, tc.data)
+			for i := 0; i < 50; i++ {
+				if got := neighbourOrder(t, tc.data); got != first {
+					t.Fatalf("run %d order = %q, want %q (first run)", i, got, first)
+				}
+			}
+			if first != tc.want {
+				t.Errorf("order = %q, want %q", first, tc.want)
+			}
+		})
 	}
 }
 
