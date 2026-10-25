@@ -33,10 +33,36 @@ const nodeTypes = { lanory: LanoryNode }
 
 const UNVERIFIED_THRESHOLD = 0.6
 
+/**
+ * The theme the app is *rendering* with, resolved from the persisted mode.
+ *
+ * `'system'` is resolved against the same media query `lib/theme.ts` uses to
+ * put `dark` on the root element: React Flow's own `'system'` watches a
+ * different class (`react-flow.dark`, driven by its own `colorMode` prop) than
+ * the app's class-based dark mode, so letting React Flow resolve it would let
+ * the two disagree. The store value alone is not enough either — a `'system'
+ * mode in a browser set to light must render the light controls.
+ */
+function useResolvedColorMode(): 'light' | 'dark' {
+  const mode = useUIStore((s) => s.theme)
+  const [systemDark, setSystemDark] = useState(
+    () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-color-scheme: dark)').matches,
+  )
+  useEffect(() => {
+    const media = window.matchMedia?.('(prefers-color-scheme: dark)')
+    if (!media) return
+    const onChange = (e: MediaQueryListEvent) => setSystemDark(e.matches)
+    media.addEventListener('change', onChange)
+    return () => media.removeEventListener('change', onChange)
+  }, [])
+  return mode === 'system' ? (systemDark ? 'dark' : 'light') : mode
+}
+
 function TopologyCanvas() {
   const { data, isLoading, isError, error, refetch } = useTopology()
   const saveLayout = useSaveLayout()
   const monitoring = useMonitoring()
+  const colorMode = useResolvedColorMode()
   const selectDevice = useUIStore((s) => s.selectDevice)
   const selectEdge = useUIStore((s) => s.selectEdge)
   const selectedEdgeId = useUIStore((s) => s.selectedEdgeId)
@@ -219,69 +245,85 @@ function TopologyCanvas() {
   return (
     <div className="flex h-full min-h-0">
       <div className="relative min-w-0 flex-1">
-        <div className="pointer-events-none absolute bottom-5 left-14 z-10 max-w-sm rounded-md border border-border bg-surface/95 px-3 py-2 text-[11px] text-muted">{t('topology.hierarchy_hint')}</div>
-        {/* toolbar */}
-        <div className="absolute left-4 top-4 z-10 flex flex-wrap items-center gap-2">
-          <Button size="sm" onClick={onAutoLayout}>
-            <LayoutGrid size={14} aria-hidden="true" />
-            {t('topology.reset_layout')}
-          </Button>
-          <Button size="sm" onClick={onSaveLayout} disabled={!dirty || saveLayout.isPending}>
-            <Save size={14} aria-hidden="true" />
-            {saveLayout.isPending ? t('app.loading') : t('app.save')}
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => fitView({ padding: 0.15, duration: 240 })}>
-            <Maximize2 size={14} aria-hidden="true" />
-            {t('topology.fit_view')}
-          </Button>
-          {unplaced.length ? <Button size="sm" variant="ghost" onClick={() => void fitView({ nodes: unplaced, padding: 0.2, duration: 0 })}>{t('topology.view_unmapped', { count: unplaced.length })}</Button> : null}
-          <div className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
-          <Button size="sm" variant="ghost" onClick={() => setAddOpen(true)}>
-            <Plus size={14} aria-hidden="true" />
-            {t('topology.add_device')}
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => setAddLinkOpen(true)}>
-            <Link2 size={14} aria-hidden="true" />
-            {t('topology.add_link')}
-          </Button>
-          {dirty ? (
-            <Badge tone="warning" className="ml-1">
-              {t('topology.manual_layout')}
-            </Badge>
-          ) : null}
-          {!showDetail ? (
-            <span className="text-[11px] text-muted">{t('topology.zoom_for_detail')}</span>
-          ) : null}
-          <div className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setShowOffline((v) => !v)}
-            aria-pressed={showOffline}
-            title={showOffline ? t('topology.hide_offline') : t('topology.show_offline')}
-          >
-            <Eye size={14} aria-hidden="true" className={showOffline ? '' : 'opacity-40'} />
-            {showOffline ? t('topology.hide_offline') : t('topology.show_offline')}
-            {!showOffline && hiddenOffline > 0 ? (
-              <span className="ml-1 rounded bg-surface-2 px-1 text-[10px] text-muted">{hiddenOffline}</span>
-            ) : null}
-          </Button>
-        </div>
-
-        {!showOffline && hiddenOffline > 0 ? (
-          <div className="absolute right-4 top-4 z-10 flex items-center gap-2 rounded-md border border-border bg-surface/95 px-2.5 py-1.5 text-[11px] text-muted">
-            <span>{t('topology.offline_hidden', { count: hiddenOffline })}</span>
-            <button
-              type="button"
-              className="font-medium text-accent underline-offset-2 hover:underline"
-              onClick={() => setShowOffline(true)}
-            >
-              {t('topology.offline_hidden_show')}
-            </button>
+        {/* Overlays live in the normal flow above the canvas, not pinned over it:
+            at 390px a wrapped 2-3 row toolbar used to collide with the badge,
+            the hint and the save error, and the error banner sat on top of the
+            toolbar's second row. The stack below is what the toolbar's height
+            actually is, so the banner can never overlap it. */}
+        <div data-testid="topology-overlays" className="absolute inset-x-0 top-0 z-10 flex flex-col items-end gap-2 p-4">
+          <div className="pointer-events-none w-full">
+            {/* the hint is decoration, not content: below `sm` it covers the
+                canvas it is describing, so it is dropped there. */}
+            <div className="hidden sm:block max-w-sm rounded-md border border-border bg-surface/95 px-3 py-2 text-[11px] text-muted">{t('topology.hierarchy_hint')}</div>
           </div>
-        ) : null}
 
-        {saveLayout.isError ? <div role="alert" className="absolute left-4 top-16 z-10 rounded-md border border-danger/30 bg-surface px-3 py-2 text-xs text-danger">{saveLayout.error instanceof Error ? saveLayout.error.message : t('app.error')}</div> : null}
+          {/* toolbar. `w-full` + `flex-wrap` bounds it to the overlay
+              column (the canvas minus its p-4 gutter), so at 390px the buttons
+              wrap onto more rows instead of running off screen. */}
+          <div className="flex w-full max-w-full flex-wrap items-center gap-2">
+            <Button size="sm" onClick={onAutoLayout}>
+              <LayoutGrid size={14} aria-hidden="true" />
+              {t('topology.reset_layout')}
+            </Button>
+            <Button size="sm" onClick={onSaveLayout} disabled={!dirty || saveLayout.isPending}>
+              <Save size={14} aria-hidden="true" />
+              {saveLayout.isPending ? t('app.loading') : t('app.save')}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => fitView({ padding: 0.15, duration: 240 })}>
+              <Maximize2 size={14} aria-hidden="true" />
+              {t('topology.fit_view')}
+            </Button>
+            {unplaced.length ? <Button size="sm" variant="ghost" onClick={() => void fitView({ nodes: unplaced, padding: 0.2, duration: 0 })}>{t('topology.view_unmapped', { count: unplaced.length })}</Button> : null}
+            <div className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
+            <Button size="sm" variant="ghost" onClick={() => setAddOpen(true)}>
+              <Plus size={14} aria-hidden="true" />
+              {t('topology.add_device')}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setAddLinkOpen(true)}>
+              <Link2 size={14} aria-hidden="true" />
+              {t('topology.add_link')}
+            </Button>
+            {dirty ? (
+              <Badge tone="warning" className="ml-1">
+                {t('topology.manual_layout')}
+              </Badge>
+            ) : null}
+            {!showDetail ? (
+              <span className="text-[11px] text-muted">{t('topology.zoom_for_detail')}</span>
+            ) : null}
+            <div className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setShowOffline((v) => !v)}
+              aria-pressed={showOffline}
+              title={showOffline ? t('topology.hide_offline') : t('topology.show_offline')}
+            >
+              <Eye size={14} aria-hidden="true" className={showOffline ? '' : 'opacity-40'} />
+              {showOffline ? t('topology.hide_offline') : t('topology.show_offline')}
+              {!showOffline && hiddenOffline > 0 ? (
+                <span className="ml-1 rounded bg-surface-2 px-1 text-[10px] text-muted">{hiddenOffline}</span>
+              ) : null}
+            </Button>
+          </div>
+
+          {/* the hidden-offline count and the save error are stacked under the
+              toolbar, so a 2-3 row toolbar pushes them down instead of under it. */}
+          {!showOffline && hiddenOffline > 0 ? (
+            <div className="flex items-center gap-2 rounded-md border border-border bg-surface/95 px-2.5 py-1.5 text-[11px] text-muted">
+              <span>{t('topology.offline_hidden', { count: hiddenOffline })}</span>
+              <button
+                type="button"
+                className="font-medium text-accent underline-offset-2 hover:underline"
+                onClick={() => setShowOffline(true)}
+              >
+                {t('topology.offline_hidden_show')}
+              </button>
+            </div>
+          ) : null}
+
+          {saveLayout.isError ? <div role="alert" className="max-w-full rounded-md border border-danger/30 bg-surface px-3 py-2 text-xs text-danger">{saveLayout.error instanceof Error ? saveLayout.error.message : t('app.error')}</div> : null}
+        </div>
 
         <ReactFlow
           nodes={nodes}
@@ -295,17 +337,29 @@ function TopologyCanvas() {
           nodesDraggable
           nodesConnectable={false}
           elementsSelectable
+          colorMode={colorMode}
           minZoom={0.2}
           maxZoom={2.5}
           proOptions={{ hideAttribution: true }}
           defaultEdgeOptions={{ type: 'smoothstep' }}
         >
           <Background gap={16} size={1} color="var(--border)" />
-          <Controls showInteractive={false} className="!bg-surface !border-border" />
+          {/* React Flow only re-themes its own panels from `colorMode` (above),
+              and that palette is its own greys, not the app's tokens. The
+              controls' icon colour comes from `currentColor`, so it inherits
+              whatever the buttons' text colour is: the surface/border
+              overrides keep the panel inside the design system, and the
+              colour override keeps the icons legible on it in both themes. */}
+          <Controls
+            showInteractive={false}
+            className="!border-border !bg-surface"
+            style={{ '--xy-controls-button-color': 'var(--fg)' } as React.CSSProperties}
+          />
           <MiniMap
             pannable
             zoomable
-            className="!bg-surface"
+            className="!border-border"
+            style={{ '--xy-minimap-background-color': 'var(--surface)' } as React.CSSProperties}
             maskColor="rgba(0,0,0,0.06)"
             nodeColor={(node) => {
               const data = node.data as TopologyNodeData
@@ -432,6 +486,7 @@ function AddLinkModal({ open, onClose }: { open: boolean; onClose: () => void })
 export function TopologyPage() {
   return (
     <div className="h-full">
+      <h1 className="sr-only">{t('topology.title')}</h1>
       <ReactFlowProvider>
         <TopologyCanvas />
       </ReactFlowProvider>

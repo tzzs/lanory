@@ -94,3 +94,19 @@ body {
 .react-flow__handle {
   opacity: 0;
 }
+
+/* Honour the OS "reduce motion" preference. The three animations in the app
+   (fade-in, slide-up, pulse) are decorative entrances, so they are removed
+   globally here rather than per component: one place covers every call site,
+   including ones added later. Transitions are shortened rather than dropped so
+   hover/focus colour changes still read as a change. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
