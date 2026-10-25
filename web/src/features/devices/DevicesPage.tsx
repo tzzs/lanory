@@ -22,6 +22,7 @@ import {
   ErrorState,
   StatusDot,
   Modal,
+  PageHeader,
 } from '@/components/ui'
 import {
   deviceIcon,
@@ -197,7 +198,7 @@ export function DevicesPage() {
     [filters, sort, order],
   )
 
-  const { data, isLoading, isError, error, refetch } = useDevices(query)
+  const { data, isLoading, isFetching, isError, error, refetch } = useDevices(query)
   const detail = useDevice(routeId ?? null)
 
   // Keep the store in sync when a device is opened by URL.
@@ -217,87 +218,108 @@ export function DevicesPage() {
   return (
     <div className="flex h-full min-h-0">
       <div className="flex min-w-0 flex-1 flex-col gap-4 p-6">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-fg">{t('devices.title')}</h2>
-            <p className="text-xs text-muted">
-              {t('devices.count', { count: data?.total ?? 0 })}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Select
-              className="w-auto min-w-[120px]"
-              value={sort}
-              onChange={(e) => setSort(e.target.value)}
-              aria-label={t('devices.sort_name')}
-            >
-              <option value="last_seen">{t('devices.sort_last_seen')}</option>
-              <option value="name">{t('devices.sort_name')}</option>
-              <option value="ip">{t('devices.sort_ip')}</option>
-              <option value="type">{t('devices.sort_type')}</option>
-            </Select>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setOrder(order === 'asc' ? 'desc' : 'asc')}
-              aria-label="toggle order"
-            >
-              {order === 'asc' ? '↑' : '↓'}
-            </Button>
-            <Button variant="primary" size="sm" onClick={() => setAddOpen(true)}>
-              <Plus size={14} aria-hidden="true" />
-              {t('devices.add')}
-            </Button>
-          </div>
-        </div>
+        <PageHeader
+          title={t('devices.title')}
+          description={t('devices.count', { count: data?.total ?? 0 })}
+          actions={
+            <>
+              <Select
+                className="w-auto min-w-[120px]"
+                value={sort}
+                onChange={(e) => setSort(e.target.value)}
+                aria-label={t('devices.sort_name')}
+              >
+                <option value="last_seen">{t('devices.sort_last_seen')}</option>
+                <option value="name">{t('devices.sort_name')}</option>
+                <option value="ip">{t('devices.sort_ip')}</option>
+                <option value="type">{t('devices.sort_type')}</option>
+              </Select>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setOrder(order === 'asc' ? 'desc' : 'asc')}
+                aria-label="toggle order"
+              >
+                {order === 'asc' ? '↑' : '↓'}
+              </Button>
+              <Button variant="primary" size="sm" onClick={() => setAddOpen(true)}>
+                <Plus size={14} aria-hidden="true" />
+                {t('devices.add')}
+              </Button>
+            </>
+          }
+        />
 
         <DeviceFilters />
 
-        <Card className="min-h-0 flex-1 overflow-auto">
+        <Card className="min-h-0 flex-1 overflow-auto" aria-busy={isFetching || undefined}>
+          {/* The table's DOM has to outlive its data. The list is re-fetched on
+              every poll and on every filter keystroke, and each of those used
+              to swap the rows for a skeleton (or for the error state when a
+              poll failed), which unmounts the row the keyboard user is standing
+              on and drops focus to <body>. So: the skeleton is only for the
+              first load, and a failed or emptied background refetch is reported
+              *beside* the rows that are still on screen rather than instead of
+              them. `aria-busy` tells a screen reader the list is refreshing
+              without moving anything. */}
           {isLoading ? (
             <div className="space-y-2 p-4">
               {Array.from({ length: 8 }).map((_, i) => (
                 <Skeleton key={i} className="h-10" />
               ))}
             </div>
-          ) : isError ? (
-            <ErrorState
-              title={t('app.error')}
-              description={error instanceof Error ? error.message : undefined}
-              action={
-                <Button variant="primary" onClick={() => void refetch()}>
-                  {t('app.retry')}
-                </Button>
-              }
-            />
           ) : devices.length === 0 ? (
-            <EmptyState title={t('devices.empty')} description={t('devices.subtitle')} />
+            // No rows to preserve: an empty result is an empty state, unless the
+            // request itself failed, in which case the error owns the card.
+            isError ? (
+              <ErrorState
+                title={t('app.error')}
+                description={error instanceof Error ? error.message : undefined}
+                action={
+                  <Button variant="primary" onClick={() => void refetch()}>
+                    {t('app.retry')}
+                  </Button>
+                }
+              />
+            ) : (
+              <EmptyState title={t('devices.empty')} description={t('devices.subtitle')} />
+            )
           ) : (
-            <Table>
-              <THead>
-                <TR className="hover:bg-transparent">
-                  <TH>{t('devices.col_name')}</TH>
-                  <TH>{t('devices.col_type')}</TH>
-                  <TH>{t('devices.col_ip')}</TH>
-                  <TH>{t('devices.col_mac')}</TH>
-                  <TH>{t('devices.col_source')}</TH>
-                  <TH>{t('devices.col_status')}</TH>
-                  <TH>{t('devices.col_last_seen')}</TH>
-                </TR>
-              </THead>
-              <TBody>
-                {devices.map((device) => (
-                  <DeviceRow
-                    key={device.id}
-                    device={device}
-                    onSelect={(id) => {
-                      selectDevice(id)
-                      void navigate(`/devices/${id}`)
-                    }}
-                  />
-                ))}
-              </TBody>
-            </Table>
+            <>
+              {isError ? (
+                <div role="alert" className="flex items-center justify-between gap-3 border-b border-danger/30 bg-danger/12 px-3 py-2 text-xs text-danger">
+                  <span>{error instanceof Error ? error.message : t('app.error')}</span>
+                  <Button variant="ghost" size="sm" onClick={() => void refetch()}>
+                    {t('app.retry')}
+                  </Button>
+                </div>
+              ) : null}
+              <Table>
+                <THead>
+                  <TR className="hover:bg-transparent">
+                    <TH>{t('devices.col_name')}</TH>
+                    <TH>{t('devices.col_type')}</TH>
+                    <TH>{t('devices.col_ip')}</TH>
+                    <TH>{t('devices.col_mac')}</TH>
+                    <TH>{t('devices.col_source')}</TH>
+                    <TH>{t('devices.col_status')}</TH>
+                    <TH>{t('devices.col_last_seen')}</TH>
+                  </TR>
+                </THead>
+                <TBody>
+                  {devices.map((device) => (
+                    <DeviceRow
+                      key={device.id}
+                      device={device}
+                      onSelect={(id) => {
+                        selectDevice(id)
+                        void navigate(`/devices/${id}`)
+                      }}
+                    />
+                  ))}
+                </TBody>
+              </Table>
+            </>
           )}
         </Card>
       </div>

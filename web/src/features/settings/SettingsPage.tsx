@@ -4,7 +4,7 @@ import { t } from '@/i18n'
 import { useSettings, usePatchSettings, useDiscoveryStatus, useHealth } from '@/hooks/useApi'
 import { useUIStore } from '@/stores/ui'
 import { setTheme, type ThemeMode } from '@/lib/theme'
-import { Card, CardHeader, CardTitle, CardBody, Button, Input, Checkbox, Badge, Skeleton, FieldRow, ErrorState, Field } from '@/components/ui'
+import { Card, CardHeader, CardBody, Button, Input, Label, Checkbox, Badge, Skeleton, FieldRow, ErrorState, PageHeader, SectionHeader } from '@/components/ui'
 import { formatBytes, formatRelativeTime } from '@/lib/devices'
 
 const THEME_OPTIONS: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
@@ -72,10 +72,12 @@ export function SettingsPage() {
 
   return (
     <div className="space-y-5 p-6">
+      <PageHeader title={t('settings.title')} description={t('settings.subtitle')} />
+
       {/* appearance */}
       <Card>
         <CardHeader>
-          <CardTitle>{t('settings.appearance')}</CardTitle>
+          <SectionHeader title={t('settings.appearance')} />
         </CardHeader>
         <CardBody className="space-y-4">
           <div>
@@ -115,12 +117,16 @@ export function SettingsPage() {
       {/* discovery */}
       <Card>
         <CardHeader>
-          <CardTitle>{t('settings.discovery')}</CardTitle>
-          {discovery.data ? (
-            <Badge tone={discovery.data.enabled ? 'success' : 'neutral'}>
-              {discovery.data.enabled ? t('discovery.enabled') : t('app.no')}
-            </Badge>
-          ) : null}
+          <SectionHeader
+            title={t('settings.discovery')}
+            actions={
+              discovery.data ? (
+                <Badge tone={discovery.data.enabled ? 'success' : 'neutral'}>
+                  {discovery.data.enabled ? t('discovery.enabled') : t('app.no')}
+                </Badge>
+              ) : null
+            }
+          />
         </CardHeader>
         <CardBody className="space-y-3">
           <Checkbox
@@ -128,16 +134,22 @@ export function SettingsPage() {
             checked={bool('discovery.enabled', true)}
             onChange={(e) => setBool('discovery.enabled', e.target.checked)}
           />
-          <Field label={t('settings.discovery_interval')}>
+          {/* Stacked label above the control: the label length must not decide
+              where the input starts, or two fields in one card misalign. */}
+          <div>
+            <Label htmlFor="settings-discovery-interval">{t('settings.discovery_interval')}</Label>
             <Input
+              id="settings-discovery-interval"
               className="max-w-[200px] font-mono"
               value={values['discovery.interval'] ?? '10m'}
               onChange={(e) => set('discovery.interval', e.target.value)}
               placeholder="10m"
             />
-          </Field>
-          <Field label={t('settings.retention')}>
+          </div>
+          <div>
+            <Label htmlFor="settings-retention">{t('settings.retention')}</Label>
             <Input
+              id="settings-retention"
               className="max-w-[200px] font-mono"
               type="number"
               min={1}
@@ -145,7 +157,7 @@ export function SettingsPage() {
               value={values['database.retention_days'] ?? '30'}
               onChange={(e) => set('database.retention_days', e.target.value)}
             />
-          </Field>
+          </div>
 
           {discovery.data?.last_job ? (
             <dl className="divide-y divide-border border-t border-border pt-2">
@@ -166,7 +178,7 @@ export function SettingsPage() {
       {discovery.data?.collectors && discovery.data.collectors.length > 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle>{t('settings.collectors')}</CardTitle>
+            <SectionHeader title={t('settings.collectors')} />
           </CardHeader>
           <CardBody>
             <ul className="divide-y divide-border">
@@ -196,7 +208,7 @@ export function SettingsPage() {
       {/* monitoring */}
       <Card>
         <CardHeader>
-          <CardTitle>{t('settings.monitoring')}</CardTitle>
+          <SectionHeader title={t('settings.monitoring')} />
         </CardHeader>
         <CardBody className="space-y-3">
           <Checkbox
@@ -205,16 +217,20 @@ export function SettingsPage() {
             onChange={(e) => setBool('monitoring.enabled', e.target.checked)}
           />
           <div className="grid gap-4 sm:grid-cols-3">
-            <Field label={t('settings.monitoring_interval')}>
+            <div>
+              <Label htmlFor="settings-monitoring-interval">{t('settings.monitoring_interval')}</Label>
               <Input
+                id="settings-monitoring-interval"
                 className="font-mono"
                 value={values['monitoring.interval'] ?? '60s'}
                 onChange={(e) => set('monitoring.interval', e.target.value)}
                 placeholder="60s"
               />
-            </Field>
-            <Field label={t('settings.failure_threshold')}>
+            </div>
+            <div>
+              <Label htmlFor="settings-failure-threshold">{t('settings.failure_threshold')}</Label>
               <Input
+                id="settings-failure-threshold"
                 className="font-mono"
                 type="number"
                 min={1}
@@ -222,15 +238,19 @@ export function SettingsPage() {
                 value={values['monitoring.failure_threshold'] ?? '3'}
                 onChange={(e) => set('monitoring.failure_threshold', e.target.value)}
               />
-            </Field>
-            <Field label={t('monitoring.probe_timeout' in values ? 'monitoring.probe_timeout' : 'settings.monitoring_interval')}>
+            </div>
+            <div>
+              <Label htmlFor="settings-monitoring-timeout">
+                {t('monitoring.probe_timeout' in values ? 'monitoring.probe_timeout' : 'settings.monitoring_interval')}
+              </Label>
               <Input
+                id="settings-monitoring-timeout"
                 className="font-mono"
                 value={values['monitoring.timeout'] ?? '3s'}
                 onChange={(e) => set('monitoring.timeout', e.target.value)}
                 placeholder="3s"
               />
-            </Field>
+            </div>
           </div>
         </CardBody>
       </Card>
@@ -238,7 +258,7 @@ export function SettingsPage() {
       {/* topology */}
       <Card>
         <CardHeader>
-          <CardTitle>{t('settings.topology')}</CardTitle>
+          <SectionHeader title={t('settings.topology')} />
         </CardHeader>
         <CardBody className="space-y-3">
           <Checkbox
@@ -257,7 +277,7 @@ export function SettingsPage() {
       {/* security */}
       <Card>
         <CardHeader>
-          <CardTitle>{t('settings.security')}</CardTitle>
+          <SectionHeader title={t('settings.security')} />
         </CardHeader>
         <CardBody className="space-y-3">
           <Checkbox
@@ -275,7 +295,7 @@ export function SettingsPage() {
       {/* about */}
       <Card>
         <CardHeader>
-          <CardTitle>{t('settings.about')}</CardTitle>
+          <SectionHeader title={t('settings.about')} />
         </CardHeader>
         <CardBody>
           <dl className="divide-y divide-border">

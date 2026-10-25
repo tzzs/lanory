@@ -75,6 +75,70 @@ export function CardBody({ className, ...props }: React.HTMLAttributes<HTMLDivEl
 }
 
 /* -------------------------------------------------------------------------- */
+/* Page / section headings                                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The single page-level title, with an optional description and actions slot.
+ *
+ * It renders `h1`, not `h2`: before this component the document had no `h1` at
+ * all, so a screen reader's heading outline started at level two and "go to the
+ * page heading" went nowhere. Sub-sections use `SectionHeader` (`h2`), which
+ * keeps the levels ordered instead of jumping from one to three.
+ */
+export function PageHeader({
+  title,
+  description,
+  actions,
+}: {
+  title: React.ReactNode
+  description?: React.ReactNode
+  actions?: React.ReactNode
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="min-w-0">
+        <h1 className="text-lg font-semibold text-fg">{title}</h1>
+        {description ? <p className="text-xs text-muted">{description}</p> : null}
+      </div>
+      {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
+    </div>
+  )
+}
+
+/**
+ * A sub-section of a page: `h2` under `PageHeader`'s `h1`. The typography is
+ * the same as `CardTitle`, so a section reads the same whether or not it sits
+ * inside a card; the spacing above/below stays with the call site, because a
+ * section in a grid and a section above a table need different rhythm.
+ *
+ * `w-full` is deliberate: the element is also used as the sole child of
+ * `CardHeader`, which is a flex row, and without it the heading would shrink to
+ * its text and the actions slot would stop hugging the right edge.
+ */
+export function SectionHeader({
+  title,
+  description,
+  actions,
+  className,
+}: {
+  title: React.ReactNode
+  description?: React.ReactNode
+  actions?: React.ReactNode
+  className?: string
+}) {
+  return (
+    <div className={cn('flex w-full flex-wrap items-center justify-between gap-3', className)}>
+      <div className="min-w-0">
+        <h2 className="text-sm font-semibold text-fg">{title}</h2>
+        {description ? <p className="mt-0.5 text-[11px] text-muted">{description}</p> : null}
+      </div>
+      {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
+    </div>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
 /* Badge                                                                      */
 /* -------------------------------------------------------------------------- */
 
@@ -162,6 +226,20 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
 )
 Input.displayName = 'Input'
 
+/**
+ * A field label. Stacked above its control rather than set inline, so inputs in
+ * the same column start at the same x no matter how long their labels are.
+ * Pass `htmlFor` to tie it to the control's `id`; a label that is not
+ * associated with a control gives that control no accessible name.
+ */
+export function Label({ className, children, ...props }: React.LabelHTMLAttributes<HTMLLabelElement>) {
+  return (
+    <label className={cn('mb-1.5 block text-xs text-muted', className)} {...props}>
+      {children}
+    </label>
+  )
+}
+
 // Form field wrapper with consistent spacing between label and input
 export function Field({
   label,
@@ -176,11 +254,7 @@ export function Field({
 }) {
   return (
     <div className={className}>
-      {label ? (
-        <label className="block mb-1.5">
-          <span className="text-xs text-muted">{label}</span>
-        </label>
-      ) : null}
+      {label ? <Label>{label}</Label> : null}
       {children}
       {description ? (
         <p className="mt-1.5 text-[11px] text-muted">{description}</p>

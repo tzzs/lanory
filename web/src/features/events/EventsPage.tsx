@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { t } from '@/i18n'
 import { useEvents } from '@/hooks/useApi'
-import { Card, Button, Select, Input, Badge, Skeleton, EmptyState, ErrorState, Table, THead, TBody, TR, TH, TD } from '@/components/ui'
+import { Card, Button, Select, Input, Badge, Skeleton, EmptyState, ErrorState, Table, THead, TBody, TR, TH, TD, PageHeader } from '@/components/ui'
 import { formatRelativeTime, formatTimestamp } from '@/lib/devices'
 import type { EventType } from '@/types/api'
 
@@ -45,15 +45,15 @@ export function EventsPage() {
 
   return (
     <div className="space-y-4 p-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold text-fg">{t('events.title')}</h2>
-          <p className="text-xs text-muted">{t('events.total', { count: total })}</p>
-        </div>
-        <Button size="sm" variant="ghost" onClick={() => void refetch()}>
-          {t('app.refresh')}
-        </Button>
-      </div>
+      <PageHeader
+        title={t('events.title')}
+        description={t('events.total', { count: total })}
+        actions={
+          <Button size="sm" variant="ghost" onClick={() => void refetch()}>
+            {t('app.refresh')}
+          </Button>
+        }
+      />
 
       <Card className="p-3">
         <div className="flex flex-wrap items-center gap-2">

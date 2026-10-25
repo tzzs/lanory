@@ -16,6 +16,8 @@ import {
   TH,
   TD,
   StatusDot,
+  PageHeader,
+  SectionHeader,
 } from '@/components/ui'
 import { formatLatency, formatPercent, formatSpeed, formatBytes, formatRelativeTime } from '@/lib/devices'
 import type { InterfaceStatus, ProbeStatus } from '@/types/api'
@@ -187,6 +189,8 @@ export function MonitoringPage() {
 
   return (
     <div className="space-y-5 p-6">
+      <PageHeader title={t('monitoring.title')} description={t('monitoring.subtitle')} />
+
       {/* source caveat - this is a correctness requirement, not decoration */}
       <p className="rounded-md border border-border bg-surface-2 px-3 py-2 text-[11px] text-muted">
         {t('monitoring.source_note')}
@@ -194,7 +198,7 @@ export function MonitoringPage() {
 
       {/* interfaces */}
       <section>
-        <h2 className="mb-2 text-sm font-semibold text-fg">{t('monitoring.lan_wan')}</h2>
+        <SectionHeader title={t('monitoring.lan_wan')} className="mb-2" />
         {data.interfaces.length === 0 ? (
           <Card>
             <EmptyState title={t('overview.no_devices')} />
@@ -210,13 +214,16 @@ export function MonitoringPage() {
 
       {/* probes */}
       <section>
-        <div className="mb-2 flex items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold text-fg">{t('monitoring.device_status')}</h2>
-          <Button size="sm" variant="ghost" onClick={() => void refetch()}>
-            <Activity size={14} aria-hidden="true" />
-            {t('app.refresh')}
-          </Button>
-        </div>
+        <SectionHeader
+          title={t('monitoring.device_status')}
+          className="mb-2"
+          actions={
+            <Button size="sm" variant="ghost" onClick={() => void refetch()}>
+              <Activity size={14} aria-hidden="true" />
+              {t('app.refresh')}
+            </Button>
+          }
+        />
 
         <Card>
           {data.probes.length === 0 ? (
@@ -247,7 +254,7 @@ export function MonitoringPage() {
       {/* latency trend for the first few probes */}
       {data.probes.some((p) => (p.recent?.length ?? 0) >= 2) ? (
         <section>
-          <h2 className="mb-2 text-sm font-semibold text-fg">{t('monitoring.latency')}</h2>
+          <SectionHeader title={t('monitoring.latency')} className="mb-2" />
           <Card>
             <CardBody className="space-y-3">
               {data.probes

@@ -19,6 +19,7 @@ import {
   Button,
   Badge,
   StatusDot,
+  PageHeader,
 } from '@/components/ui'
 import {
   deviceIcon,
@@ -179,6 +180,8 @@ export function OverviewPage() {
 
   return (
     <div className="space-y-5 p-6">
+      <PageHeader title={t('overview.title')} description={t('overview.subtitle')} />
+
       {/* stats */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile label={t('overview.total_devices')} value={counts.total} icon={MonitorSmartphone} />
