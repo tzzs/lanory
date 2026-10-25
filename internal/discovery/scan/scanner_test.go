@@ -5,12 +5,18 @@ import (
 	"errors"
 	"net"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
 
 // fakeProber answers for a fixed set of hosts.
+//
+// seen is mutex-guarded because the scanner calls Ping from several worker
+// goroutines concurrently: that concurrency is part of the Prober contract, so
+// the test double has to tolerate it rather than the scanner serialising.
 type fakeProber struct {
+	mu      sync.Mutex
 	answers map[string]bool
 	seen    []string
 	delay   time.Duration
@@ -21,7 +27,9 @@ func (f *fakeProber) Ping(ctx context.Context, host net.IP, timeout time.Duratio
 	if f.err != nil {
 		return false, f.err
 	}
+	f.mu.Lock()
 	f.seen = append(f.seen, host.String())
+	f.mu.Unlock()
 	if f.delay > 0 {
 		select {
 		case <-ctx.Done():
@@ -30,6 +38,14 @@ func (f *fakeProber) Ping(ctx context.Context, host net.IP, timeout time.Duratio
 		}
 	}
 	return f.answers[host.String()], nil
+}
+
+// hosts returns a copy of the hosts Ping was called with, so assertions do not
+// race the scanner's workers.
+func (f *fakeProber) hosts() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.seen...)
 }
 
 func testLimit() Limit {
@@ -62,8 +78,8 @@ func TestRefusesWithoutAuthorisedSubnets(t *testing.T) {
 	if len(res) != 0 {
 		t.Errorf("Collect returned %d results with no authorised subnets", len(res))
 	}
-	if len(p.seen) != 0 {
-		t.Errorf("prober was asked to ping %d hosts despite no authorisation", len(p.seen))
+	if seen := p.hosts(); len(seen) != 0 {
+		t.Errorf("prober was asked to ping %d hosts despite no authorisation", len(seen))
 	}
 }
 
@@ -184,8 +200,8 @@ func TestMaxHostsPerRun(t *testing.T) {
 	if _, err := c.Collect(context.Background()); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
-	if len(p.seen) > 10 {
-		t.Errorf("probed %d hosts, above the per-run cap of 10", len(p.seen))
+	if seen := p.hosts(); len(seen) > 10 {
+		t.Errorf("probed %d hosts, above the per-run cap of 10", len(seen))
 	}
 }
 
