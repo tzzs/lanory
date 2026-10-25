@@ -5,6 +5,8 @@
 **See your home network at a glance.**
 **家的网络，一图看清。**
 
+**Pronunciation:** *Lanory* /ləˈnɔːri/ — “luh-NOR-ee”; 中文可读作“拉诺瑞”。
+
 A self-hosted home network topology and monitoring tool for OpenWrt / iStoreOS.
 One Go binary, one SQLite file, one interactive map. No cloud, no account, no
 Node.js or Python runtime — and read-only towards your router.
