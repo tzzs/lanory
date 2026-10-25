@@ -138,12 +138,6 @@ jobs:
           CGO_ENABLED: "0"
         run: |
           echo "building for ${GOOS}/${GOARCH}${GOARM:+/v$GOARM}"
-          # KNOWN 32-BIT BREAKAGE (first failure only, see the note below):
-          #   internal/api/server.go: `1 << 31` overflows int on 386/arm/mips.
-          # The fix is `const maxParse = 1 << 31` as an int64 (or
-          # `if n > math.MaxInt32`), in a package this workflow's author does not
-          # own. Until that lands, the 386 job is expected to fail; every other
-          # target must stay green.
           go build -trimpath -ldflags "-s -w" -o /tmp/lanory-${GOOS}-${GOARCH}${GOARM} ./cmd/lanory
           file /tmp/lanory-${GOOS}-${GOARCH}${GOARM}
 

@@ -15,17 +15,17 @@ import (
 // expressed as an interface here, and the concrete implementation is injected
 // through App.
 //
-// Until the engines are wired, internal/api/providers_stub.go implements these
-// interfaces directly from the database, so the server is fully functional
-// end to end today. The stub is a real implementation (it derives everything
-// from stored data); it is not a fake that invents results.
+// internal/api/providers_stub.go supplies a store-only fallback for every
+// interface here, used when no engine is injected — the internal/api tests,
+// and any build that does not call newSchedulers. The stub is a real
+// implementation (it derives everything from stored data); it is not a fake
+// that invents results.
 
 // TopologyProvider builds the topology graph served by GET /topology.
 //
-// TODO(engine): internal/topology will supply the concrete type. Its
-// *topology.Builder takes a store reader and options and returns a *Graph; a
-// small adapter (Build -> *model.Topology via Graph.ToModel) will satisfy this
-// interface.
+// In production cmd/lanory/engines.go injects topologyProvider, an adapter
+// over *topology.Service. Without an injected engine the store-only fallback
+// in providers_stub.go is used.
 type TopologyProvider interface {
 	// Build returns the current topology graph.
 	Build() (*model.Topology, error)
@@ -37,10 +37,9 @@ type TopologyProvider interface {
 
 // DiscoveryProvider runs discovery collectors.
 //
-// TODO(engine): internal/discovery will supply the concrete type. Its
-// *discovery.Registry already reports CollectorStatus and lists names and
-// capabilities; the job scheduling around it (Scan/Job/Cancel) is the part
-// still to be adapted to this interface.
+// In production cmd/lanory/engines.go injects discoveryProvider, an adapter
+// over *discovery.Service. Without an injected engine the store-only fallback
+// in providers_stub.go is used.
 type DiscoveryProvider interface {
 	// Status returns the current discovery state.
 	Status() (*model.DiscoveryStatus, error)
@@ -64,10 +63,9 @@ type ScanRequest struct {
 
 // MonitoringProvider executes probes.
 //
-// TODO(engine): internal/monitoring will supply the concrete type:
-// *monitoring.Engine, constructed with the store, a bus publisher and an
-// executor. Engine.Status already returns *model.MonitoringStatus; Engine.RunNow
-// returns a ProbeRecord that an adapter can render as *model.ProbeResult.
+// In production cmd/lanory/engines.go injects monitoringProvider, an adapter
+// over *monitoring.Engine. Without an injected engine the store-only fallback
+// in providers_stub.go is used.
 type MonitoringProvider interface {
 	// Status returns the probes with their recent results and the interfaces.
 	Status() (*model.MonitoringStatus, error)
@@ -77,9 +75,8 @@ type MonitoringProvider interface {
 
 // DemoProvider loads the built-in sample network.
 //
-// TODO(engine): internal/demo.Provider (Enabled, Seed) is the intended
-// implementation; it is not imported here so the API package stays independent
-// of the demo package's lifecycle.
+// In production cmd/lanory/engines.go injects *demo.Provider directly, so the
+// API package stays independent of the demo package's lifecycle.
 type DemoProvider interface {
 	// Enabled reports whether demo mode is active.
 	Enabled() bool
@@ -90,9 +87,10 @@ type DemoProvider interface {
 // SettingsProvider reads and writes effective settings, layering the database
 // overrides on top of the configuration file.
 //
-// TODO(engine): internal/config should own effective settings once it learns
-// about app_settings overrides; until then storeSettings in providers_stub.go
-// keeps the configuration defaults together with the database overrides.
+// No engine implements this yet: internal/config does not read app_settings,
+// so the defaults-plus-overrides layering lives in storeSettings in
+// providers_stub.go, in production as well as in tests. internal/config should
+// own effective settings once it learns about app_settings overrides.
 type SettingsProvider interface {
 	// All returns the effective settings as a flat key/value map.
 	All() (map[string]string, error)
@@ -102,9 +100,10 @@ type SettingsProvider interface {
 
 // InterfaceStatusProvider derives the runtime status of network interfaces.
 //
-// TODO(engine): internal/monitoring.LinkObserver reports live interface status;
-// the store-only implementation in providers_stub.go reports the last observed
-// state, which is correct but is not a fresh measurement.
+// internal/monitoring.LinkObserver can report live interface status, but the
+// implementation in use is still the store-only one in providers_stub.go,
+// which reports the last observed state — correct, but not a fresh
+// measurement.
 type InterfaceStatusProvider interface {
 	// InterfaceStatus returns the status of every interface, newest first.
 	InterfaceStatus() ([]model.InterfaceStatus, error)

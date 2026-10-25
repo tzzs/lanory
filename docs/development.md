@@ -13,7 +13,8 @@ Everything needed to build, test and change Lanory.
 - [Adding a collector](#adding-a-collector)
 - [Adding a router adapter](#adding-a-router-adapter)
 - [Debugging](#debugging)
-- [Known defects in the current tree](#known-defects-in-the-current-tree)
+- [Migration notes](#migration-notes)
+- [Topology presentation](#topology-presentation)
 
 ## Prerequisites
 
@@ -104,16 +105,20 @@ go test ./internal/demo -v
 - **`internal/model` is the contract.** Changing a JSON tag there changes the API;
   update `docs/api.md` and `web/src/types/api.ts` in the same commit.
 - **`internal/database` owns all SQL.** No other package writes a query, except
-  the documented workaround in `internal/api/ifaces.go` and
-  `internal/demo/store_compat.go` (see
-  [known defects](#known-defects-in-the-current-tree)).
+  the interface workarounds in `internal/api/ifaces.go` and
+  `internal/demo/store_compat.go`: they read interfaces through `store.DB()`
+  with their own `SELECT` statement. They were workarounds for a defect in the
+  store's interface queries, which has since been fixed (`interfaceColumns`
+  now includes the `SELECT`), so the workarounds are redundant but harmless —
+  they keep working if the store ever regresses. Leave them in place.
 - **Collectors report, they do not decide.** A collector returns
   `discovery.Result`; merging and topology belong to other packages.
 - **Every exported symbol has a doc comment.** "Exported" includes package-level
   functions, types, methods and constants.
 - **No placeholder implementations.** An unimplemented endpoint returns `501` with
-  a machine readable code; it does not return fake data. `auto-layout` is the
-  current example.
+  a machine readable code; it does not return fake data. With the store-only
+  fallback providers in `providers_stub.go` — what the tests run against —
+  `auto-layout` and on-demand probe runs behave this way.
 - **`gofmt` always.** `gofmt -l` must be empty for the files you touch.
 - **No new dependency without a reason.** The current set is `modernc.org/sqlite`,
   `gopkg.in/yaml.v3` and `golang.org/x/net`. Anything else needs a paragraph in the
@@ -260,61 +265,21 @@ sqlite3 /var/lib/lanory/lanory.db "SELECT * FROM app_settings WHERE key = 'demo_
 Run the server with `--log-level debug` (or `LANORY_LOG_LEVEL=debug`) to see each
 collector's duration and record count.
 
-## Known defects in the current tree
+## Migration notes
 
-These are real, present in `main`, and owned by packages this document's author
-does not modify. They are listed so nobody debugs them twice.
+`NOT NULL DEFAULT ''` on a column that also carries an `ON DELETE SET NULL`
+foreign key is contradictory: SQLite implements the FK action as
+`UPDATE … SET x = NULL`, which the `NOT NULL` constraint rejects, so deleting
+the referenced row fails instead of nulling the reference. Two tables were
+created that way in `0001_initial.sql`:
 
-### 1. Interface queries in `internal/database` omit `SELECT`
+- `network_events.device_id` and `network_events.edge_id` — fixed by
+  `0002_event_foreign_keys.sql`, which rebuilds the table with nullable
+  columns.
+- `probe_targets.device_id` — fixed by `0003_probe_device_nullable.sql`, the
+  same table rebuild making the column nullable.
 
-```go
-// internal/database/store.go — current
-rows, err := s.db.Query(interfaceColumns+` FROM network_interfaces WHERE …`)
-```
-
-`interfaceColumns` is a plain column list, so the statement starts with `id, …`
-and SQLite rejects it: `SQL logic error: near "id": syntax error`.
-
-Affected: `Store.ListInterfaces`, `Store.ListAllInterfaces`,
-`Store.GetInterface`, `Store.GetInterfaceByName`, and therefore
-`Store.UpsertInterface` (its existence check calls `GetInterface`).
-
-Workaround in place:
-
-- `internal/api/ifaces.go` reads interfaces through `store.DB()` with the correct
-  statement;
-- `internal/demo/store_compat.go` probes the store once and uses the same
-  fallback if the store is broken.
-
-Fix: prefix each of the four statements with `"SELECT " +`. Both workarounds then
-delegate automatically (`preferStoreInterfaceQueries` flips to true).
-
-### 2. `NOT NULL DEFAULT ''` next to a foreign key
-
-`network_events.edge_id` and `probe_targets.device_id` are declared
-`NOT NULL DEFAULT ''` **and** carry a foreign key with `ON DELETE SET NULL`.
-SQLite implements the FK action as `UPDATE … SET x = NULL`, which the `NOT NULL`
-constraint rejects, so:
-
-- inserting an event with no edge fails with
-  `FOREIGN KEY constraint failed`;
-- deleting a device that still has probes or events fails the same way.
-
-Demo Mode orders its deletes and always anchors its rows to real devices/edges to
-work around it. The real fix is a migration making those columns nullable (or
-dropping the FK):
-`ALTER TABLE network_events ...` is not supported by SQLite, so it needs a
-table rebuild.
-
-### 3. Pre-existing `gofmt` drift
-
-Some baseline files are not `gofmt` clean (alignment in `internal/model`,
-`internal/database`, `internal/events`, `internal/device`,
-`internal/discovery`, `internal/config`). CI therefore checks formatting only on
-files changed in the range. Formatting the whole tree is a single mechanical
-commit nobody has made yet.
-
-### Topology presentation
+## Topology presentation
 
 `web/src/features/topology/hierarchy.ts` derives the default presentation from
 `TopologyNode.children`, with observed edges as a compatibility fallback. Shared

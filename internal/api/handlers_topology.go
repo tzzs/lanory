@@ -14,9 +14,9 @@ import (
 
 // handleTopology serves GET /api/v1/topology.
 //
-// The graph comes from the injected TopologyProvider. Until the topology engine
-// is wired, the store-only provider returns exactly the devices, edges and
-// layout that were persisted — no inferred relations.
+// The graph comes from the injected TopologyProvider. The store-only fallback
+// provider (providers_stub.go) returns exactly the devices, edges and layout
+// that were persisted — no inferred relations.
 func (a *App) handleTopology(w http.ResponseWriter, r *http.Request) {
 	topo, err := a.topo.Build()
 	if err != nil {
@@ -413,9 +413,10 @@ type autoLayoutRequest struct {
 
 // handleAutoLayout serves POST /api/v1/topology/auto-layout.
 //
-// Computing a layout is the topology engine's responsibility. Until it is
-// wired this endpoint answers 501 rather than returning positions that were
-// never computed.
+// Computing a layout is the topology engine's responsibility. The store-only
+// fallback provider cannot do it, so against the stub this endpoint answers
+// 501 rather than returning positions that were never computed; production
+// injects the real engine.
 func (a *App) handleAutoLayout(w http.ResponseWriter, r *http.Request) {
 	var body autoLayoutRequest
 	if err := decodeJSON(r, &body); err != nil {

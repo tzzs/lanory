@@ -463,8 +463,9 @@ func (a *App) handleDeleteProbe(w http.ResponseWriter, r *http.Request) {
 // handleRunProbe serves POST /api/v1/monitoring/probes/{id}/run.
 //
 // Executing a probe is a network side effect, so it needs the probe engine.
-// Until that is wired the endpoint answers 501 rather than reporting a fake
-// result.
+// The store-only fallback provider cannot run one, so against the stub this
+// endpoint answers 501 rather than reporting a fake result; production injects
+// the real engine.
 func (a *App) handleRunProbe(w http.ResponseWriter, r *http.Request) {
 	id, err := pathID(r, "id")
 	if err != nil {

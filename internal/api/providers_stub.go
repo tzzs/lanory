@@ -12,12 +12,12 @@ import (
 	"github.com/lanory/lanory/internal/model"
 )
 
-// This file implements the provider interfaces from the database alone, so the
-// HTTP server is fully functional end to end before the discovery, topology,
-// monitoring and demo engines are wired in.
+// This file implements the provider interfaces from the database alone. It is
+// the fallback for when no engine is injected: the internal/api tests, and any
+// build that does not call newSchedulers. Production injects the real engines
+// through the App setters in cmd/lanory/engines.go.
 //
-// It is a TEMPORARY store-only implementation. It derives every value it
-// returns from rows that were already persisted:
+// It derives every value it returns from rows that were already persisted:
 //
 //   - no invented online/offline state: a device keeps whatever state the last
 //     writer recorded;
@@ -26,10 +26,11 @@ import (
 //   - no invented collectors: the list reflects what the detected platform
 //     supports.
 //
-// When internal/topology, internal/discovery, internal/monitoring and
-// internal/demo land, App should take the real implementations and this file
-// should be deleted. It is kept in one place so that swap is a single edit in
-// App.
+// Two capabilities have no engine behind them, so the store-only
+// implementations here serve production as well: effective settings
+// (storeSettings) and interface status. Operations the store alone cannot
+// perform — starting a scan, running a probe, computing a layout — return
+// errProviderUnwired, which the HTTP layer turns into 501.
 
 // errProviderUnwired is returned by operations that need a real engine.
 //
