@@ -200,6 +200,24 @@ export function AddDeviceForm({
 /* Device detail panel                                                        */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Shell shared by the loading, error and loaded states of the panel.
+ *
+ * A 320px side column cannot be afforded on a phone: at 390px it leaves ~70px
+ * for the search box, the filters and the table, so browsing breaks down.
+ * Below `lg` the panel is therefore an overlay drawer pinned to the right edge,
+ * full-bleed up to `max-w-sm`, and it scrolls on its own. From `lg` up it
+ * returns to the original in-flow column, which keeps the desktop layout
+ * unchanged.
+ *
+ * Every branch uses this recipe so the panel does not jump size when the data
+ * arrives.
+ */
+const panelShell =
+  'fixed inset-y-0 right-0 z-40 w-full max-w-sm shrink-0 overflow-y-auto ' +
+  'border-l border-border bg-surface shadow-xl animate-slide-up ' +
+  'lg:static lg:z-auto lg:w-80 lg:max-w-none lg:animate-none lg:shadow-none'
+
 export function DeviceDetailPanel({ onClose }: { onClose: () => void }) {
   const selectedDeviceId = useUIStore((s) => s.selectedDeviceId)
   const detail = useDeviceDetail(selectedDeviceId)
@@ -208,7 +226,7 @@ export function DeviceDetailPanel({ onClose }: { onClose: () => void }) {
 
   if (detail.isLoading) {
     return (
-      <aside className="w-80 shrink-0 border-l border-border bg-surface p-4">
+      <aside className={`${panelShell} p-4`}>
         <Skeleton className="h-6 w-32" />
         <Skeleton className="mt-3 h-24" />
         <Skeleton className="mt-3 h-40" />
@@ -218,7 +236,7 @@ export function DeviceDetailPanel({ onClose }: { onClose: () => void }) {
 
   if (detail.isError || !detail.data) {
     return (
-      <aside className="w-80 shrink-0 border-l border-border bg-surface p-4">
+      <aside className={`${panelShell} p-4`}>
         <EmptyState title={t('app.error')} action={<Button size="sm" onClick={onClose}>{t('app.close')}</Button>} />
       </aside>
     )
@@ -228,7 +246,7 @@ export function DeviceDetailPanel({ onClose }: { onClose: () => void }) {
   const Icon = deviceIcon(device.type)
 
   return (
-    <aside className="flex w-80 shrink-0 flex-col border-l border-border bg-surface">
+    <aside className={`${panelShell} flex flex-col`}>
       <CardHeader className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2.5">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-surface-2">

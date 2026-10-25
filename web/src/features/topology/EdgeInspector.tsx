@@ -8,6 +8,20 @@ import type { Edge } from '@xyflow/react'
 import type { TopologyEdgeData } from '@/features/topology/graph'
 
 /**
+ * Shell shared by both panels on this page.
+ *
+ * A 320px side column cannot be afforded on a phone: at 390px it leaves ~70px
+ * for the canvas and its toolbar. Below `lg` the panel is therefore an overlay
+ * drawer pinned to the right edge, full-bleed up to `max-w-sm`, and it scrolls
+ * on its own. From `lg` up it returns to the original in-flow column, so the
+ * desktop layout is unchanged.
+ */
+const panelShell =
+  'fixed inset-y-0 right-0 z-40 w-full max-w-sm shrink-0 overflow-y-auto ' +
+  'border-l border-border bg-surface shadow-xl animate-slide-up ' +
+  'lg:static lg:z-auto lg:w-80 lg:max-w-none lg:animate-none lg:shadow-none'
+
+/**
  * Inspector for a selected edge.
  *
  * Shows the connection type, port, speed, state and confidence, plus the
@@ -31,7 +45,7 @@ export function EdgeInspector({ edge }: { edge: Edge<TopologyEdgeData> }) {
   }
 
   return (
-    <aside className="flex w-80 shrink-0 flex-col border-l border-border bg-surface">
+    <aside className={`${panelShell} flex flex-col`}>
       <CardHeader>
         <CardTitle>{t('topology.edge_details')}</CardTitle>
         <Button

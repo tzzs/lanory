@@ -5,6 +5,23 @@ import { Button, CardHeader, CardTitle, Badge, FieldRow, StatusDot, Skeleton, Em
 import { deviceIcon, formatTimestamp, formatRelativeTime, formatMac, formatSpeed } from '@/lib/devices'
 
 /**
+ * Shell shared by every state of the inspector.
+ *
+ * A 320px side column cannot be afforded on a phone: at 390px it leaves ~70px
+ * for the canvas and its toolbar. Below `lg` the inspector is therefore an
+ * overlay drawer pinned to the right edge, full-bleed up to `max-w-sm`, and it
+ * scrolls on its own. From `lg` up it returns to the original in-flow column,
+ * so the desktop layout is unchanged.
+ *
+ * Every branch uses this recipe so the panel does not jump size when the data
+ * arrives.
+ */
+const panelShell =
+  'fixed inset-y-0 right-0 z-40 w-full max-w-sm shrink-0 overflow-y-auto ' +
+  'border-l border-border bg-surface shadow-xl animate-slide-up ' +
+  'lg:static lg:z-auto lg:w-80 lg:max-w-none lg:animate-none lg:shadow-none'
+
+/**
  * Device inspector used by the topology page. Reuses the shared device detail
  * layout so a device looks the same wherever it is opened.
  */
@@ -30,7 +47,7 @@ function DeviceInspectorBody({ deviceId, onClose }: { deviceId: string; onClose:
 
   if (isLoading) {
     return (
-      <aside className="w-80 shrink-0 border-l border-border bg-surface p-4">
+      <aside className={`${panelShell} p-4`}>
         <Skeleton className="h-6 w-32" />
         <Skeleton className="mt-3 h-40" />
       </aside>
@@ -39,7 +56,7 @@ function DeviceInspectorBody({ deviceId, onClose }: { deviceId: string; onClose:
 
   if (isError || !data) {
     return (
-      <aside className="w-80 shrink-0 border-l border-border bg-surface">
+      <aside className={panelShell}>
         <EmptyState title={t('app.error')} action={<Button size="sm" onClick={onClose}>{t('app.close')}</Button>} />
       </aside>
     )
@@ -49,7 +66,7 @@ function DeviceInspectorBody({ deviceId, onClose }: { deviceId: string; onClose:
   const Icon = deviceIcon(device.type)
 
   return (
-    <aside className="flex w-80 shrink-0 flex-col border-l border-border bg-surface">
+    <aside className={`${panelShell} flex flex-col`}>
       <CardHeader>
         <div className="flex min-w-0 items-center gap-2.5">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-surface-2">
