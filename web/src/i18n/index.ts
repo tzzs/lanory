@@ -144,7 +144,21 @@ const zhCN: Dict = {
   'topology.layout_tree': '树形布局',
   'topology.layout_layered': '分层布局',
   'topology.layout_force': '力导向布局',
+  'topology.hide_offline': '隐藏离线',
+  'topology.show_offline': '显示离线',
+  'topology.offline_hidden': '已隐藏 {count} 台离线设备',
+  'topology.offline_hidden_show': '显示',
+  'topology.multi_homed': '多网段',
+  'topology.multi_homed_hint': '该设备在多个网段上都有地址（例如 LAN 侧和 WAN 侧）',
   'topology.zoom_for_detail': '放大查看设备详情',
+
+  // ---- interface roles ----
+  'role.lan': 'LAN',
+  'role.wan': 'WAN',
+  'role.dmz': 'DMZ',
+  'role.loopback': 'LOOPBACK',
+  'role.virtual': 'VIRTUAL',
+  'role.unknown': '未知',
 
   // ---- devices ----
   'devices.title': '设备',
@@ -492,7 +506,21 @@ const en: Dict = {
   'topology.layout_tree': 'Tree layout',
   'topology.layout_layered': 'Layered layout',
   'topology.layout_force': 'Force layout',
+  'topology.hide_offline': 'Hide offline',
+  'topology.show_offline': 'Show offline',
+  'topology.offline_hidden': '{count} offline devices hidden',
+  'topology.offline_hidden_show': 'Show',
+  'topology.multi_homed': 'Multi-subnet',
+  'topology.multi_homed_hint': 'This device has addresses on more than one subnet (for example a LAN side and a WAN side)',
   'topology.zoom_for_detail': 'Zoom in for device details',
+
+  // ---- interface roles ----
+  'role.lan': 'LAN',
+  'role.wan': 'WAN',
+  'role.dmz': 'DMZ',
+  'role.loopback': 'LOOPBACK',
+  'role.virtual': 'VIRTUAL',
+  'role.unknown': 'Unknown',
 
   'devices.title': 'Devices',
   'devices.subtitle': 'Everything discovered on your network',

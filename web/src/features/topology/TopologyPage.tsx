@@ -80,7 +80,6 @@ function TopologyCanvas() {
   // that answer. The toggle and the hidden-count badge keep them discoverable,
   // so nothing is silently lost.
   const [showOffline, setShowOffline] = useState(false)
-  const [hiddenOffline, setHiddenOffline] = useState(0)
   // The viewport zoom decides how much of a card can be read: below the
   // detail threshold the node renders in its low tier (name only, bigger
   // type). The raw zoom is tracked, but only the tier is allowed to reach
@@ -94,22 +93,33 @@ function TopologyCanvas() {
   // Build the graph from the payload. The build is memoized on the tier
   // rather than on the raw zoom, so the graph is only rebuilt when the tier
   // actually flips.
+  //
+  // `nodes`/`edges` hold the *whole* graph, offline devices included. The
+  // offline filter is a projection over it (below) rather than part of the
+  // build, because a rebuild would discard unsaved drag positions: toggling
+  // visibility must not cost the user their layout.
   const built = useMemo(() => {
     if (!data) return null
-    const flow = buildFlow(data, {
+    return buildFlow(data, {
       unverifiedThreshold: UNVERIFIED_THRESHOLD,
       interfaces: monitoring.data?.interfaces.map(s => s.interface),
       showDetail,
     })
-    return showOffline ? { ...flow, hidden: 0 } : hideOffline(flow.nodes, flow.edges)
-  }, [data, monitoring.data, showOffline, showDetail])
+  }, [data, monitoring.data, showDetail])
+
+  // What the canvas actually draws. Hidden offline nodes stay in `nodes`, so
+  // their positions survive a save and a toggle back.
+  const visible = useMemo(
+    () => (showOffline ? { nodes, edges, hidden: 0 } : hideOffline(nodes, edges)),
+    [nodes, edges, showOffline],
+  )
+  const { hidden: hiddenOffline } = visible
 
   // Rebuild the graph whenever the payload changes.
   useEffect(() => {
     if (!built || dirty) return
     setNodes(built.nodes)
     setEdges(built.edges)
-    setHiddenOffline(built.hidden)
     setDirty(false)
   }, [built, dirty])
 
@@ -126,13 +136,14 @@ function TopologyCanvas() {
   // Fit the view once on first data, but never again so the user's zoom and
   // pan survive subsequent polls.
   useEffect(() => {
-    if (!data || !initialized || hasFitted.current || nodes.length === 0) return
+    if (!data || !initialized || hasFitted.current || visible.nodes.length === 0) return
     const raf = requestAnimationFrame(() => {
-      const connected = nodes.filter(n => n.parentId || n.data.group || edges.some(e => e.source === n.id || e.target === n.id))
-      void fitView({ nodes: connected.length ? connected : nodes, padding: 0.15, duration: 0 }).then(() => { hasFitted.current = true })
+      const drawn = visible.nodes
+      const connected = drawn.filter(n => n.parentId || n.data.group || visible.edges.some(e => e.source === n.id || e.target === n.id))
+      void fitView({ nodes: connected.length ? connected : drawn, padding: 0.15, duration: 0 }).then(() => { hasFitted.current = true })
     })
     return () => cancelAnimationFrame(raf)
-  }, [data, initialized, nodes, edges, fitView])
+  }, [data, initialized, visible, fitView])
 
   const onNodesChange: OnNodesChange<Node<TopologyNodeData>> = useCallback((changes) => {
     setNodes(current => applyNodeChanges(changes, current))
@@ -170,6 +181,9 @@ function TopologyCanvas() {
   )
 
   const onSaveLayout = useCallback(() => {
+    // Saved from the full set, hidden offline devices included: a device that is
+    // asleep today is on the network tomorrow, and its pinned position must
+    // still be there when it comes back.
     const payload: LayoutNode[] = nodes.filter(n => !n.data.annotation).map((node) => ({
       node_id: node.id,
       x: node.position.x + (nodes.find(n => n.id === node.parentId)?.position.x ?? 0),
@@ -187,14 +201,12 @@ function TopologyCanvas() {
       interfaces: monitoring.data?.interfaces.map(s => s.interface),
       showDetail,
     })
-    const visible = showOffline ? { ...flow, hidden: 0 } : hideOffline(flow.nodes, flow.edges)
-    setNodes(visible.nodes)
-    setEdges(visible.edges)
-    setHiddenOffline(visible.hidden)
+    setNodes(flow.nodes)
+    setEdges(flow.edges)
     setDirty(true)
-  }, [data, monitoring.data, showOffline, showDetail])
+  }, [data, monitoring.data, showDetail])
 
-  const unplaced = nodes.filter(n => n.data.kind === 'device' && !n.parentId && !edges.some(e => e.source === n.id || e.target === n.id) && !data?.nodes.find(item => item.id === n.id)?.device?.is_self)
+  const unplaced = visible.nodes.filter(n => n.data.kind === 'device' && !n.parentId && !visible.edges.some(e => e.source === n.id || e.target === n.id) && !data?.nodes.find(item => item.id === n.id)?.device?.is_self)
 
   const selectedEdge = useMemo(
     () => edges.find((e) => e.id === selectedEdgeId) ?? null,
@@ -326,8 +338,8 @@ function TopologyCanvas() {
         </div>
 
         <ReactFlow
-          nodes={nodes}
-          edges={edges}
+          nodes={visible.nodes}
+          edges={visible.edges}
           nodeTypes={nodeTypes}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}

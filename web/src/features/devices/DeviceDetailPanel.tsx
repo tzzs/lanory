@@ -12,6 +12,7 @@ import {
   useDevice as useDeviceDetail,
 } from '@/hooks/useApi'
 import { CardHeader, CardTitle, Button, Badge, Input, Select, Modal, FieldRow, StatusDot, EmptyState, Skeleton, Field } from '@/components/ui'
+import { AddressGroups } from '@/components/AddressGroups'
 import {
   deviceIcon,
   deviceStateLabel,
@@ -20,6 +21,7 @@ import {
   formatTimestamp,
   formatRelativeTime,
   formatMac,
+  groupDeviceAddresses,
   DEVICE_TYPE_OPTIONS,
 } from '@/lib/devices'
 import type { Device, DeviceType, EdgeType } from '@/types/api'
@@ -244,6 +246,7 @@ export function DeviceDetailPanel({ onClose }: { onClose: () => void }) {
 
   const { device, addresses, identities, interfaces, edges, probes, last_probe, events } = detail.data
   const Icon = deviceIcon(device.type)
+  const addressGroups = groupDeviceAddresses(addresses, interfaces)
 
   return (
     <aside className={`${panelShell} flex flex-col`}>
@@ -280,7 +283,7 @@ export function DeviceDetailPanel({ onClose }: { onClose: () => void }) {
           </h4>
           <dl className="divide-y divide-border">
             <FieldRow label={t('device.ip')} mono>
-              {addresses.map((a) => a.address).join(', ') || '—'}
+              <AddressGroups groups={addressGroups} />
             </FieldRow>
             <FieldRow label={t('device.mac')} mono>
               {device.primary_mac ? formatMac(device.primary_mac) : '—'}
