@@ -245,6 +245,15 @@ for view in overview; do
 	done
 done
 
+# The host page must offer its language and theme to the embedded app, so the
+# two halves of the management UI do not disagree. A host that only sends the
+# token leaves a Chinese light LuCI wrapping an English dark Lanory.
+if grep -q "lanory:host-context" "$DIR/luci-app-lanory/luasrc/view/lanory/overview.htm"; then
+	pass "overview posts the host language and theme"
+else
+	fail "overview does not post lanory:host-context"
+fi
+
 # ---------------------------------------------------------------------------
 say "generated YAML"
 # ---------------------------------------------------------------------------

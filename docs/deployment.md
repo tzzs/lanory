@@ -311,6 +311,34 @@ error.
 
 Logs: `logread -e lanory` on OpenWrt, `journalctl -u lanory` on systemd.
 
+## Embedding in LuCI
+
+`luci-app-lanory` renders Lanory inside a LuCI page instead of linking out. The
+host page builds an iframe pointing at `/embed/...` on the Lanory listener and
+bootstraps it over `postMessage`:
+
+| Message | Direction | Carries |
+| --- | --- | --- |
+| `lanory:session` | host → app | the bearer credential, held in frame memory |
+| `lanory:host-context` | host → app | the host's language and theme, as a default |
+| `lanory:ready` / `lanory:route` | app → host | bootstrap done / the route currently shown |
+
+The credential never appears in a URL, the HTML source or `localStorage`: the
+host reads it from a session-authenticated endpoint and passes it once, and the
+app keeps it in memory for the lifetime of the frame.
+
+The host context follows one rule: **follow the host until the user disagrees.**
+A LuCI that is Chinese and light produces a Chinese light Lanory by default, so
+the management UI reads as one surface. The moment the user picks a language or a
+theme in Lanory's own Settings, that choice is persisted and the host stops being
+followed. A theme LuCI does not map (an unmapped theme name) leaves the app on its
+own setting rather than guessing. Argon and `material-dark` are treated as dark;
+`bootstrap` and `material` as light.
+
+The listener speaks plain HTTP. An HTTPS LuCI host therefore shows an explicit
+standalone/HTTP-access fallback instead of attempting a mixed-content iframe; TLS
+requires a proxy in front of the listener.
+
 ## What is verified
 
 | Statement | Verified? |

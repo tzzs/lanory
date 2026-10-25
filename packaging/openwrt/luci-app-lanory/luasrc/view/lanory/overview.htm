@@ -6,6 +6,22 @@ local running = (require("luci.sys").exec("pidof lanory 2>/dev/null") or ""):mat
 local zh = (luci.i18n.context.lang or ""):match("^zh") ~= nil
 local function tr(cn, en) return zh and cn or en end
 local function js(v) return json.stringify(v):gsub("<", "\\u003c") end
+-- The embedded app inherits LuCI's language and theme so the frame agrees with
+the page around it. Each value is checked against the small set Lanory supports;
+anything else is omitted rather than guessed, which leaves the app on its own
+default instead of a wrong one. The app only follows these until the user picks a
+language or a theme in its own Settings.
+local luci_lang = (luci.i18n.context.lang or ""):lower()
+local host_lang = luci_lang:match("^zh") and "zh-CN" or luci_lang:match("^en") and "en" or nil
+-- LuCI resolves the active theme. Only the themes this build can identify are
+-- mapped, so a theme that is not listed keeps the app's own setting.
+local theme_name = luci.dispatcher and luci.dispatcher.context and luci.dispatcher.context.theme
+if type(theme_name) ~= "string" then theme_name = nil end
+local dark_themes = { argon = true, ["material-dark"] = true }
+local light_themes = { bootstrap = true, material = true }
+local host_theme = dark_themes[theme_name] and "dark" or light_themes[theme_name] and "light" or nil
+local host_context = { type = 'lanory:host-context', lang = host_lang }
+if host_theme then host_context.theme = host_theme end
 luci.http.header("Cache-Control", "no-store")
 %>
 <%+header%>
@@ -60,6 +76,10 @@ luci.http.header("Cache-Control", "no-store")
  window.addEventListener('message', function (event) {
   if (event.source !== frame.contentWindow || event.origin !== origin || !event.data) return;
   if (event.data.type === 'lanory:ready') {
+   // The app asked for its bootstrap. Answer with the host context first, then the
+   // credential: the app applies the language and theme as a default, and only
+   // until the user chooses its own, so sending them every time is harmless.
+   frame.contentWindow.postMessage(<%=js(host_context)%>, origin);
    if (!session) session = fetch(<%=js(luci.dispatcher.build_url('admin','services','lanory','session'))%>, {
     method: 'POST', credentials: 'same-origin', cache: 'no-store',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
