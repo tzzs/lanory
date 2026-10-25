@@ -94,7 +94,9 @@ and start in state `unknown` unless probed.
 
 ```json
 {
-  "nodes": [{"id":"dev-1","kind":"device","device":{...},"state":"online","state_reason":"","primary_ip":"192.0.2.116","primary_mac":"02:11:22:33:44:b7","children":["dev-3"],"unresolved":false}],
+  "nodes": [{"id":"dev-1","kind":"device","device":{...},"state":"online","state_reason":"","primary_ip":"192.0.2.116","primary_mac":"02:11:22:33:44:b7",
+             "addresses":[{"address":"192.0.2.116","family":"ipv4","prefix_length":24,"cidr":"192.0.2.0/24","side":"unknown"}],
+             "children":["dev-3"],"unresolved":false}],
   "edges": [TopologyEdge...],
   "layout": [{"id":"lay-1","node_id":"dev-1","x":120.5,"y":340,"pinned":false,"updated_at":"..."}],
   "generated_at": "..."
@@ -102,6 +104,26 @@ and start in state `unknown` unless probed.
 ```
 
 Node kinds: `device`, `network`. Network nodes carry `network` and no `device`.
+
+`addresses` lists **every** address of the node, not just `primary_ip`. A router
+is the reason: it is one device with an address on each side of it, and a caller
+that only reads `primary_ip` cannot tell which side it received.
+
+| Field | Meaning |
+| --- | --- |
+| `address` | the address as observed |
+| `family` | `ipv4` or `ipv6` |
+| `prefix_length` | CIDR prefix length, omitted when unknown |
+| `cidr` | the network the address belongs to (`192.168.100.0/24`), omitted when the prefix is unknown |
+| `interface` | the local interface carrying it; omitted for an address on a remote device |
+| `side` | `lan`, `wan`, `dmz`, `virtual`, `loopback` or `unknown` — the role of that interface |
+| `is_primary` | true for the one address `primary_ip` was taken from |
+
+Addresses sharing a `cidr` are on the same subnet, so a client can group them
+without re-deriving the mask. A node with more than one distinct `cidr` is
+multi-homed. A remote device's address has `side: "unknown"`: no interface of
+ours carries it, so assigning a side would be a guess. Link-local IPv6 addresses
+are not listed.
 
 `GET /api/v1/topology/evidence` → `TopologyEvidence`
 `{"edges":[{"edge":TopologyEdge,"evidence":[DiscoveryEvidence...]}], "unmapped_devices":[...]}`
@@ -126,6 +148,29 @@ Node kinds: `device`, `network`. Network nodes carry `network` and no `device`.
 `POST /api/v1/topology/layout` body `{"nodes":[{"node_id":"dev-1","x":10,"y":20,"pinned":true}]}` → `200` `{"saved": 1}`
 
 `POST /api/v1/topology/auto-layout` body `{"algorithm":"tree"}` → `200` `{"layout":[TopologyLayout...]}`
+
+`algorithm` is `tree` (default), `layered` or `force`; anything else is a `400`
+with `details.algorithm`. The endpoint recomputes every node position and
+persists the result, so the returned layout is the layout a later `GET
+/api/v1/topology` reports. Pinned nodes keep their position. When
+`topology.preserve_manual_layout` is set (the default) a node the user dragged
+keeps its saved position too; setting `topology.auto_layout: false` alongside it
+turns the call into a no-op that returns the stored layout unchanged.
+
+Whether the call can do that work depends on which topology engine the binary was
+wired with, and a caller sees one of two things:
+
+| Case | Response |
+| --- | --- |
+| Full engine (the normal deployment) | `200` with the recomputed `layout` |
+| Store-only fallback, no topology engine injected | `501` `{"error":"capability requires a discovery engine that is not wired","code":"not_implemented"}` |
+
+The `501` is a wiring fact, not a missing feature: the fallback provider reads
+and writes the store but cannot compute positions, and returning the stored
+layout with `200` would report a layout the caller did not ask for. A client
+should treat `501` as "ask the user to move the nodes by hand and save with
+`POST /api/v1/topology/layout`" rather than as a transient failure; retrying will
+not change the answer.
 
 ## Discovery
 
@@ -176,6 +221,35 @@ normalisation alone.
 ```
 or for a device: `{"name":"iPhone","kind":"device","device_id":"dev-2","protocol":"icmp","interval":60}` → `201` + `ProbeTarget`
 
+`device_id` is **optional**. `probe_targets.device_id` is nullable in the store
+(schema 0003), and the column exists to say which device a probe describes, not to
+say that it must describe one:
+
+- A probe whose device is deleted is **detached, not deleted**: the foreign key
+  is `ON DELETE SET NULL`, so the row survives with no device and `device_id`
+  disappears from the JSON. Probe history outlives the device it once described,
+  because the address it measured may still be reachable.
+- A probe with no device never moves a device's state, and does not appear under
+  `probes` in `GET /api/v1/devices/{id}`.
+- When a device is merged into another (`POST /api/v1/devices/{id}/merge`), its
+  probes move to the surviving device.
+
+`device_id` is omitted from the JSON when it is empty, never sent as `null` or
+`""`.
+
+One caveat a caller can observe today: `POST /api/v1/monitoring/probes` with no
+`device_id` still **anchors the new probe to the host device** (the device with
+`is_self: true`) rather than creating an unattached probe, so the `201` body
+typically carries a `device_id` you did not send. Anchoring is what
+`internal/api/ifaces.go` has always done, from before the column was made
+nullable, and it matches the rule that a probe runs from the host Lanory runs on.
+If no host device exists the call fails with `500`. A probe only becomes
+unattached by its device being deleted.
+
+For `kind: "device"` the address is derived from the device's stored
+`primary_ipv4`/`primary_ipv6` when `target` is omitted; a device with no known
+address is a `400` with `details.target`.
+
 `POST /api/v1/monitoring/probes/{id}/run` → `200` + `ProbeResult`
 `GET /api/v1/monitoring/history?device_id=&probe_id=&since=&limit=` → `{"results":[ProbeResult...]}`
 
@@ -201,4 +275,84 @@ Event types: `device.updated`, `device.online`, `device.offline`,
 `topology.updated`, `link.updated`, `probe.completed`,
 `discovery.started`, `discovery.completed`, `settings.updated`.
 
-Clients must reconnect with backoff and use `seq` to detect gaps.
+### Authentication: the header only
+
+The stream is protected like every other route. The token goes in the
+`Authorization: Bearer <token>` header and **nowhere else**: a token in the query
+string is refused with `401`, because URLs end up in proxy access logs and in the
+`Referer` header.
+
+That rules out `EventSource`, which cannot set request headers. A client must
+open the stream with `fetch` and read `response.body` as a stream — the browser
+hook in `web/src/hooks/useRealtime.ts` is the reference implementation:
+
+```js
+const res = await fetch('/api/v1/events/stream', {
+  headers: { Accept: 'text/event-stream', Authorization: `Bearer ${token}` },
+  cache: 'no-store',
+})
+const reader = res.body.getReader()
+```
+
+A `401` means the token was missing or wrong and no stream was opened; the client
+should surface that instead of retrying in a tight loop.
+
+### Frame format
+
+Each event is three lines terminated by a blank line:
+
+```
+id: 42
+event: device.online
+data: {"type":"device.online","seq":42,"timestamp":"2026-10-19T20:12:46.517Z","payload":{...}}
+
+```
+
+`id` is the bus sequence number and matches `seq` inside the payload. `event` is
+the event type, so a client can dispatch by name without parsing first. The
+`data:` payload is compact JSON on a single line: `encoding/json` escapes
+newlines inside strings, so a frame never contains a raw newline inside a data
+value and there is nothing to reassemble.
+
+An idle stream writes a comment frame every 15 seconds:
+
+```
+: heartbeat
+
+```
+
+Comment lines start with `:` and carry no event; they exist to keep the
+connection and every proxy in front of it alive. A parser must ignore them.
+
+The response also sets `Cache-Control: no-store`, `X-Accel-Buffering: no` and
+`Connection: keep-alive`, and every frame is flushed immediately, so a buffering
+proxy cannot turn the stream into a single delayed response.
+
+### Reconnect and replay
+
+On reconnect a client sends the last sequence it saw:
+
+```
+Last-Event-ID: 42
+```
+
+(the `lastEventId` query parameter is accepted as a fallback for proxies that
+strip the header, but it is not an authentication channel). The bus retains a
+bounded window of recent events — 512 in the shipped binary — and replays what it
+still has so a short disconnect does not silently lose state changes.
+
+Two things a client must do regardless:
+
+- **Deduplicate by `seq`.** The replay is a best-effort catch-up over a bounded
+  buffer, not a guaranteed exactly-once delivery. Today the stream also replays
+  the whole retained buffer into the new subscription, so a reconnect can re-send
+  events at or below the `Last-Event-ID` you sent. Treat any `seq` you have
+  already handled as a no-op. This is a known defect, recorded in
+  `.sdd/briefs/task-12-report.md`.
+- **Detect gaps.** A `seq` that jumps by more than one means the buffer dropped
+  events: the client missed them and should refetch the state it cares about
+  (`GET /api/v1/devices`, `/api/v1/topology`) rather than assume it is current.
+
+Events are in-memory only. They are not persisted and not replayed across a
+restart; the `seq` counter starts again at 1, so a client that reconnects to a
+restarted server must discard its stored `seq`.

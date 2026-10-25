@@ -417,6 +417,65 @@ func TestServicePublishesEvents(t *testing.T) {
 	}
 }
 
+// TestServiceScanReturnsPreRunSnapshot checks the snapshot Scan hands back.
+//
+// The returned snapshot is the contract of POST /api/v1/discovery/scan: a 202
+// carrying the job as it was when the request was answered, which is why a
+// caller may read status and progress off it. The run goroutine mutates the same
+// record, so the snapshot has to be taken before that goroutine can touch it.
+// This test hammers the window between "the run has been started" and "the
+// snapshot was copied": a fast collector finishes in microseconds, so an
+// unsynchronised copy is caught both by the assertion (the snapshot would report
+// progress 100 and status completed) and by `-race` (the copy reads a field the
+// run goroutine is writing).
+func TestServiceScanReturnsPreRunSnapshot(t *testing.T) {
+	s := NewService(serviceConfig(true), nil)
+	// No delay: the run races the return path as hard as it can.
+	s.Registry().Register(newServiceFake(model.CollectorARP, true, 3))
+
+	for i := 0; i < 200; i++ {
+		// The job status flips to completed slightly before the run goroutine
+		// clears the single-flight flag, so wait for the service to be idle
+		// rather than for the job alone.
+		waitForIdle(t, s)
+		job, err := s.Scan(context.Background(), ScanRequest{})
+		if err != nil {
+			t.Fatalf("Scan %d: %v", i, err)
+		}
+		if job.Status != model.JobRunning {
+			t.Fatalf("iteration %d: returned job status = %q, want %q: the snapshot must be the state at return, not a later one",
+				i, job.Status, model.JobRunning)
+		}
+		if job.Progress != 0 {
+			t.Fatalf("iteration %d: returned job progress = %d, want 0", i, job.Progress)
+		}
+		if !job.FinishedAt.IsZero() {
+			t.Fatalf("iteration %d: returned job already has a finish time %v", i, job.FinishedAt)
+		}
+		if len(job.Collectors) != 0 {
+			t.Fatalf("iteration %d: returned job already lists %d collector runs", i, len(job.Collectors))
+		}
+		waitForJob(t, s, job.ID)
+	}
+}
+
+// waitForIdle blocks until no run is in flight.
+func waitForIdle(t *testing.T, s *Service) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		st, err := s.Status()
+		if err != nil {
+			t.Fatalf("Status: %v", err)
+		}
+		if !st.Running {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatal("the service never became idle")
+}
+
 func TestServiceJobHistoryIsPruned(t *testing.T) {
 	s := NewService(serviceConfig(true), nil)
 	s.Registry().Register(newServiceFake(model.CollectorARP, true, 0))

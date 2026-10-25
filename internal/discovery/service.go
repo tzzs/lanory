@@ -215,6 +215,14 @@ func (s *Service) Scan(ctx context.Context, req ScanRequest) (*model.DiscoveryJo
 	s.order = append(s.order, job.ID)
 	s.lastJob = job.ID
 	s.pruneLocked()
+	// The snapshot returned to the caller is taken here, under the lock and
+	// before the run goroutine exists. Once `go s.run` is called that goroutine
+	// starts writing status, progress, finish time and the collector list on the
+	// very same record, so copying afterwards would be an unsynchronised read of
+	// fields another goroutine is mutating. The caller gets the state the scan
+	// was accepted in, which is what POST /discovery/scan documents.
+	cp := *job
+	cp.Collectors = append([]model.CollectorRun{}, job.Collectors...)
 	s.mu.Unlock()
 
 	if s.bus != nil {
@@ -226,7 +234,6 @@ func (s *Service) Scan(ctx context.Context, req ScanRequest) (*model.DiscoveryJo
 
 	go s.run(runCtx, job.ID, req)
 
-	cp := *job
 	return &cp, nil
 }
 
