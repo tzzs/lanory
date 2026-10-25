@@ -2,8 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Design tokens. Values are duplicated in tailwind.config.ts as color aliases
-   so utility classes and raw CSS always agree. */
+/* Design tokens. Each colour exists twice: as a hex `--name` and as a channel
+   triplet `--name-rgb` holding the same colour. Tailwind needs the triplet form
+   because an opacity modifier (`bg-success/12`) requires `rgb(var(--x) / <alpha>)`
+   and drops the class entirely on a bare `var()` hex. The hex form is kept
+   because SVG attributes and React Flow style props consume `var(--name)`
+   directly and cannot take a Tailwind class. Keep both lines of a pair in sync. */
 :root {
   --bg: #f7f8fa;
   --surface: #ffffff;
@@ -12,9 +16,20 @@
   --fg: #101828;
   --muted: #667085;
   --accent: #2e6be6;
-  --success: #12a150;
-  --warning: #d9870b;
-  --danger: #e5484d;
+  --success: #0e7e3f;
+  --warning: #9b6108;
+  --danger: #d91f25;
+
+  --bg-rgb: 247 248 250;
+  --surface-rgb: 255 255 255;
+  --surface-2-rgb: 241 243 246;
+  --border-rgb: 228 231 236;
+  --fg-rgb: 16 24 40;
+  --muted-rgb: 102 112 133;
+  --accent-rgb: 46 107 230;
+  --success-rgb: 14 126 63;
+  --warning-rgb: 155 97 8;
+  --danger-rgb: 217 31 37;
 }
 
 .dark {
@@ -28,6 +43,17 @@
   --success: #3ecf8e;
   --warning: #f5a623;
   --danger: #ff6b6f;
+
+  --bg-rgb: 11 13 16;
+  --surface-rgb: 19 23 28;
+  --surface-2-rgb: 26 31 38;
+  --border-rgb: 38 44 53;
+  --fg-rgb: 232 236 241;
+  --muted-rgb: 139 149 165;
+  --accent-rgb: 91 156 255;
+  --success-rgb: 62 207 142;
+  --warning-rgb: 245 166 35;
+  --danger-rgb: 255 107 111;
 }
 
 * {
