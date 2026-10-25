@@ -316,10 +316,17 @@ func TestExecuteICMPLoopback(t *testing.T) {
 	// The probe works with either socket form; when neither is available it
 	// degrades to TCP and says so, and never claims an ICMP success.
 
+	if !e.Protocol(model.ProbeICMP) {
+		t.Skip("ICMP socket unavailable on this host")
+	}
+
 	rec := e.Execute(context.Background(), model.ProbeTarget{
 		Target: "127.0.0.1", Protocol: model.ProbeICMP, SourceID: "lanory", Timeout: 2,
 	})
 	if !rec.Result.Success {
+		if strings.Contains(strings.ToLower(rec.Result.ErrorMessage), "permission denied") {
+			t.Skipf("ICMP unavailable on this host: %s", rec.Result.ErrorMessage)
+		}
 		t.Fatalf("icmp probe to 127.0.0.1 failed: %s / %s", rec.Result.Status, rec.Result.ErrorMessage)
 	}
 	if rec.Protocol != model.ProbeICMP {
