@@ -317,15 +317,19 @@ func scanProbe(sc interface{ Scan(...any) error }) (*model.ProbeTarget, error) {
 	var (
 		kind, protocol, state, lastResult string
 		enabled                           int
+		deviceID                          sql.NullString
 		lastRun, lastSuccess              sql.NullTime
 	)
 	err := sc.Scan(&p.ID, &p.Name, &kind, &p.Target, &p.Port, &protocol, &p.SourceID, &p.Interval, &p.Timeout, &enabled,
-		&p.DeviceID, &p.FailureThreshold, &p.RecoverConfirm, &state, &p.StateReason,
+		&deviceID, &p.FailureThreshold, &p.RecoverConfirm, &state, &p.StateReason,
 		&p.ConsecutiveFailures, &p.ConsecutiveSuccesses, &lastResult, &p.LastLatencyMS, &p.LastError,
 		&lastRun, &lastSuccess, &p.CreatedAt, &p.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
+	// device_id is NULL for a probe that is not attached to a device; the model
+	// keeps a plain string so readers see '' in both representations.
+	p.DeviceID = deviceID.String
 	p.Kind = model.ProbeKind(kind)
 	p.Protocol = model.ProbeProtocol(protocol)
 	p.State = model.DeviceState(state)
@@ -355,7 +359,7 @@ func (s *Store) CreateProbe(p *model.ProbeTarget) error {
 		last_run_at, last_success_at, created_at, updated_at
 	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		p.ID, p.Name, string(p.Kind), p.Target, p.Port, string(p.Protocol), p.SourceID, p.Interval, p.Timeout, boolInt(p.Enabled),
-		p.DeviceID, p.FailureThreshold, p.RecoverConfirm, string(p.State), p.StateReason,
+		nullString(p.DeviceID), p.FailureThreshold, p.RecoverConfirm, string(p.State), p.StateReason,
 		p.ConsecutiveFailures, p.ConsecutiveSuccesses, string(p.LastResult), p.LastLatencyMS, p.LastError,
 		nullTime(p.LastRunAt), nullTime(p.LastSuccessAt),
 		p.CreatedAt.UTC().Format(TimeLayout), p.UpdatedAt.UTC().Format(TimeLayout))
