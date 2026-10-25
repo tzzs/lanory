@@ -2,8 +2,21 @@
  * Minimal i18n layer.
  *
  * Lanory ships Chinese and English. Keys are dotted paths; interpolation uses
- * `{name}` placeholders. The language is stored in localStorage and falls back
- * to the browser language, then English.
+ * `{name}` placeholders.
+ *
+ * Ownership of the language value lives in one place: the persisted
+ * `useUIStore` (`web/src/stores/ui.ts`). This module is a *subscriber* of that
+ * store, not a parallel source of truth:
+ *
+ *   detectLanguage()  -> the only code that reads localStorage / navigator
+ *   setLanguage()     -> writes the module value + localStorage + <html lang>
+ *   useUIStore        -> persists the value and calls setLanguage() on change
+ *
+ * `t()` stays a plain function (most components `import { t } from '@/i18n'`),
+ * so changing `current` alone does not re-render anything. Re-rendering is the
+ * store's job: `AppShell` subscribes to `useUIStore((s) => s.language)` and keys
+ * the routed subtree on it. Without that, clicking a language in Settings wrote
+ * localStorage but left the visible text in the previous language until reload.
  */
 
 export type Language = 'zh-CN' | 'en'
@@ -131,6 +144,7 @@ const zhCN: Dict = {
   'topology.layout_tree': '树形布局',
   'topology.layout_layered': '分层布局',
   'topology.layout_force': '力导向布局',
+  'topology.zoom_for_detail': '放大查看设备详情',
 
   // ---- devices ----
   'devices.title': '设备',
@@ -150,6 +164,7 @@ const zhCN: Dict = {
   'devices.col_ip': 'IP',
   'devices.col_mac': 'MAC',
   'devices.col_interface': '接口',
+  'devices.col_source': '发现来源',
   'devices.col_status': '状态',
   'devices.col_last_seen': '最近出现',
   'devices.empty': '没有符合条件的设备',
@@ -477,6 +492,7 @@ const en: Dict = {
   'topology.layout_tree': 'Tree layout',
   'topology.layout_layered': 'Layered layout',
   'topology.layout_force': 'Force layout',
+  'topology.zoom_for_detail': 'Zoom in for device details',
 
   'devices.title': 'Devices',
   'devices.subtitle': 'Everything discovered on your network',
@@ -495,6 +511,7 @@ const en: Dict = {
   'devices.col_ip': 'IP',
   'devices.col_mac': 'MAC',
   'devices.col_interface': 'Interface',
+  'devices.col_source': 'Source',
   'devices.col_status': 'Status',
   'devices.col_last_seen': 'Last seen',
   'devices.empty': 'No devices match your filters',
@@ -706,7 +723,12 @@ const dictionaries: Record<Language, Dict> = { 'zh-CN': zhCN, en }
 
 let current: Language = detectLanguage()
 
-function detectLanguage(): Language {
+/**
+ * The one place that knows how to guess the language before the store exists:
+ * an explicit stored choice wins, then the browser preference, then English
+ * (which is also the dictionary fallback).
+ */
+export function detectLanguage(): Language {
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
     if (stored === 'zh-CN' || stored === 'en') return stored
@@ -723,6 +745,16 @@ export function getLanguage(): Language {
   return current
 }
 
+/**
+ * Applies a language: module value, localStorage and `<html lang>`.
+ *
+ * `<html lang>` matters beyond semantics: `lib/devices.ts:getLocale()` reads it
+ * to pick the locale for `Intl` date/relative-time formatting, so a stale
+ * attribute renders Chinese dates on an English page.
+ *
+ * Callers must invoke this once per change - `useUIStore.setLang` does the
+ * writing and the store value is what components re-render on.
+ */
 export function setLanguage(lang: Language): void {
   current = lang
   try {
@@ -735,6 +767,8 @@ export function setLanguage(lang: Language): void {
 
 /** Translates a key, interpolating `{name}` placeholders from params. */
 export function translate(key: string, params?: Record<string, string | number>): string {
+  // Read the dictionary on every call instead of closing over it: the language
+  // can change while components are mounted (the store re-renders them).
   const dict = dictionaries[current] ?? en
   let value = dict[key]
   if (value === undefined) {
@@ -756,4 +790,4 @@ export function t(key: string, params?: Record<string, string | number>): string
   return translate(key, params)
 }
 
-export const i18n = { t, translate, getLanguage, setLanguage, languages: LANGUAGES }
+export const i18n = { t, translate, getLanguage, setLanguage, detectLanguage, languages: LANGUAGES }

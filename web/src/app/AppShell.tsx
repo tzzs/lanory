@@ -76,6 +76,15 @@ function RealtimeSync() {
 export function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => initTheme(), [])
 
+  // `t()` is a plain module function, so a language change does not re-render the
+  // components that call it. Subscribing here and keying the routed subtree on
+  // the value remounts the content, which is the cheapest correct answer: the
+  // alternative (a `useTranslation()` hook) would have to be adopted by every
+  // component, including pages owned by other changes. Cost: content state is
+  // rebuilt on a language switch (e.g. an unsaved Settings draft is discarded),
+  // which is a deliberate trade for actually seeing the new language.
+  const language = useUIStore((s) => s.language)
+
   // The API requires a bearer token. When it rejects the current one the app
   // shows the token prompt instead of an empty page, so a first-time visitor
   // knows what to do rather than staring at a blank screen.
@@ -85,7 +94,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <BrowserRouter basename={embedded ? '/embed' : undefined}>
       <div className="flex h-full min-w-0">
-        <div className="flex min-w-0 flex-1 flex-col">
+        {/* Keyed on the language: a switch remounts the chrome and the routed
+            content so `t()` is re-evaluated everywhere. The router and the
+            sync-only helpers stay mounted, so the URL and the query cache
+            survive; only component state is rebuilt. */}
+        <div key={language} className="flex min-w-0 flex-1 flex-col">
           {required ? null : <Navigation embedded={embedded} />}
           <AlertBanner />
           <main className="min-h-0 flex-1 overflow-auto">

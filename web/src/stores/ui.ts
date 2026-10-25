@@ -9,7 +9,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { Device, TopologyEdge, DeviceState, DeviceType } from '@/types/api'
-import { setLanguage, type Language } from '@/i18n'
+import { detectLanguage, setLanguage, type Language } from '@/i18n'
 
 export type ThemeMode = 'light' | 'dark' | 'system'
 
@@ -34,7 +34,9 @@ interface UIState {
   detailPanelOpen: boolean
   setDetailPanelOpen: (open: boolean) => void
 
-  /* global filters shared by the device table and the topology view */
+  // Global filters shared by the device table and the topology view.
+  // (Written as a line comment: `/* global ... */` is an ESLint directive that
+  // declares globals, which produced nine spurious unused-var warnings here.)
   deviceFilters: {
     query: string
     type: DeviceType | ''
@@ -70,7 +72,10 @@ export const useUIStore = create<UIState>()(
       theme: 'system',
       setTheme: (theme) => set({ theme }),
 
-      language: 'en',
+      // Seeded from the same detection the i18n module uses, so the Settings page
+      // highlights the language that is actually being rendered. Hardcoding 'en'
+      // made a Chinese UI claim English was selected.
+      language: detectLanguage(),
       setLang: (language) => {
         setLanguage(language)
         set({ language })
@@ -109,6 +114,15 @@ export const useUIStore = create<UIState>()(
         language: state.language,
         deviceFilters: state.deviceFilters,
       }),
+      // The i18n module keeps its own copy of the language for `t()`; push the
+      // rehydrated value into it on boot, otherwise a persisted 'zh-CN' never
+      // reaches the dictionary (or `<html lang>`) until the user clicks.
+      // `persist` calls this synchronously for the localStorage backend, i.e.
+      // before the store module finishes evaluating, so the first render already
+      // has the right language.
+      onRehydrateStorage: () => (state) => {
+        if (state) setLanguage(state.language)
+      },
     },
   ),
 )

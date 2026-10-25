@@ -3,7 +3,17 @@ import { createRoot } from 'react-dom/client'
 import { App } from './app/App'
 import './index.css'
 import { initializeEmbeddedSession } from '@/lib/embed'
-import { t } from '@/i18n'
+import { getLanguage, setLanguage, t } from '@/i18n'
+import { useUIStore } from '@/stores/ui'
+
+// The persisted UI store owns the language. Reading it here forces its
+// localStorage rehydration (whose `onRehydrateStorage` writes the value into the
+// i18n module) to finish before the first render, so the first paint already has
+// the right dictionary and `<html lang>` - no flash of the wrong language, and
+// no wrong-language `Intl` formatting on the first render. The guard keeps this
+// a no-op when rehydration already wrote the same value.
+const bootLanguage = useUIStore.getState().language
+if (getLanguage() !== bootLanguage) setLanguage(bootLanguage)
 
 const root = document.getElementById('root')
 if (!root) throw new Error('missing #root element')
