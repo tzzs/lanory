@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildFlow, iconKeyForDeviceType } from '@/features/topology/graph'
+import { buildFlow, hideOffline, iconKeyForDeviceType, isDetailZoom, DETAIL_ZOOM } from '@/features/topology/graph'
 import type { Topology, TopologyNode, DeviceType } from '@/types/api'
 
 const layout: Topology['layout'] = []
@@ -230,4 +230,129 @@ it('places the active WAN above the local router even when old saved positions p
   expect(edges.some(e => e.source === wan.id && e.target === router.id)).toBe(true)
   expect(nodes.find(n => n.id === wan.id)!.data.label).toBe('WAN · eth3')
   expect(nodes.find(n => n.id === wan.id)!.data.subtitle).toContain('100 Mbps')
+})
+
+describe('hideOffline', () => {
+  function stateful(id: string, state: string, opts: Partial<TopologyNode> = {}): TopologyNode {
+    const node = deviceNode(id, id, 'desktop')
+    node.state = state as TopologyNode['state']
+    node.device!.state = state as TopologyNode['state']
+    return { ...node, ...opts }
+  }
+
+  it('drops offline devices and their edges', () => {
+    const payload: Topology = {
+      nodes: [stateful('dev-1', 'online'), stateful('dev-2', 'offline')],
+      edges: [
+        {
+          id: 'edge-1',
+          source_id: 'dev-1',
+          target_id: 'dev-2',
+          edge_type: 'user_defined',
+          discovery_source: 'manual',
+          confidence: 1,
+          user_confirmed: true,
+          locked: false,
+          status: 'link_up',
+          unverified: false,
+          evidence_count: 0,
+          last_observed: generated,
+          created_at: generated,
+          updated_at: generated,
+        },
+      ],
+      layout,
+      generated_at: generated,
+    }
+    const built = buildFlow(payload, { unverifiedThreshold: 0.6 })
+    const result = hideOffline(built.nodes, built.edges)
+    expect(result.nodes.map((n) => n.id)).toEqual(['dev-1'])
+    expect(result.edges).toHaveLength(0)
+    expect(result.hidden).toBe(1)
+  })
+
+  it('keeps an offline parent that still has a visible child', () => {
+    // Hiding the router would orphan everything behind it and claim those
+    // devices have no upstream.
+    const router = deviceNode('dev-router', 'Router', 'router')
+    router.device!.is_self = true
+    router.children = ['dev-child']
+    const payload: Topology = {
+      nodes: [router, stateful('dev-child', 'online')],
+      edges: [
+        {
+          id: 'edge-1',
+          source_id: 'dev-router',
+          target_id: 'dev-child',
+          edge_type: 'observed_mac_port',
+          discovery_source: 'bridge_fdb',
+          confidence: 0.95,
+          user_confirmed: true,
+          locked: false,
+          status: 'link_up',
+          unverified: false,
+          evidence_count: 1,
+          last_observed: generated,
+          created_at: generated,
+          updated_at: generated,
+        },
+      ],
+      layout,
+      generated_at: generated,
+    }
+    const built = buildFlow(payload, { unverifiedThreshold: 0.6 })
+    // Force the router offline after the build so the parent link is intact.
+    const nodes = built.nodes.map((n) => (n.id === 'dev-router' ? { ...n, data: { ...n.data, state: 'offline' } } : n))
+    const result = hideOffline(nodes, built.edges)
+    expect(result.nodes.map((n) => n.id).sort()).toEqual(['dev-child', 'dev-router'])
+    expect(result.hidden).toBe(0)
+  })
+
+  it('never drops network nodes', () => {
+    const payload: Topology = {
+      nodes: [
+        stateful('dev-1', 'offline'),
+        { id: 'net-br-lan', kind: 'network', state: 'unknown', network: { id: 'br-lan', name: 'br-lan', interface_id: 'if-1', role: 'lan', device_count: 0 } },
+      ],
+      edges: [],
+      layout,
+      generated_at: generated,
+    }
+    const built = buildFlow(payload, { unverifiedThreshold: 0.6 })
+    const result = hideOffline(built.nodes, built.edges)
+    expect(result.nodes.map((n) => n.id)).toEqual(['net-br-lan'])
+  })
+})
+
+describe('zoom tier', () => {
+  const payload: Topology = {
+    nodes: [deviceNode('dev-1', 'Router', 'router'), deviceNode('dev-2', 'PC', 'desktop', '192.0.2.116')],
+    edges: [],
+    layout,
+    generated_at: generated,
+  }
+
+  it('keeps the threshold inside the range where a card can still be read', () => {
+    // 0 or 2 would silently disable the tier, so the constant is guarded.
+    expect(DETAIL_ZOOM).toBeGreaterThan(0)
+    expect(DETAIL_ZOOM).toBeLessThan(1)
+  })
+
+  it('flips the tier at the exported threshold', () => {
+    expect(isDetailZoom(DETAIL_ZOOM)).toBe(true)
+    expect(isDetailZoom(DETAIL_ZOOM - 0.01)).toBe(false)
+  })
+
+  it('marks the built nodes with the tier they were built for', () => {
+    const detailed = buildFlow(payload, { unverifiedThreshold: 0.6 })
+    expect(detailed.nodes.every(n => n.data.showDetail === true)).toBe(true)
+
+    const low = buildFlow(payload, { unverifiedThreshold: 0.6, showDetail: false })
+    expect(low.nodes.every(n => n.data.showDetail === false)).toBe(true)
+  })
+
+  it('defaults to the detailed tier when no tier is given', () => {
+    const { nodes } = buildFlow(payload, { unverifiedThreshold: 0.6 })
+    expect(nodes[0].data.showDetail).toBe(true)
+  })
 })

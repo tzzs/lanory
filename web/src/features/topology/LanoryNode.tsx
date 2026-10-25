@@ -57,6 +57,11 @@ const STATE_DOT: Record<string, string> = {
 function LanoryNodeComponent({ data, selected }: NodeProps) {
   const nodeData = data as TopologyNodeData
   const Icon = ICONS[nodeData.icon] ?? (nodeData.kind === 'unresolved' ? CircleDashed : HelpCircle)
+  // The zoom tier travels with the node data, so the renderer needs no prop
+  // of its own. Absent means the detailed tier. Unresolved segments are
+  // excluded: they are already group markers, and the audit wants them
+  // unchanged at every zoom level.
+  const showDetail = nodeData.kind !== 'unresolved' && nodeData.showDetail !== false
 
   if (nodeData.annotation) return <div className="text-sm font-semibold text-muted">{nodeData.label}</div>
 
@@ -76,7 +81,11 @@ function LanoryNodeComponent({ data, selected }: NodeProps) {
   return (
     <div
       className={cn(
-        'group relative w-[200px] rounded-lg border border-border bg-surface px-3 py-2.5 shadow-sm transition-shadow',
+        'group relative rounded-lg border border-border bg-surface px-3 py-2.5 shadow-sm transition-shadow',
+        // The card is scaled by the viewport, so the low tier trades width for
+        // a bigger name: at 0.5× a 15px name still reads while a 200px card
+        // would overlap its neighbours.
+        showDetail ? 'w-[200px]' : 'w-[140px]',
         'hover:shadow-md',
         selected && 'ring-2 ring-accent',
         nodeData.kind !== 'unresolved' && `ring-1 ${STATE_RING[nodeData.state] ?? 'ring-border'}`,
@@ -97,16 +106,29 @@ function LanoryNodeComponent({ data, selected }: NodeProps) {
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <span title={nodeData.label} className="truncate text-[13px] font-medium text-fg">{nodeData.label}</span>
+            <span
+              title={nodeData.label}
+              className={cn(
+                'truncate font-medium text-fg',
+                // The name is the one thing worth keeping at low zoom, and it
+                // is made larger — not smaller — because the viewport already
+                // shrinks it.
+                showDetail ? 'text-[13px]' : 'text-[15px]',
+              )}
+            >
+              {nodeData.label}
+            </span>
             {nodeData.isManual ? (
               <span className="shrink-0 rounded bg-accent/15 px-1 text-[9px] font-medium text-accent">
                 {t('devices.manual_badge')}
               </span>
             ) : null}
           </div>
-          <p className="truncate font-mono text-[10px] text-muted">
-            {nodeData.subtitle || nodeData.primaryIp || nodeData.primaryMac || t('app.unknown')}
-          </p>
+          {showDetail ? (
+            <p className="truncate font-mono text-[10px] text-muted">
+              {nodeData.subtitle || nodeData.primaryIp || nodeData.primaryMac || t('app.unknown')}
+            </p>
+          ) : null}
         </div>
       </div>
 
@@ -115,8 +137,8 @@ function LanoryNodeComponent({ data, selected }: NodeProps) {
           className={cn('inline-block h-1.5 w-1.5 rounded-full', STATE_DOT[nodeData.state] ?? 'bg-muted')}
           aria-hidden="true"
         />
-        <span className="text-[10px] text-muted">{t(`state.${nodeData.state}`)}</span>
-        {nodeData.isLocked ? (
+        {showDetail ? <span className="text-[10px] text-muted">{t(`state.${nodeData.state}`)}</span> : null}
+        {showDetail && nodeData.isLocked ? (
           <span className="ml-auto text-[9px] text-muted">{t('topology.locked')}</span>
         ) : null}
       </div>

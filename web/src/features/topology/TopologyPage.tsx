@@ -17,13 +17,13 @@ import {
   type OnEdgesChange,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { LayoutGrid, Save, Maximize2, Plus, Link2, RefreshCw } from 'lucide-react'
+import { LayoutGrid, Save, Maximize2, Plus, Link2, RefreshCw, Eye } from 'lucide-react'
 import { t } from '@/i18n'
 import { useTopology, useSaveLayout, useCreateEdge, useMonitoring } from '@/hooks/useApi'
 import { useUIStore } from '@/stores/ui'
 import { Button, Card, Badge, Modal, Select, Input, EmptyState, ErrorState, Skeleton, Field } from '@/components/ui'
 import { LanoryNode } from '@/features/topology/LanoryNode'
-import { buildFlow, type TopologyNodeData, type TopologyEdgeData } from '@/features/topology/graph'
+import { buildFlow, hideOffline, isDetailZoom, type TopologyNodeData, type TopologyEdgeData } from '@/features/topology/graph'
 import { AddDeviceForm } from '@/features/devices/AddDeviceForm'
 import { EdgeInspector } from '@/features/topology/EdgeInspector'
 import { DeviceInspector } from '@/features/topology/DeviceInspector'
@@ -49,18 +49,53 @@ function TopologyCanvas() {
   const [dirty, setDirty] = useState(false)
   const initialized = useNodesInitialized()
   const detailPanelOpen = useUIStore(s => s.detailPanelOpen)
+  // Offline devices are hidden by default: the map answers "what is on my
+  // network now", and a wall of red boxes from devices that are asleep drowns
+  // that answer. The toggle and the hidden-count badge keep them discoverable,
+  // so nothing is silently lost.
+  const [showOffline, setShowOffline] = useState(false)
+  const [hiddenOffline, setHiddenOffline] = useState(0)
+  // The viewport zoom decides how much of a card can be read: below the
+  // detail threshold the node renders in its low tier (name only, bigger
+  // type). The raw zoom is tracked, but only the tier is allowed to reach
+  // the graph, so a wheel gesture inside one tier rebuilds nothing.
+  const [zoom, setZoom] = useState(1)
+  const showDetail = useMemo(() => isDetailZoom(zoom), [zoom])
 
   const { fitView } = useReactFlow()
   const hasFitted = useRef(false)
 
+  // Build the graph from the payload. The build is memoized on the tier
+  // rather than on the raw zoom, so the graph is only rebuilt when the tier
+  // actually flips.
+  const built = useMemo(() => {
+    if (!data) return null
+    const flow = buildFlow(data, {
+      unverifiedThreshold: UNVERIFIED_THRESHOLD,
+      interfaces: monitoring.data?.interfaces.map(s => s.interface),
+      showDetail,
+    })
+    return showOffline ? { ...flow, hidden: 0 } : hideOffline(flow.nodes, flow.edges)
+  }, [data, monitoring.data, showOffline, showDetail])
+
   // Rebuild the graph whenever the payload changes.
   useEffect(() => {
-    if (!data || dirty) return
-    const built = buildFlow(data, { unverifiedThreshold: UNVERIFIED_THRESHOLD, interfaces: monitoring.data?.interfaces.map(s => s.interface) })
+    if (!built || dirty) return
     setNodes(built.nodes)
     setEdges(built.edges)
+    setHiddenOffline(built.hidden)
     setDirty(false)
-  }, [data, dirty, monitoring.data])
+  }, [built, dirty])
+
+  // Apply the tier to the nodes already on screen. A graph with unsaved
+  // layout changes is never rebuilt from the payload, so the tier is
+  // applied as a data patch instead of a rebuild.
+  useEffect(() => {
+    setNodes(current => {
+      if (current.length === 0 || current.every(n => n.data.showDetail === showDetail)) return current
+      return current.map(n => (n.data.showDetail === showDetail ? n : { ...n, data: { ...n.data, showDetail } }))
+    })
+  }, [showDetail])
 
   // Fit the view once on first data, but never again so the user's zoom and
   // pan survive subsequent polls.
@@ -80,6 +115,12 @@ function TopologyCanvas() {
 
   const onEdgesChange: OnEdgesChange<Edge<TopologyEdgeData>> = useCallback((changes) => {
     setEdges(current => applyEdgeChanges(changes, current))
+  }, [])
+
+  // The zoom is tracked so the tier can be derived; the graph itself is only
+  // rebuilt when the tier flips, not on every wheel tick.
+  const onMove = useCallback((_event: MouseEvent | TouchEvent | null, viewport: { zoom: number }) => {
+    setZoom(viewport.zoom)
   }, [])
 
   const onNodeClick: NodeMouseHandler = useCallback(
@@ -115,11 +156,17 @@ function TopologyCanvas() {
   const onAutoLayout = useCallback(() => {
     if (!data) return
     hasFitted.current = false
-    const built = buildFlow({ ...data, layout: data.layout.filter(p => p.pinned) }, { unverifiedThreshold: UNVERIFIED_THRESHOLD, interfaces: monitoring.data?.interfaces.map(s => s.interface) })
-    setNodes(built.nodes)
-    setEdges(built.edges)
+    const flow = buildFlow({ ...data, layout: data.layout.filter(p => p.pinned) }, {
+      unverifiedThreshold: UNVERIFIED_THRESHOLD,
+      interfaces: monitoring.data?.interfaces.map(s => s.interface),
+      showDetail,
+    })
+    const visible = showOffline ? { ...flow, hidden: 0 } : hideOffline(flow.nodes, flow.edges)
+    setNodes(visible.nodes)
+    setEdges(visible.edges)
+    setHiddenOffline(visible.hidden)
     setDirty(true)
-  }, [data, monitoring.data])
+  }, [data, monitoring.data, showOffline, showDetail])
 
   const unplaced = nodes.filter(n => n.data.kind === 'device' && !n.parentId && !edges.some(e => e.source === n.id || e.target === n.id) && !data?.nodes.find(item => item.id === n.id)?.device?.is_self)
 
@@ -202,7 +249,37 @@ function TopologyCanvas() {
               {t('topology.manual_layout')}
             </Badge>
           ) : null}
+          {!showDetail ? (
+            <span className="text-[11px] text-muted">{t('topology.zoom_for_detail')}</span>
+          ) : null}
+          <div className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setShowOffline((v) => !v)}
+            aria-pressed={showOffline}
+            title={showOffline ? t('topology.hide_offline') : t('topology.show_offline')}
+          >
+            <Eye size={14} aria-hidden="true" className={showOffline ? '' : 'opacity-40'} />
+            {showOffline ? t('topology.hide_offline') : t('topology.show_offline')}
+            {!showOffline && hiddenOffline > 0 ? (
+              <span className="ml-1 rounded bg-surface-2 px-1 text-[10px] text-muted">{hiddenOffline}</span>
+            ) : null}
+          </Button>
         </div>
+
+        {!showOffline && hiddenOffline > 0 ? (
+          <div className="absolute right-4 top-4 z-10 flex items-center gap-2 rounded-md border border-border bg-surface/95 px-2.5 py-1.5 text-[11px] text-muted">
+            <span>{t('topology.offline_hidden', { count: hiddenOffline })}</span>
+            <button
+              type="button"
+              className="font-medium text-accent underline-offset-2 hover:underline"
+              onClick={() => setShowOffline(true)}
+            >
+              {t('topology.offline_hidden_show')}
+            </button>
+          </div>
+        ) : null}
 
         {saveLayout.isError ? <div role="alert" className="absolute left-4 top-16 z-10 rounded-md border border-danger/30 bg-surface px-3 py-2 text-xs text-danger">{saveLayout.error instanceof Error ? saveLayout.error.message : t('app.error')}</div> : null}
 
@@ -214,6 +291,7 @@ function TopologyCanvas() {
           onEdgesChange={onEdgesChange}
           onNodeClick={onNodeClick}
           onEdgeClick={onEdgeClick}
+          onMove={onMove}
           nodesDraggable
           nodesConnectable={false}
           elementsSelectable

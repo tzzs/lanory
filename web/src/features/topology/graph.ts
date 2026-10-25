@@ -32,6 +32,11 @@ export interface TopologyNodeData extends Record<string, unknown> {
   group?: boolean
   subtitle?: string
   memberCount?: number
+  /**
+   * Whether the card renders its detail lines (address, state text).
+   * False in the low zoom tier, where that text would be unreadable.
+   */
+  showDetail?: boolean
 }
 
 export interface TopologyEdgeData extends Record<string, unknown> {
@@ -54,6 +59,28 @@ export interface BuildOptions {
   /** Threshold under which an edge is drawn dashed. */
   unverifiedThreshold: number
   interfaces?: NetworkInterface[]
+  /**
+   * Whether the cards render their detail lines. The caller picks the tier
+   * with isDetailZoom(); the default is the full-detail tier.
+   */
+  showDetail?: boolean
+}
+
+/**
+ * The zoom at which a device card stops carrying information.
+ *
+ * Measured on the real graph: at ~1470px wide the fitted viewport is ~0.696×,
+ * which renders the 13px device name at ~9 CSS px and the 10px address at
+ * ~7 CSS px; at 390px wide the fit drops to ~0.286×, i.e. ~3.7 CSS px and
+ * ~2.9 CSS px. Below roughly 7 CSS px the text stops being readable, so the
+ * low tier keeps only the name, the icon and the status dot, and enlarges the
+ * name to compensate for the viewport scale.
+ */
+export const DETAIL_ZOOM = 0.55
+
+/** True when the viewport zoom is high enough for the detailed node tier. */
+export function isDetailZoom(zoom: number): boolean {
+  return zoom >= DETAIL_ZOOM
 }
 
 /** Icon key per device type, resolved to a component in the node renderer. */
@@ -90,6 +117,7 @@ export function buildFlow(payload: TopologyPayload, options: BuildOptions): { no
   const tree = hierarchy(payload, options.interfaces)
   const nodes: Node<TopologyNodeData>[] = []
   const nodeIndex = new Map<string, number>()
+  const showDetail = options.showDetail !== false
 
   payload.nodes.forEach((node: LanoryNode) => {
     const kind = node.unresolved ? 'unresolved' : node.kind === 'network' ? 'network' : 'device'
@@ -115,7 +143,7 @@ export function buildFlow(payload: TopologyPayload, options: BuildOptions): { no
       group: tree.groups.has(node.id),
       subtitle: node.unresolved ? t('topology.segment_hint') : node.kind === 'network' ? [node.network?.cidr, node.network?.role?.toUpperCase()].filter(Boolean).join(' · ') : undefined,
       memberCount: tree.groups.get(node.id)?.length,
-
+      showDetail,
     }
 
     if (node.unresolved) data.label = [segmentPort(payload, node), t('topology.unresolved_segment')].filter(Boolean).join(' · ')
@@ -239,6 +267,61 @@ export function buildFlow(payload: TopologyPayload, options: BuildOptions): { no
   // React Flow requires parent nodes to precede their children.
   nodes.sort((a, b) => Number(!!a.parentId) - Number(!!b.parentId))
   return { nodes, edges }
+}
+
+/**
+ * Drops offline device nodes from an already-built graph.
+ *
+ * Two rules keep the result honest rather than merely tidy:
+ *
+ *   - a node that still has a visible descendant is kept, even when it is
+ *     offline. Hiding a router would otherwise orphan every device behind it and
+ *     silently claim those devices have no upstream;
+ *   - network nodes are never dropped: a network is not online or offline, and
+ *     the graph's spine would disappear with it.
+ */
+export function hideOffline(
+  nodes: Node<TopologyNodeData>[],
+  edges: Edge<TopologyEdgeData>[],
+): { nodes: Node<TopologyNodeData>[]; edges: Edge<TopologyEdgeData>[]; hidden: number } {
+  const kept = new Set<string>()
+  const hidden = new Set<string>()
+  for (const node of nodes) {
+    const droppable = node.data.kind === 'device' && node.data.state === 'offline' && !node.data.annotation
+    if (droppable) hidden.add(node.id)
+    else kept.add(node.id)
+  }
+  if (hidden.size === 0) return { nodes, edges, hidden: 0 }
+
+  // Re-admit every ancestor of a kept node: an offline parent of a visible child
+  // is part of the picture, not noise.
+  const parentOf = new Map<string, string>()
+  for (const node of nodes) {
+    if (node.parentId) parentOf.set(node.id, node.parentId)
+  }
+  for (const node of nodes) {
+    if (!kept.has(node.id)) continue
+    let ancestor = parentOf.get(node.id)
+    const seen = new Set<string>()
+    while (ancestor && !seen.has(ancestor)) {
+      seen.add(ancestor)
+      kept.add(ancestor)
+      hidden.delete(ancestor)
+      ancestor = parentOf.get(ancestor)
+    }
+  }
+  // Same rule along the edge direction, for payloads that carry no parentId.
+  for (const edge of edges) {
+    if (kept.has(edge.target) && hidden.has(edge.source)) {
+      kept.add(edge.source)
+      hidden.delete(edge.source)
+    }
+  }
+
+  const visibleNodes = nodes.filter((n) => kept.has(n.id))
+  const visibleIDs = new Set(visibleNodes.map((n) => n.id))
+  const visibleEdges = edges.filter((e) => visibleIDs.has(e.source) && visibleIDs.has(e.target))
+  return { nodes: visibleNodes, edges: visibleEdges, hidden: hidden.size }
 }
 
 /** Finds the speed of the interface referenced by an edge, if any. */
