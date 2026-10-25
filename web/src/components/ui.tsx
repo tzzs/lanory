@@ -51,14 +51,16 @@ Button.displayName = 'Button'
 /* Card                                                                       */
 /* -------------------------------------------------------------------------- */
 
-export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return (
+export const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
     <div
+      ref={ref}
       className={cn('rounded-lg border border-border bg-surface', className)}
       {...props}
     />
-  )
-}
+  ),
+)
+Card.displayName = 'Card'
 
 export function CardHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return <div className={cn('flex items-center justify-between px-4 py-3 border-b border-border', className)} {...props} />
@@ -331,15 +333,90 @@ export interface ModalProps {
 
 const modalWidths = { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl' }
 
+const focusableSelector = [
+  'a[href]',
+  'button:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(', ')
+
+/**
+ * Focusable descendants of `root`, in document order.
+ *
+ * Elements with no layout box are dropped: `offsetParent` is null inside a
+ * `display: none` subtree, and this app hides controls with utility classes, so
+ * a naive query would let Tab land on something the user cannot see.
+ */
+function focusableIn(root: HTMLElement): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>(focusableSelector)).filter(
+    (el) => el.offsetParent !== null,
+  )
+}
+
 export function Modal({ open, onClose, title, description, children, footer, width = 'md' }: ModalProps) {
+  const dialogRef = React.useRef<HTMLDivElement>(null)
+  const onCloseRef = React.useRef(onClose)
+
+  // Held in a ref so a parent that re-creates the callback on every render does
+  // not re-run the effects below and yank focus back to the first control.
+  React.useEffect(() => {
+    onCloseRef.current = onClose
+  })
+
   React.useEffect(() => {
     if (!open) return
+    const dialog = dialogRef.current
+    if (!dialog) return
+
+    // This dialog is hand-rolled, so this trap is what makes aria-modal
+    // truthful: without it Tab walks out of the dialog and into the page
+    // behind the backdrop, where the user cannot see where focus went.
+    const restoreTo = document.activeElement instanceof HTMLElement ? document.activeElement : null
+
+    const initial = focusableIn(dialog)
+    if (initial.length > 0) initial[0].focus()
+    else dialog.focus()
+
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') {
+        onCloseRef.current()
+        return
+      }
+      if (e.key !== 'Tab') return
+
+      // Re-query on every Tab: content inside the dialog can grow or shrink
+      // (a form gains fields, a submit button becomes disabled while pending).
+      const items = focusableIn(dialog)
+      if (items.length === 0) {
+        e.preventDefault()
+        dialog.focus()
+        return
+      }
+
+      const first = items[0]
+      const last = items[items.length - 1]
+      const active = document.activeElement
+      const escaped = !dialog.contains(active)
+
+      if (e.shiftKey) {
+        if (escaped || active === first || active === dialog) {
+          e.preventDefault()
+          last.focus()
+        }
+      } else if (escaped || active === last || active === dialog) {
+        e.preventDefault()
+        first.focus()
+      }
     }
+
     document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [open, onClose])
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      if (restoreTo && restoreTo.isConnected) restoreTo.focus()
+    }
+  }, [open])
 
   if (!open) return null
 
@@ -351,9 +428,11 @@ export function Modal({ open, onClose, title, description, children, footer, wid
         aria-hidden="true"
       />
       <Card
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        tabIndex={-1}
         className={cn('relative z-10 w-full animate-slide-up shadow-xl', modalWidths[width])}
       >
         <CardHeader>

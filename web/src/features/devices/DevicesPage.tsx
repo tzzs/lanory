@@ -131,7 +131,19 @@ function DeviceFilters() {
 function DeviceRow({ device, onSelect }: { device: Device; onSelect: (id: string) => void }) {
   const Icon = deviceIcon(device.type)
   return (
-    <TR className="cursor-pointer" onClick={() => onSelect(device.id)}>
+    <TR
+      className="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+      onClick={() => onSelect(device.id)}
+      tabIndex={0}
+      role="button"
+      aria-label={device.name}
+      onKeyDown={(e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return
+        // Space would otherwise scroll the page instead of activating the row.
+        if (e.key === ' ') e.preventDefault()
+        onSelect(device.id)
+      }}
+    >
       <TD>
         <div className="flex items-center gap-2.5">
           <StatusDot state={device.state} />
@@ -268,7 +280,7 @@ export function DevicesPage() {
                   <TH>{t('devices.col_type')}</TH>
                   <TH>{t('devices.col_ip')}</TH>
                   <TH>{t('devices.col_mac')}</TH>
-                  <TH>{t('devices.col_interface')}</TH>
+                  <TH>{t('devices.col_source')}</TH>
                   <TH>{t('devices.col_status')}</TH>
                   <TH>{t('devices.col_last_seen')}</TH>
                 </TR>
