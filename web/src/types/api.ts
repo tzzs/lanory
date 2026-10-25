@@ -334,8 +334,27 @@ export interface TopologyNode {
   state_reason?: string
   primary_ip?: string
   primary_mac?: string
+  /** Every address of the node, tagged with its interface and side. */
+  addresses?: NodeAddress[]
   children?: string[]
   unresolved?: boolean
+}
+
+/**
+ * One address of a topology node.
+ *
+ * `side` is what makes a multi-homed node legible: a router's LAN address and
+ * its WAN address are different networks on different sides of the same box.
+ * `cidr` is the network the address belongs to, so addresses can be grouped.
+ */
+export interface NodeAddress {
+  address: string
+  family: AddressFamily
+  prefix_length?: number
+  cidr?: string
+  interface?: string
+  side: InterfaceRole
+  is_primary?: boolean
 }
 
 export interface Topology {

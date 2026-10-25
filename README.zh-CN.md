@@ -5,6 +5,8 @@
 **家的网络，一图看清。**
 **See your home network at a glance.**
 
+**发音：** *Lanory* /ləˈnɔːri/，英文近似 “luh-NOR-ee”；中文可读作“拉诺瑞”。
+
 面向 OpenWrt / iStoreOS 的自托管家庭网络拓扑与监控工具。
 一个 Go 二进制、一个 SQLite 文件、一张可交互的网络地图。
 无云端、无账号、运行时不需要 Node.js 或 Python，并且对路由器**只读**。

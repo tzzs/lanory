@@ -17,6 +17,7 @@ Two deployment targets, in order of how well they fit Lanory:
 - [Upgrade](#upgrade)
 - [Resource usage](#resource-usage)
 - [Diagnostics](#diagnostics)
+- [Embedding in LuCI](#embedding-in-luci)
 - [What is verified](#what-is-verified)
 
 ## Requirements

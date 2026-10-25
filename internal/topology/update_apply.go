@@ -3,6 +3,7 @@ package topology
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -736,11 +737,22 @@ func (u *UpdateEngine) flagSelf(dev *model.Device) (*model.Device, error) {
 // Order matters: a bridge's MAC is normally the MAC of one of its member ports,
 // and the WAN interface is the other reliable marker. Taking the bridge MAC first
 // keeps the identity stable when a member port is added or removed.
+//
+// Virtual interfaces (docker0, dummy0, etc.) are excluded because container
+// bridges report themselves as type "bridge" and would otherwise be mistaken
+// for the router's own MAC. The candidates are sorted within each group so the
+// selection is deterministic regardless of observation order.
 func selfMACsFromInterfaces(interfaces []discovery.InterfaceObservation) []string {
 	var bridges, wans, physical []string
 	for _, obs := range interfaces {
 		mac := database.CanonicalizeMAC(obs.MAC)
 		if mac == "" || database.IsZeroMAC(mac) || database.IsMulticastMAC(mac) {
+			continue
+		}
+		// Skip virtual interfaces: a container bridge (docker0) reports itself
+		// as a bridge and would otherwise be taken for the host, while its MAC
+		// belongs to the container runtime, not to this router.
+		if obs.Virtual {
 			continue
 		}
 		switch {
@@ -752,6 +764,11 @@ func selfMACsFromInterfaces(interfaces []discovery.InterfaceObservation) []strin
 			physical = append(physical, mac)
 		}
 	}
+	// Sort within each group so the chosen candidate is deterministic even when
+	// the collector emits its observations in a different order between runs.
+	sort.Strings(bridges)
+	sort.Strings(wans)
+	sort.Strings(physical)
 	out := make([]string, 0, len(bridges)+len(wans)+len(physical))
 	seen := map[string]bool{}
 	for _, group := range [][]string{bridges, wans, physical} {

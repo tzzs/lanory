@@ -10,7 +10,7 @@
  */
 
 import { MarkerType, type Edge, type Node } from '@xyflow/react'
-import { EDGE_STATUS_COLORS, confidenceBand, formatEdgeLabel, formatConfidence } from '@/lib/devices'
+import { EDGE_STATUS_COLORS, confidenceBand, formatEdgeLabel, formatConfidence, addressSummary, isMultiHomed } from '@/lib/devices'
 import { t } from '@/i18n'
 import { hierarchy, edgePort, segmentPort } from './hierarchy'
 import type { Topology as TopologyPayload, TopologyNode as LanoryNode, TopologyEdge as LanoryEdge, NetworkInterface } from '@/types/api'
@@ -24,6 +24,10 @@ export interface TopologyNodeData extends Record<string, unknown> {
   stateReason?: string
   primaryIp?: string
   primaryMac?: string
+  /** Compact address line: shows both sides when the node is multi-homed. */
+  addressLine?: string
+  /** True when the node carries addresses on more than one subnet. */
+  multiHomed?: boolean
   deviceType?: string
   isManual?: boolean
   isLocked?: boolean
@@ -136,6 +140,8 @@ export function buildFlow(payload: TopologyPayload, options: BuildOptions): { no
       stateReason: node.state_reason,
       primaryIp: node.primary_ip,
       primaryMac: node.primary_mac,
+      addressLine: addressSummary(node.addresses, node.primary_ip),
+      multiHomed: isMultiHomed(node.addresses),
       deviceType: node.device?.type,
       isManual: node.device?.is_manual,
       isLocked: node.device?.is_locked,

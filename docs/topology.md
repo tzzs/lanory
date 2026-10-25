@@ -7,6 +7,8 @@ claim, and how user corrections survive.
 - [From evidence to edges](#from-evidence-to-edges)
 - [Confidence](#confidence)
 - [Unresolved segments](#unresolved-segments)
+- [Multi-homed nodes and subnets](#multi-homed-nodes-and-subnets)
+- [Offline devices in the graph](#offline-devices-in-the-graph)
 - [User intent](#user-intent)
 - [Layout](#layout)
 - [What the graph does not claim](#what-the-graph-does-not-claim)
@@ -109,6 +111,65 @@ The segment node has `unresolved: true`. The UI labels it "unresolved" and offer
 "add the device that is really here", which creates a manual node and lets the
 user re-parent. Nothing is asserted on the user's behalf.
 
+## Multi-homed nodes and subnets
+
+A router is not one address. The same box owns `192.168.100.1` on its LAN bridge
+and `192.168.1.4` on its WAN port, and those are two different networks on two
+different sides of it. `primary_ip` cannot express that, so every topology node
+carries the full list:
+
+```json
+"addresses": [
+  {"address":"192.168.100.1","family":"ipv4","prefix_length":24,"cidr":"192.168.100.0/24","interface":"br-lan","side":"lan","is_primary":true},
+  {"address":"192.168.1.4","family":"ipv4","prefix_length":24,"cidr":"192.168.1.0/24","interface":"eth0","side":"wan"}
+]
+```
+
+Three properties make this usable rather than merely verbose:
+
+| Field | Meaning |
+| --- | --- |
+| `side` | the role of the interface carrying the address: `lan`, `wan`, `dmz`, `virtual`, `loopback`, or `unknown` |
+| `cidr` | the network the address belongs to, masked from address + prefix |
+| `interface` | the local interface, empty for an address observed on a remote device |
+
+**Subnet is the classification key.** Addresses that share a `cidr` are on the
+same network, so the UI groups them instead of printing a flat list. A node with
+addresses in more than one subnet is *multi-homed* and is labelled as such on its
+card (`Multi-subnet`), with the detail panel showing one row per
+`side · cidr`. A remote device keeps `side: "unknown"`: it has an address, but no
+interface of ours carries it, so claiming a side would be a guess.
+
+Only the router is expected to be multi-homed today. The engine does not special
+case it: any device whose stored addresses span subnets gets the same treatment,
+which is what makes a second router, a DMZ host or a device that moved between
+subnets fall out for free.
+
+Link-local IPv6 addresses are excluded. They are per-interface plumbing, not
+network membership, and including them would make every node look multi-homed.
+
+## Offline devices in the graph
+
+The topology view hides offline devices by default. The map is meant to answer
+"what is on my network now", and a wall of red boxes for sleeping phones and
+powered-off consoles buries that answer.
+
+Hiding is deliberately not a plain filter:
+
+- **An offline node with a visible descendant is kept.** Dropping a router
+  because its probe failed would orphan every device behind it and silently
+  claim those devices have no upstream.
+- **Network nodes are never dropped.** A network is not online or offline.
+- **Edges follow their endpoints.** An edge is drawn only when both ends are
+  visible, so no line points at a node that is not on the canvas.
+- **The count is always visible.** The toolbar toggle carries the number of
+  hidden devices and a "show" action, so nothing disappears without a way back.
+
+Offline is a *monitoring* verdict (`N` consecutive failed probes), not an absence
+of evidence. A device with no probe result is `unknown`, not `offline`, and
+`unknown` devices stay visible: they are the ones the user has not yet
+classified, which is exactly when the map is most useful.
+
 ## User intent
 
 Three mechanisms protect what the user asserted:
@@ -174,6 +235,9 @@ rearranges; nothing is lost that matters.
 | locked / confirmed edges | implemented | update tests |
 | manual device, manual edge | implemented | `internal/api` route tests |
 | merge / hide device | implemented | route tests |
+| multi-homed node addresses | implemented | `builder_test.go` (`TestMultiHomedRouterAddresses`) |
+| subnet grouping | implemented | `builder_test.go`, `web/src/lib/devices.test.ts` |
+| hide offline in the graph | implemented (UI) | `web/src/features/topology/graph.test.ts` |
 | tree layout | implemented | `layout_test.go` |
 | persisted positions, pinning | implemented | layout tests |
 | auto-layout endpoint | **not implemented** (`501`) | route test asserts the 501 |

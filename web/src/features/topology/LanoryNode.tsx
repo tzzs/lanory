@@ -123,10 +123,18 @@ function LanoryNodeComponent({ data, selected }: NodeProps) {
                 {t('devices.manual_badge')}
               </span>
             ) : null}
+            {showDetail && nodeData.multiHomed ? (
+              <span
+                className="shrink-0 rounded border border-accent/30 bg-accent/10 px-1 text-[9px] font-medium text-accent"
+                title={t('topology.multi_homed_hint')}
+              >
+                {t('topology.multi_homed')}
+              </span>
+            ) : null}
           </div>
           {showDetail ? (
             <p className="truncate font-mono text-[10px] text-muted">
-              {nodeData.subtitle || nodeData.primaryIp || nodeData.primaryMac || t('app.unknown')}
+              {nodeData.addressLine || nodeData.subtitle || nodeData.primaryIp || nodeData.primaryMac || t('app.unknown')}
             </p>
           ) : null}
         </div>

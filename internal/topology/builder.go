@@ -2,6 +2,7 @@ package topology
 
 import (
 	"fmt"
+	"net/netip"
 	"strconv"
 	"strings"
 	"time"
@@ -257,9 +258,122 @@ func deviceNode(d model.Device, ifaces []model.NetworkInterface, addrs []model.D
 			}
 		}
 	}
+	// Every address, tagged with its interface and the side that interface
+	// belongs to. A router is the case this exists for: 192.168.100.1 (br-lan,
+	// lan) and 192.168.1.4 (eth0, wan) are the same device, and a caller that
+	// only sees PrimaryIP cannot tell the two apart.
+	node.Addresses = collectAddresses(d, ifaces, addrs, node.PrimaryIP)
 	node.Reason = describePlacement(d, ifaces, addrs)
 	_ = now
 	return node
+}
+
+// collectAddresses builds the tagged address list of a node.
+//
+// Addresses come from two places and both are needed:
+//
+//   - device_addresses rows (what the collectors observed for this device),
+//   - the addresses attached to the device's own interfaces (what the local
+//     interface configuration says).
+//
+// For a remote device only the first exists. For the router the two overlap and
+// the interface copy wins, because only it knows which interface — and therefore
+// which side (lan/wan) — carries the address.
+//
+// Link-local IPv6 addresses are skipped: they are per-interface plumbing, not a
+// network membership, and listing them would drown the meaningful addresses.
+func collectAddresses(d model.Device, ifaces []model.NetworkInterface, addrs []model.DeviceAddress, primary string) []model.NodeAddress {
+	ifaceByID := make(map[string]model.NetworkInterface, len(ifaces))
+	for _, iface := range ifaces {
+		ifaceByID[iface.ID] = iface
+	}
+
+	out := make([]model.NodeAddress, 0, len(addrs)+len(ifaces))
+	seen := map[string]int{} // address -> index in out
+
+	add := func(a model.DeviceAddress, iface *model.NetworkInterface) {
+		if a.Address == "" || isLinkLocal(a.Address) {
+			return
+		}
+		side := model.InterfaceRoleUnknown
+		ifaceName := ""
+		if iface != nil {
+			ifaceName = iface.Name
+			if iface.Role != "" {
+				side = iface.Role
+			}
+		}
+		entry := model.NodeAddress{
+			Address:      a.Address,
+			Family:       a.Family,
+			PrefixLength: a.PrefixLength,
+			CIDR:         subnetOf(a.Address, a.PrefixLength),
+			Interface:    ifaceName,
+			Side:         side,
+			IsPrimary:    a.Address == primary,
+		}
+		if entry.Family == "" {
+			if strings.Contains(a.Address, ":") {
+				entry.Family = model.AddressFamilyIPv6
+			} else {
+				entry.Family = model.AddressFamilyIPv4
+			}
+		}
+		if i, ok := seen[entry.Address]; ok {
+			// An interface-backed entry is strictly more informative than a bare
+			// device_addresses row: keep it, but do not lose a primary flag.
+			if entry.Interface != "" {
+				out[i].Interface = entry.Interface
+				out[i].Side = entry.Side
+				if entry.PrefixLength > 0 {
+					out[i].PrefixLength = entry.PrefixLength
+					out[i].CIDR = entry.CIDR
+				}
+			}
+			out[i].IsPrimary = out[i].IsPrimary || entry.IsPrimary
+			return
+		}
+		seen[entry.Address] = len(out)
+		out = append(out, entry)
+	}
+
+	// Device-level addresses first: they cover remote devices.
+	for _, a := range addrs {
+		var iface *model.NetworkInterface
+		if a.InterfaceID != "" {
+			if found, ok := ifaceByID[a.InterfaceID]; ok {
+				iface = &found
+			}
+		}
+		add(a, iface)
+	}
+	// Interface addresses second: they add the side a bare address row lacks.
+	for _, iface := range ifaces {
+		for _, a := range iface.Addresses {
+			add(a, &iface)
+		}
+	}
+
+	return out
+}
+
+// subnetOf renders the network an address belongs to, or "" when the prefix is
+// unknown. Addresses sharing a subnet therefore share this value, which is what
+// lets the UI group a multi-homed node's addresses by network.
+func subnetOf(address string, prefix int) string {
+	if prefix <= 0 || prefix > 128 {
+		return ""
+	}
+	addr, err := netip.ParseAddr(address)
+	if err != nil {
+		return ""
+	}
+	prefixLen := prefix
+	if addr.Is4() && prefixLen > 32 {
+		// A v4-mapped prefix wider than 32 bits is nonsense for a v4 address.
+		return ""
+	}
+	return netip.PrefixFrom(addr, prefixLen).Masked().String()
 }
 
 // describePlacement renders a human readable explanation of how the device was
@@ -361,6 +475,7 @@ func networkNode(owner model.Device, iface model.NetworkInterface) Node {
 		Interface: &iface,
 		Network:   &status,
 		State:     networkState(iface),
+		Addresses: collectAddresses(owner, []model.NetworkInterface{iface}, nil, status.GatewayIP),
 		Reason:    "network carried by " + iface.Name + " of " + owner.Name,
 	}
 }

@@ -259,4 +259,33 @@ describe('TopologyPage', () => {
     expect(classes).toContain('flex-wrap')
     expect(classes.some((c) => c.startsWith('max-w-'))).toBe(true)
   })
+
+  /* ------------------------------------------------------------------ */
+  /* offline devices are hidden by default                              */
+  /* ------------------------------------------------------------------ */
+
+  it('hides offline devices by default and says how many', () => {
+    renderPage()
+
+    // The fixture has one offline device (the TV), so the badge reports it...
+    expect(screen.getByText(t('topology.offline_hidden', { count: 1 }))).toBeTruthy()
+    // ...and the toggle offers the way back rather than only reporting.
+    const toggle = screen.getByRole('button', { name: new RegExp(t('topology.show_offline')) })
+    expect(toggle.getAttribute('aria-pressed')).toBe('false')
+  })
+
+  it('reveals offline devices when the user asks for them', async () => {
+    const { act } = await import('react')
+    renderPage()
+
+    const toggle = screen.getByRole('button', { name: new RegExp(t('topology.show_offline')) })
+    act(() => {
+      toggle.click()
+    })
+
+    // Pledging to show them flips the control and drops the notification: the
+    // count is a property of the hidden state, not a permanent fixture.
+    expect(screen.getByRole('button', { name: new RegExp(t('topology.hide_offline')) }).getAttribute('aria-pressed')).toBe('true')
+    expect(screen.queryByText(t('topology.offline_hidden', { count: 1 }))).toBeNull()
+  })
 })

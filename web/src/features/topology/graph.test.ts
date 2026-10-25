@@ -70,6 +70,19 @@ describe('buildFlow', () => {
     expect(nodes[1].data.primaryIp).toBe('192.0.2.116')
   })
 
+  it('carries a multi-homed address summary into the node card data', () => {
+    const router = deviceNode('dev-1', 'Router', 'router')
+    router.addresses = [
+      { address: '192.168.100.1', family: 'ipv4', cidr: '192.168.100.0/24', side: 'lan', is_primary: true },
+      { address: '192.168.1.4', family: 'ipv4', cidr: '192.168.1.0/24', side: 'wan' },
+    ]
+    const { nodes } = buildFlow({ nodes: [router], edges: [], layout, generated_at: generated }, { unverifiedThreshold: 0.6 })
+
+    expect(nodes[0].data.addressLine).toContain('192.168.100.1')
+    expect(nodes[0].data.addressLine).toContain('WAN 192.168.1.4')
+    expect(nodes[0].data.multiHomed).toBe(true)
+  })
+
   it('draws unverified edges dashed', () => {
     const payload: Topology = {
       nodes: [deviceNode('dev-1', 'Router', 'router'), deviceNode('dev-2', 'iPhone', 'smartphone')],

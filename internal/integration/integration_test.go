@@ -24,6 +24,7 @@ package integration_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -300,9 +301,12 @@ func TestScenario2And3_DevicesAndPorts(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestNoiseIsNotADevice(t *testing.T) {
-	h := newHarness(t)
-	h.run(t)
-
+	// The scenario is exercised repeatedly on purpose. The collector used to
+	// build its interface list from a Go map, so the order of the interface
+	// observations changed on every run: whenever docker0 (which reports itself
+	// as a bridge) came first, its MAC was taken for the host and the real
+	// router became an ordinary device. A single run therefore proved nothing;
+	// every run must keep the noise out and the router in place.
 	noise := []string{
 		"33:33:00:00:00:01", // IPv6 multicast
 		"01:00:5e:00:00:01", // IPv4 multicast
@@ -310,22 +314,29 @@ func TestNoiseIsNotADevice(t *testing.T) {
 		"02:42:ac:12:00:02", // docker0
 		"02:11:22:33:44:55", // dummy0
 	}
-	for _, mac := range noise {
-		if dev := h.deviceByMAC(t, mac); dev != nil {
-			t.Errorf("noise MAC %s became device %q", mac, dev.Name)
-		}
-	}
+	for run := 0; run < 10; run++ {
+		t.Run(fmt.Sprintf("run-%02d", run), func(t *testing.T) {
+			h := newHarness(t)
+			h.run(t)
 
-	// The bridge MAC is a different case: it belongs to the router itself. It
-	// must be represented exactly once, flagged as the local host, and never as
-	// an ordinary end device.
-	if dev := h.deviceByMAC(t, "02:00:00:00:00:11"); dev != nil {
-		if !dev.IsSelf {
-			t.Errorf("the bridge MAC became an ordinary device %q instead of being marked is_self", dev.Name)
-		}
-		if dev.Type != model.DeviceTypeRouter {
-			t.Errorf("the local host has type %q, want router", dev.Type)
-		}
+			for _, mac := range noise {
+				if dev := h.deviceByMAC(t, mac); dev != nil {
+					t.Errorf("noise MAC %s became device %q", mac, dev.Name)
+				}
+			}
+
+			// The bridge MAC is a different case: it belongs to the router itself.
+			// It must be represented exactly once, flagged as the local host, and
+			// never as an ordinary end device.
+			if dev := h.deviceByMAC(t, "02:00:00:00:00:11"); dev != nil {
+				if !dev.IsSelf {
+					t.Errorf("the bridge MAC became an ordinary device %q instead of being marked is_self", dev.Name)
+				}
+				if dev.Type != model.DeviceTypeRouter {
+					t.Errorf("the local host has type %q, want router", dev.Type)
+				}
+			}
+		})
 	}
 }
 

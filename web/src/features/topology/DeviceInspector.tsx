@@ -1,8 +1,10 @@
+import { useMemo } from 'react'
 import { t } from '@/i18n'
 import { useUIStore } from '@/stores/ui'
 import { useDevice } from '@/hooks/useApi'
 import { Button, CardHeader, CardTitle, Badge, FieldRow, StatusDot, Skeleton, EmptyState } from '@/components/ui'
-import { deviceIcon, formatTimestamp, formatRelativeTime, formatMac, formatSpeed } from '@/lib/devices'
+import { deviceIcon, formatTimestamp, formatRelativeTime, formatMac, formatSpeed, groupDeviceAddresses } from '@/lib/devices'
+import { AddressGroups } from '@/components/AddressGroups'
 
 /**
  * Shell shared by every state of the inspector.
@@ -44,6 +46,10 @@ export function DeviceInspector() {
 
 function DeviceInspectorBody({ deviceId, onClose }: { deviceId: string; onClose: () => void }) {
   const { data, isLoading, isError } = useDevice(deviceId)
+  const addressGroups = useMemo(
+    () => groupDeviceAddresses(data?.addresses, data?.interfaces),
+    [data?.addresses, data?.interfaces],
+  )
 
   if (isLoading) {
     return (
@@ -62,7 +68,7 @@ function DeviceInspectorBody({ deviceId, onClose }: { deviceId: string; onClose:
     )
   }
 
-  const { device, addresses, interfaces, edges, last_probe } = data
+  const { device, interfaces, edges, last_probe } = data
   const Icon = deviceIcon(device.type)
 
   return (
@@ -91,7 +97,7 @@ function DeviceInspectorBody({ deviceId, onClose }: { deviceId: string; onClose:
 
         <dl className="divide-y divide-border">
           <FieldRow label={t('device.ip')} mono>
-            {addresses.map((a) => a.address).join(', ') || '—'}
+            <AddressGroups groups={addressGroups} />
           </FieldRow>
           <FieldRow label={t('device.mac')} mono>
             {device.primary_mac ? formatMac(device.primary_mac) : '—'}

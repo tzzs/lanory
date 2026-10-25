@@ -32,7 +32,7 @@ import {
   CircleDashed,
 } from 'lucide-react'
 
-import type { DeviceType, DeviceState, EdgeType, EdgeStatus, DiscoverySource } from '@/types/api'
+import type { DeviceType, DeviceState, EdgeType, EdgeStatus, DiscoverySource, InterfaceRole, NodeAddress, DeviceAddress, NetworkInterface } from '@/types/api'
 import { t } from '@/i18n'
 
 /** Icon per device type, matching the spec's requested mapping. */
@@ -244,4 +244,201 @@ export function confidenceBand(confidence: number): 'high' | 'medium' | 'low' {
 export function formatConfidence(confidence: number): string {
   if (!Number.isFinite(confidence)) return '—'
   return `${Math.round(Math.max(0, Math.min(1, confidence)) * 100)}%`
+}
+
+/**
+ * One group of a node's addresses that share a subnet.
+ *
+ * A router is the case this exists for: 192.168.100.1/24 and 192.168.1.4/24 are
+ * the same box, but they are two different networks, and listing them as one
+ * comma-separated string hides that. Grouping by CIDR (and side) makes the
+ * multi-homing explicit without inventing a second node.
+ */
+export interface AddressGroup {
+  /** The subnet the addresses belong to, or "" when the prefix is unknown. */
+  cidr: string
+  /** The side of the box these addresses sit on, when it is a local address. */
+  side: InterfaceRole
+  /** The addresses in this group, primary first. */
+  addresses: NodeAddress[]
+}
+
+/** Orders sides so the LAN comes before the WAN, matching the graph's flow. */
+const SIDE_ORDER: Record<InterfaceRole, number> = {
+  lan: 0,
+  dmz: 1,
+  wan: 2,
+  virtual: 3,
+  loopback: 4,
+  unknown: 5,
+}
+
+/**
+ * Groups a node's addresses by subnet, primary address first within a group.
+ *
+ * Addresses with no known prefix each become their own group: they are real
+ * addresses, but claiming they share a network would be a guess.
+ */
+export function groupAddresses(addresses: NodeAddress[] | undefined): AddressGroup[] {
+  if (!addresses?.length) return []
+  const byKey = new Map<string, AddressGroup>()
+  for (const address of addresses) {
+    // A group is (subnet, side): the same subnet seen from two sides of a box is
+    // still two groups, because the side is what the user is trying to read.
+    const key = `${address.cidr ?? ''}|${address.side ?? 'unknown'}|${address.cidr ? '' : address.address}`
+    const existing = byKey.get(key)
+    if (existing) {
+      existing.addresses.push(address)
+    } else {
+      byKey.set(key, { cidr: address.cidr ?? '', side: address.side ?? 'unknown', addresses: [address] })
+    }
+  }
+  const groups = [...byKey.values()]
+  for (const group of groups) {
+    group.addresses.sort((a, b) => Number(!!b.is_primary) - Number(!!a.is_primary) || a.address.localeCompare(b.address))
+  }
+  groups.sort((a, b) => (SIDE_ORDER[a.side] ?? 5) - (SIDE_ORDER[b.side] ?? 5) || a.cidr.localeCompare(b.cidr))
+  return groups
+}
+
+/** True when a node carries addresses on more than one known subnet. */
+export function isMultiHomed(addresses: NodeAddress[] | undefined): boolean {
+  const subnets = new Set((addresses ?? []).map((a) => a.cidr).filter(Boolean))
+  return subnets.size > 1
+}
+
+/**
+ * The compact address summary shown on a topology node card.
+ *
+ * Multi-homed nodes show their sides ("WAN 192.168.1.4") so the card never
+ * implies the box has one address when it has two.
+ */
+export function addressSummary(addresses: NodeAddress[] | undefined, fallback?: string): string {
+  const groups = groupAddresses(addresses)
+  if (groups.length === 0) return fallback ?? ''
+  if (groups.length === 1) return groups[0].addresses[0].address
+  const visible = groups.slice(0, 2).map((g) => {
+    const label = g.side === 'unknown' ? '' : `${g.side.toUpperCase()} `
+    return label + g.addresses[0].address
+  })
+  if (groups.length > visible.length) visible.push(`+${groups.length - visible.length}`)
+  return visible.join(' · ')
+}
+
+/**
+ * Groups the addresses of a device-detail payload by subnet and side.
+ *
+ * The device endpoint returns flat DeviceAddress rows, which do not carry the
+ * interface role. It is resolved here from the interface list so the detail
+ * panel can say "LAN 192.168.100.1 · WAN 192.168.1.4" instead of printing a
+ * comma-separated list in which the two sides are indistinguishable.
+ */
+export function groupDeviceAddresses(
+  addresses: DeviceAddress[] | undefined,
+  interfaces: NetworkInterface[] | undefined,
+): AddressGroup[] {
+  if (!addresses?.length) return []
+  const roleByIface = new Map<string, InterfaceRole>()
+  for (const iface of interfaces ?? []) {
+    roleByIface.set(iface.id, iface.role)
+  }
+  const mapped: NodeAddress[] = addresses
+    .filter((a) => !isLinkLocalIPv6(a.address))
+    .map((a) => ({
+      address: a.address,
+      family: a.family,
+      prefix_length: a.prefix_length,
+      cidr: subnetOfAddress(a.address, a.prefix_length),
+      side: (a.interface_id && roleByIface.get(a.interface_id)) || 'unknown',
+      is_primary: a.is_primary,
+    }))
+  return groupAddresses(mapped)
+}
+
+/** Mirrors Go's netip.PrefixFrom(addr, prefix).Masked().String() for IP addresses. */
+function isLinkLocalIPv6(address: string): boolean {
+  const zoneIndex = address.indexOf('%')
+  const withoutZone = zoneIndex < 0 ? address : address.slice(0, zoneIndex)
+  const parsed = parseIPv6(withoutZone)
+  if (parsed === undefined) return false
+  return (parsed >> 118n) === 0b1111111010n
+}
+
+function subnetOfAddress(address: string, prefix?: number): string | undefined {
+  if (prefix === undefined || !Number.isInteger(prefix) || prefix <= 0) return undefined
+
+  const ipv4 = parseIPv4(address)
+  if (ipv4 !== undefined) {
+    if (prefix > 32) return undefined
+    const mask = prefix === 0 ? 0 : (0xffffffff << (32 - prefix)) >>> 0
+    const network = (ipv4 & mask) >>> 0
+    return `${(network >>> 24) & 0xff}.${(network >>> 16) & 0xff}.${(network >>> 8) & 0xff}.${network & 0xff}/${prefix}`
+  }
+
+  const ipv6 = parseIPv6(address)
+  if (ipv6 === undefined || prefix > 128) return undefined
+  const mask = prefix === 0 ? 0n : ((1n << 128n) - 1n) ^ ((1n << BigInt(128 - prefix)) - 1n)
+  return `${formatIPv6(ipv6 & mask)}/${prefix}`
+}
+
+function parseIPv4(address: string): number | undefined {
+  const octets = address.split('.')
+  if (octets.length !== 4) return undefined
+  const values = octets.map(Number)
+  if (values.some((value, index) => {
+    const octet = octets[index]
+    return !/^\d+$/.test(octet) || (octet.length > 1 && octet.startsWith('0')) || !Number.isInteger(value) || value < 0 || value > 255
+  })) return undefined
+  return ((values[0] << 24) | (values[1] << 16) | (values[2] << 8) | values[3]) >>> 0
+}
+
+function parseIPv6(address: string): bigint | undefined {
+  const zoneIndex = address.indexOf('%')
+  const withoutZone = zoneIndex < 0 ? address : address.slice(0, zoneIndex)
+  if (zoneIndex >= 0 && address.length === zoneIndex + 1) return undefined
+  if (!withoutZone.includes(':')) return undefined
+
+  const pieces = withoutZone.split('::')
+  if (pieces.length > 2) return undefined
+  const left = pieces[0] ? pieces[0].split(':') : []
+  let right = pieces.length === 2 && pieces[1] ? pieces[1].split(':') : []
+  const tail = right.length > 0 ? right : left
+  const last = tail[tail.length - 1]
+  if (last?.includes('.')) {
+    const mapped = parseIPv4(last)
+    if (mapped === undefined) return undefined
+    const replacement = [(mapped >>> 16).toString(16), (mapped & 0xffff).toString(16)]
+    if (right.length > 0) right = [...right.slice(0, -1), ...replacement]
+    else left.splice(left.length - 1, 1, ...replacement)
+  }
+
+  const groups = [...left, ...right]
+  if (groups.some((group) => !/^[0-9a-f]{1,4}$/i.test(group))) return undefined
+  if (pieces.length === 1 ? groups.length !== 8 : groups.length >= 8) return undefined
+  const expanded = pieces.length === 2 ? [...left, ...Array(8 - groups.length).fill('0'), ...right] : groups
+  return expanded.reduce((value, group) => (value << 16n) | BigInt(parseInt(group, 16)), 0n)
+}
+
+function formatIPv6(value: bigint): string {
+  const groups = Array.from({ length: 8 }, (_, index) => Number((value >> BigInt((7 - index) * 16)) & 0xffffn))
+  let bestStart = -1
+  let bestLength = 1
+  for (let start = 0; start < groups.length;) {
+    if (groups[start] !== 0) {
+      start++
+      continue
+    }
+    let end = start
+    while (end < groups.length && groups[end] === 0) end++
+    if (end - start > bestLength) {
+      bestStart = start
+      bestLength = end - start
+    }
+    start = end
+  }
+  const rendered = groups.map((group) => group.toString(16))
+  if (bestStart < 0) return rendered.join(':')
+  const before = rendered.slice(0, bestStart).join(':')
+  const after = rendered.slice(bestStart + bestLength).join(':')
+  return `${before}::${after}`
 }

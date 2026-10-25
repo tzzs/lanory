@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -459,8 +460,19 @@ func (c *Collector) merge(
 	}
 
 	// 1. ubus device dump: the base layer.
+	//
+	// devDump.Devices is a Go map, whose iteration order is randomized. The
+	// names are collected and sorted before the views are built so the
+	// collector emits a stable order on every run; an observation order that
+	// changes between runs makes every downstream merge non-deterministic.
 	if devDump != nil {
-		for name, d := range devDump.Devices {
+		names := make([]string, 0, len(devDump.Devices))
+		for name := range devDump.Devices {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			d := devDump.Devices[name]
 			v := get(name)
 			v.Source = "ubus:network.device"
 			v.MAC = d.MAC
@@ -533,8 +545,18 @@ func (c *Collector) merge(
 
 	// 4. ubus interface dump: addresses and the device each logical interface
 	//    is bound to. This is what makes an interface "carry a subnet".
+	//
+	// This is also a map, so its names are collected and sorted too: an
+	// interface that only ubus knows about would otherwise be appended to the
+	// order at a random position.
 	if ifDump != nil {
-		for name, i := range ifDump.Interfaces {
+		names := make([]string, 0, len(ifDump.Interfaces))
+		for name := range ifDump.Interfaces {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			i := ifDump.Interfaces[name]
 			dev := i.L3Device
 			if dev == "" {
 				dev = i.Device

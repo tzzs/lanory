@@ -73,6 +73,7 @@ func (n Node) toModel() model.TopologyNode {
 		StateReason: n.StateReason,
 		PrimaryIP:   n.PrimaryIP,
 		PrimaryMAC:  n.PrimaryMAC,
+		Addresses:   n.Addresses,
 		Children:    n.Children,
 		Unresolved:  unresolved,
 	}
