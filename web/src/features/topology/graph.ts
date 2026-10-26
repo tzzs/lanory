@@ -35,6 +35,8 @@ export interface TopologyNodeData extends Record<string, unknown> {
   annotation?: boolean
   group?: boolean
   subtitle?: string
+  networkKind?: 'bridge' | 'interface'
+  networkRole?: string
   memberCount?: number
   /**
    * Whether the card renders its detail lines (address, state text).
@@ -131,6 +133,7 @@ export function buildFlow(payload: TopologyPayload, options: BuildOptions): { no
         ? node.network?.name ?? 'network'
         : node.device?.name ?? 'device'
 
+    const networkInterface = node.interface ?? options.interfaces?.find(i => i.id === node.network?.interface_id)
     const data: TopologyNodeData = {
       nodeId: node.device?.id ?? node.id,
       label,
@@ -148,6 +151,8 @@ export function buildFlow(payload: TopologyPayload, options: BuildOptions): { no
       demo: node.device?.discovery_sources?.includes('demo'),
       group: tree.groups.has(node.id),
       subtitle: node.unresolved ? t('topology.segment_hint') : node.kind === 'network' ? [node.network?.cidr, node.network?.role?.toUpperCase()].filter(Boolean).join(' · ') : undefined,
+      networkKind: node.kind === 'network' ? (networkInterface?.type === 'bridge' ? 'bridge' : 'interface') : undefined,
+      networkRole: node.kind === 'network' ? node.network?.role : undefined,
       memberCount: tree.groups.get(node.id)?.length,
       showDetail,
     }
