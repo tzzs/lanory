@@ -103,14 +103,30 @@ make release     # dist/lanory-linux-{amd64,arm64,armv7,386}
 make packages    # dist/packages/*.ipk + *.apk, no SDK involved
 make package-check
 
-# on the router: pick the file matching `uname -m`
-scp dist/packages/lanory_0.1.0_aarch64_generic.ipk root@192.168.100.1:/tmp/
-ssh root@192.168.100.1 'opkg install /tmp/lanory_0.1.0_aarch64_generic.ipk'
+# the generated service APK names are:
+#   x86_64-lanory-0.1.0.apk
+#   aarch64_generic-lanory-0.1.0.apk
+#   arm_cortex-a7_neon-vfpv4-lanory-0.1.0.apk
+#   i386_pentium4-lanory-0.1.0.apk
+
+# on an OpenWrt 25.x / iStoreOS router: pick the file matching `uname -m`
+scp dist/packages/aarch64_generic-lanory-0.1.0.apk root@192.168.100.1:/tmp/
+ssh root@192.168.100.1 'apk add --allow-untrusted /tmp/aarch64_generic-lanory-0.1.0.apk'
 ssh root@192.168.100.1 'logread -e lanory | grep token'   # the access token
 ```
 
-Then open `http://192.168.100.1:8787/` and paste the token. On apk-based
-releases install the `.apk` with `apk add --allow-untrusted` instead.
+Then open `http://192.168.100.1:8787/` and paste the token. The `.ipk` plus
+`opkg install` route is for older OpenWrt releases or compatibility, not the
+default path for OpenWrt 25.x / iStoreOS.
+
+For that compatibility path, the direct packager generates
+`lanory_0.1.0_aarch64_generic.ipk` (and the corresponding architecture name for
+the other targets):
+
+```sh
+scp dist/packages/lanory_0.1.0_aarch64_generic.ipk root@192.168.100.1:/tmp/
+ssh root@192.168.100.1 'opkg install /tmp/lanory_0.1.0_aarch64_generic.ipk'
+```
 
 If you would rather have the buildroot compile the Go source (feed-style,
 reproducible, signed by the SDK), the SDK route is documented too.
