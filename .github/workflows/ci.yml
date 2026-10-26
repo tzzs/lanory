@@ -256,8 +256,9 @@ jobs:
           version=0.1.0
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             version="${RELEASE_TAG#v}"
-            if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
-              echo "::error::tag must use a semantic version such as v0.1.0; got $RELEASE_TAG"
+            semver_re='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*)|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(\.((0|[1-9][0-9]*)|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?(\+([0-9A-Za-z-]+)(\.[0-9A-Za-z-]+)*)?$'
+            if [[ ! "$version" =~ $semver_re ]]; then
+              echo "::error::tag must use SemVer 2.0 such as v0.1.0, with optional prerelease/build metadata; got $RELEASE_TAG"
               exit 1
             fi
           fi
