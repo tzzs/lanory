@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"runtime"
 	"strings"
@@ -251,31 +253,14 @@ func TestExecuteContextCancelled(t *testing.T) {
 // TestExecuteHTTP asserts the http probe follows a bounded GET and records the
 // outcome.
 func TestExecuteHTTP(t *testing.T) {
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
-	defer ln.Close()
-	go func() {
-		for {
-			c, err := ln.Accept()
-			if err != nil {
-				return
-			}
-			go func() {
-				defer c.Close()
-				_, _ = c.Write([]byte("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"))
-			}()
-		}
-	}()
-	_, port, _ := net.SplitHostPort(ln.Addr().String())
-	portNum := 0
-	for _, c := range port {
-		portNum = portNum*10 + int(c-'0')
-	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
 
 	e := NewExecutor(DefaultExecutorConfig())
-	target := model.ProbeTarget{Target: "127.0.0.1", Port: portNum, Protocol: model.ProbeHTTP, Timeout: 3}
+	target := model.ProbeTarget{Target: srv.URL, Protocol: model.ProbeHTTP, Timeout: 3}
 	rec := e.Execute(context.Background(), target)
 	if !rec.Result.Success {
 		t.Fatalf("http probe failed: %s / %s", rec.Result.Status, rec.Result.ErrorMessage)
