@@ -62,6 +62,7 @@ function LanoryNodeComponent({ data, selected }: NodeProps) {
   // excluded: they are already group markers, and the audit wants them
   // unchanged at every zoom level.
   const showDetail = nodeData.kind !== 'unresolved' && nodeData.showDetail !== false
+  const isLanBridge = nodeData.kind === 'network' && nodeData.networkKind === 'bridge' && nodeData.networkRole === 'lan'
 
   if (nodeData.annotation) return <div className="text-sm font-semibold text-muted">{nodeData.label}</div>
 
@@ -82,6 +83,7 @@ function LanoryNodeComponent({ data, selected }: NodeProps) {
     <div
       className={cn(
         'group relative rounded-lg border border-border bg-surface px-3 py-2.5 shadow-sm transition-shadow',
+        isLanBridge && 'border-success/40 bg-success/5',
         // The card is scaled by the viewport, so the low tier trades width for
         // a bigger name: at 0.5× a 15px name still reads while a 200px card
         // would overlap its neighbours.
@@ -98,10 +100,10 @@ function LanoryNodeComponent({ data, selected }: NodeProps) {
         <div
           className={cn(
             'flex h-8 w-8 shrink-0 items-center justify-center rounded-md',
-            nodeData.kind === 'unresolved' ? 'bg-surface-2' : 'bg-accent/10',
+            nodeData.kind === 'unresolved' ? 'bg-surface-2' : isLanBridge ? 'bg-success/12' : 'bg-accent/10',
           )}
         >
-          <Icon size={16} className="text-muted" aria-hidden="true" />
+          <Icon size={16} className={isLanBridge ? 'text-success' : 'text-muted'} aria-hidden="true" />
         </div>
 
         <div className="min-w-0 flex-1">
@@ -118,6 +120,11 @@ function LanoryNodeComponent({ data, selected }: NodeProps) {
             >
               {nodeData.label}
             </span>
+            {isLanBridge ? (
+              <span className="shrink-0 rounded border border-success/30 bg-success/10 px-1 py-px text-[9px] font-medium text-success">
+                {t('topology.lan_bridge')}
+              </span>
+            ) : null}
             {nodeData.isManual ? (
               <span className="shrink-0 rounded bg-accent/15 px-1 text-[9px] font-medium text-accent">
                 {t('devices.manual_badge')}

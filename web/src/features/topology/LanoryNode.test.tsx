@@ -72,4 +72,39 @@ describe('LanoryNode', () => {
     expect(screen.queryByText('LAN 192.168.100.1 · WAN 192.168.1.4')).toBeNull()
     expect(screen.queryByText(t('topology.multi_homed'))).toBeNull()
   })
+
+  it('labels a LAN bridge as a network boundary while keeping its interface name visible', () => {
+    render(
+      <ReactFlowProvider>
+        <LanoryNode
+          id="net-br-lan"
+          type="lanory"
+          data={{
+            kind: 'network',
+            icon: 'network',
+            label: 'br-lan',
+            state: 'unknown',
+            showDetail: true,
+            subtitle: '192.168.100.0/24',
+            networkKind: 'bridge',
+            networkRole: 'lan',
+          }}
+          selected={false}
+          isConnectable={false}
+          positionAbsoluteX={0}
+          positionAbsoluteY={0}
+          draggable={false}
+          dragging={false}
+          selectable={false}
+          deletable={false}
+          zIndex={0}
+          targetPosition={Position.Top}
+          sourcePosition={Position.Bottom}
+        />
+      </ReactFlowProvider>,
+    )
+
+    expect(screen.getByText('br-lan')).toBeTruthy()
+    expect(screen.getByText(t('topology.lan_bridge'))).toBeTruthy()
+  })
 })

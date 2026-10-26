@@ -151,6 +151,7 @@ const zhCN: Dict = {
   'topology.multi_homed': '多网段',
   'topology.multi_homed_hint': '该设备在多个网段上都有地址（例如 LAN 侧和 WAN 侧）',
   'topology.zoom_for_detail': '放大查看设备详情',
+  'topology.lan_bridge': 'LAN 网桥',
 
   // ---- interface roles ----
   'role.lan': 'LAN',
@@ -513,6 +514,7 @@ const en: Dict = {
   'topology.multi_homed': 'Multi-subnet',
   'topology.multi_homed_hint': 'This device has addresses on more than one subnet (for example a LAN side and a WAN side)',
   'topology.zoom_for_detail': 'Zoom in for device details',
+  'topology.lan_bridge': 'LAN bridge',
 
   // ---- interface roles ----
   'role.lan': 'LAN',
