@@ -328,6 +328,64 @@ health endpoint.
 | `apk del lanory` | removed | removed | **preserved** |
 | purge | removed | removed | removed by hand |
 
+### Restart the service after an upgrade
+
+`apk` replaces the files on disk but does not restart the procd service. The
+running process keeps executing the old binary, so an upgrade that reported
+success can still be serving the previous version. Observed on iStoreOS
+25.12.5:
+
+```sh
+apk add --allow-untrusted /tmp/aarch64_generic-lanory-0.1.2.apk
+# (1/1) Upgrading lanory (0.1.1 -> 0.1.2)
+# OK: 608.3 MiB in 988 packages
+
+/usr/bin/lanory --version          # lanory 0.1.2 — the file on disk
+wget -qO- http://127.0.0.1:8787/api/v1/health
+# {"status":"ok","version":"0.1.1",...,"uptime_seconds":9592}
+
+/etc/init.d/lanory restart
+wget -qO- http://127.0.0.1:8787/api/v1/health
+# {"status":"ok","version":"0.1.2",...,"uptime_seconds":3}
+```
+
+Always restart explicitly after an upgrade. Checking `apk list --installed` or
+the binary on disk is not enough: neither proves which binary the service is
+actually running. `version` and `uptime_seconds` in `/api/v1/health` are the
+quickest confirmation — `uptime_seconds` drops to a few seconds once the new
+process has started. `/api/v1/health` is exempt from token authentication, so
+this works before the token is read.
+
+The same restart settles the conffile prompt. When `/etc/lanory/config.yaml`
+differs from the packaged template, apk keeps the existing file and writes the
+new copy beside it as `config.yaml.apk-new`. With `generate_config='1'` (the
+default) the init script regenerates the YAML from UCI and removes the
+`.apk-new` file on start, so the leftover disappears with the restart:
+
+```sh
+ls /etc/lanory/config.yaml.apk-new    # present right after the upgrade
+/etc/init.d/lanory restart
+ls /etc/lanory/config.yaml.apk-new    # gone
+```
+
+If you upgrade while `generate_config='0'`, the `.apk-new` file stays and you
+must merge it into `/etc/lanory/config.yaml` yourself — the init script will
+not touch a hand-maintained YAML.
+
+### Reload the browser after an upgrade
+
+The frontend is compiled into the binary, and every build gets new hashed asset
+names (`index-<hash>.css`). The LuCI page hosts the UI in an iframe, and a
+browser may reuse the cached iframe document across a top-level reload, so the
+page keeps requesting the previous CSS and JS even though the server already
+serves the new ones. The symptom is an upgraded, restarted service whose UI
+still looks stale — or, after a frontend toolchain change, completely unstyled.
+
+Close and reopen the tab, or open the standalone window
+(`http://<router>:8787/`) once, to force a fresh document. Observed on iStoreOS
+25.12.5: a normal reload kept the old `index-<hash>.css`, while a newly opened
+tab picked up the new one.
+
 Data is never deleted by the package manager. To purge:
 
 ```sh
