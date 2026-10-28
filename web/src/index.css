@@ -1,6 +1,5 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../tailwind.config.ts";
 
 /* Design tokens. Each colour exists twice: as a hex `--name` and as a channel
    triplet `--name-rgb` holding the same colour. Tailwind needs the triplet form
