@@ -97,14 +97,28 @@ make release     # dist/lanory-linux-{amd64,arm64,armv7,386}
 make packages    # dist/packages/*.ipk + *.apk，全程不涉及 SDK
 make package-check
 
-# 在路由器上：挑与 `uname -m` 匹配的那个文件
-scp dist/packages/lanory_0.1.0_aarch64_generic.ipk root@192.168.100.1:/tmp/
-ssh root@192.168.100.1 'opkg install /tmp/lanory_0.1.0_aarch64_generic.ipk'
+# 生成的服务 APK 文件名如下：
+#   x86_64-lanory-0.1.0.apk
+#   aarch64_generic-lanory-0.1.0.apk
+#   arm_cortex-a7_neon-vfpv4-lanory-0.1.0.apk
+#   i386_pentium4-lanory-0.1.0.apk
+
+# OpenWrt 25.x / iStoreOS 路由器：挑与 `uname -m` 匹配的文件
+scp dist/packages/aarch64_generic-lanory-0.1.0.apk root@192.168.100.1:/tmp/
+ssh root@192.168.100.1 'apk add --allow-untrusted /tmp/aarch64_generic-lanory-0.1.0.apk'
 ssh root@192.168.100.1 'logread -e lanory | grep token'   # 访问令牌
 ```
 
-然后打开 `http://192.168.100.1:8787/`，粘贴该令牌。基于 apk 的版本改用
-`apk add --allow-untrusted` 安装 `.apk`。
+然后打开 `http://192.168.100.1:8787/`，粘贴该令牌。IPK 加 `opkg install`
+是旧版 OpenWrt 或兼容路径，不是 OpenWrt 25.x / iStoreOS 的默认路径。
+
+兼容路径下，直接打包器生成的文件名是
+`lanory_0.1.0_aarch64_generic.ipk`（其他架构同样替换架构名）：
+
+```sh
+scp dist/packages/lanory_0.1.0_aarch64_generic.ipk root@192.168.100.1:/tmp/
+ssh root@192.168.100.1 'opkg install /tmp/lanory_0.1.0_aarch64_generic.ipk'
+```
 
 如果你希望由 buildroot 从源码编译（feed 风格、可复现、由 SDK 签名），
 SDK 路线也一并写进了文档。

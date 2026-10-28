@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -249,10 +250,30 @@ jobs:
       - name: Build installable packages
         # Produces real .ipk and .apk files from the release binaries. No SDK is
         # involved: the binary is static and the rest of the package is text.
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          make release
-          make packages
+          version=0.1.0
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version="${RELEASE_TAG#v}"
+            semver_re='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*)|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(\.((0|[1-9][0-9]*)|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?(\+([0-9A-Za-z-]+)(\.[0-9A-Za-z-]+)*)?$'
+            if [[ ! "$version" =~ $semver_re ]]; then
+              echo "::error::tag must use SemVer 2.0 such as v0.1.0, with optional prerelease/build metadata; got $RELEASE_TAG"
+              exit 1
+            fi
+          fi
+          make VERSION="$version" packages
           make package-check
+
+      - name: Upload OpenWrt packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: lanory-openwrt-packages
+          path: |
+            dist/packages/*.apk
+            dist/packages/*.ipk
+          if-no-files-found: error
+          retention-days: 30
 
       - name: systemd unit file
         run: |
@@ -364,3 +385,32 @@ jobs:
           if [ -f /tmp/lanory.pid ]; then kill "$(cat /tmp/lanory.pid)" 2>/dev/null || true; fi
           echo "--- service log ---"
           cat /tmp/lanory.log 2>/dev/null || true
+
+  # ---------------------------------------------------------------------------
+  # Release: publish the packages produced by the packaging job for version
+  # tags. The tag is the release source of truth (for example, v0.1.0); the
+  # leading v is removed before passing the version to mkpackage.py.
+  # ---------------------------------------------------------------------------
+  release:
+    name: Release OpenWrt packages
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [packaging]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download OpenWrt packages
+        uses: actions/download-artifact@v4
+        with:
+          name: lanory-openwrt-packages
+          path: release-assets
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --generate-notes \
+            release-assets/*.apk release-assets/*.ipk

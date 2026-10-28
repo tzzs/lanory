@@ -140,15 +140,21 @@ python3 packaging/openwrt/mkpackage.py \
 
 `mkpackage.py` detects the ELF machine type and names the package with the right
 OpenWrt architecture (`x86_64`, `aarch64_generic`, `arm_cortex-a7_neon-vfpv4`,
-`i386_pentium4`). It emits both formats:
+`i386_pentium4`). It emits both formats. The service package filenames are:
 
-| Format | Layout | Install with |
+| Architecture | APK (OpenWrt 25.x / iStoreOS default) | IPK (older/compatibility path) |
 | --- | --- | --- |
-| `.ipk` | `debian-binary` + `control.tar.gz` + `data.tar.gz` | `opkg install` |
-| `.apk` | one gzip stream: `.PKGINFO` + files | `apk add --allow-untrusted` |
+| x86_64 | `x86_64-lanory-0.1.0.apk` | `lanory_0.1.0_x86_64.ipk` |
+| aarch64 | `aarch64_generic-lanory-0.1.0.apk` | `lanory_0.1.0_aarch64_generic.ipk` |
+| armv7 | `arm_cortex-a7_neon-vfpv4-lanory-0.1.0.apk` | `lanory_0.1.0_arm_cortex-a7_neon-vfpv4.ipk` |
+| i386 | `i386_pentium4-lanory-0.1.0.apk` | `lanory_0.1.0_i386_pentium4.ipk` |
 
-Both are unsigned, which OpenWrt accepts for an explicitly installed local file.
-Sign them with your own key if you intend to serve them from a feed.
+The `.apk` files use one gzip stream containing `.PKGINFO` plus files and install
+with `apk add --allow-untrusted`. The `.ipk` files use
+`debian-binary` + `control.tar.gz` + `data.tar.gz` and install with `opkg
+install`; keep this as the older OpenWrt/compatibility path. Both are unsigned,
+which OpenWrt accepts for an explicitly installed local file. Sign them with
+your own key if you intend to serve them from a feed.
 
 `make package-check` re-parses the produced archives and verifies them against
 the documented formats: the debian-binary marker, the two gzip streams, every
@@ -206,15 +212,18 @@ find bin/ -name 'lanory*.apk' -o -name 'lanory*.ipk'
 ### APK versus IPK
 
 OpenWrt 24.10 and later default to `apk` (Alpine's package format, via
-`apk-tools`) instead of `opkg`. Route A produces both, so you can install on any
-release. Route B produces whichever format the SDK is configured for.
+`apk-tools`) instead of `opkg`. For OpenWrt 25.x / iStoreOS, use the APK path
+first. Route A produces both, while Route B produces whichever format the SDK is
+configured for.
 
 ```sh
-# APK (OpenWrt 24.10+, 25.12, recent iStoreOS)
-apk add --allow-untrusted /tmp/lanory-0.1.0-r1.apk
+# APK: OpenWrt 25.x / iStoreOS default path
+scp dist/packages/aarch64_generic-lanory-0.1.0.apk root@192.168.100.1:/tmp/
+ssh root@192.168.100.1 'apk add --allow-untrusted /tmp/aarch64_generic-lanory-0.1.0.apk'
 
-# IPK (older releases)
-opkg install /tmp/lanory_0.1.0-r1_*.ipk
+# IPK: older OpenWrt releases or compatibility path
+scp dist/packages/lanory_0.1.0_aarch64_generic.ipk root@192.168.100.1:/tmp/
+ssh root@192.168.100.1 'opkg install /tmp/lanory_0.1.0_aarch64_generic.ipk'
 ```
 
 If the SDK refuses to build the Go package, check in this order:
@@ -247,7 +256,7 @@ make apk-sign LANORY_KEY=~/.lanory/lanory.key
 scp dist/packages/aarch64_generic-lanory-0.1.0.apk.signed root@192.168.100.1:/tmp/
 
 # 4. install; no --allow-untrusted needed
-ssh root@192.168.100.1 'apk add /tmp/lanory-0.1.0.apk.signed'
+ssh root@192.168.100.1 'apk add /tmp/aarch64_generic-lanory-0.1.0.apk.signed'
 ```
 
 The private key stays on your workstation. Never put it on the router.
@@ -283,17 +292,17 @@ public source addresses.
 
 ```sh
 # pick the file matching `uname -m` on the router:
-#   aarch64 -> *aarch64_generic*   armv7l -> *arm_cortex-a7*
+#   aarch64 -> *aarch64_generic*   armv7l -> *arm_cortex-a7_neon-vfpv4*
 #   x86_64  -> *x86_64*            i686   -> *i386_pentium4*
 ls dist/packages/
 
-# copy the artifact over
-scp dist/packages/lanory_0.1.0_aarch64_generic.ipk root@192.168.100.1:/tmp/
+# OpenWrt 25.x / iStoreOS: copy and install the APK (or upgrade)
+scp dist/packages/aarch64_generic-lanory-0.1.0.apk root@192.168.100.1:/tmp/
+ssh root@192.168.100.1 'apk add --allow-untrusted /tmp/aarch64_generic-lanory-0.1.0.apk'
 
-# install (or upgrade; /var/lib/lanory is preserved)
-ssh root@192.168.100.1 'opkg install /tmp/lanory_0.1.0_aarch64_generic.ipk'
-# on apk-based releases:
-# ssh root@192.168.100.1 'apk add --allow-untrusted /tmp/aarch64_generic-lanory-0.1.0.apk'
+# Older OpenWrt / compatibility path: use the matching IPK with opkg instead
+# scp dist/packages/lanory_0.1.0_aarch64_generic.ipk root@192.168.100.1:/tmp/
+# ssh root@192.168.100.1 'opkg install /tmp/lanory_0.1.0_aarch64_generic.ipk'
 
 # edit the UCI config
 ssh root@192.168.100.1 'vi /etc/config/lanory'

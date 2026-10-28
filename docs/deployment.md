@@ -70,17 +70,23 @@ declarations and upgrade semantics, is in
 Short version, on the device:
 
 ```sh
-apk add --allow-untrusted /tmp/lanory-0.1.0-r1.apk
-uci set lanory.main.enabled='1'
-uci set lanory.main.listen='0.0.0.0'
-uci set lanory.main.port='8787'
-uci commit lanory
-/etc/init.d/lanory enable
-/etc/init.d/lanory start
-logread -e lanory | tail -30
+# OpenWrt 25.x / iStoreOS: use the generated APK for the target architecture
+scp dist/packages/aarch64_generic-lanory-0.1.0.apk root@192.168.100.1:/tmp/
+ssh root@192.168.100.1 'apk add --allow-untrusted /tmp/aarch64_generic-lanory-0.1.0.apk'
+ssh root@192.168.100.1 "uci set lanory.main.enabled='1' && \
+  uci set lanory.main.listen='0.0.0.0' && \
+  uci set lanory.main.port='8787' && \
+  uci commit lanory && \
+  /etc/init.d/lanory enable && \
+  /etc/init.d/lanory start && \
+  logread -e lanory | tail -30"
 ```
 
-Then <http://192.168.100.1:8787/>.
+Then <http://192.168.100.1:8787/>. The direct packager names service APKs as
+`<openwrt-arch>-lanory-0.1.0.apk`, for example
+`aarch64_generic-lanory-0.1.0.apk`. On older OpenWrt releases, the compatibility
+package is `lanory_0.1.0_aarch64_generic.ipk` and is installed with
+`opkg install`; this is not the default path for OpenWrt 25.x / iStoreOS.
 
 Paths:
 
