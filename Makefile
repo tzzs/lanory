@@ -66,7 +66,7 @@ web:
 ## is kept: it is tracked, and it keeps the embed directive valid on a checkout
 ## where the frontend has never been built.
 webapp: web
-	find internal/api/webapp -mindepth 1 -maxdepth 1 ! -name README.md -exec rm -rf {} +
+	find internal/api/webapp -mindepth 1 -maxdepth 1 ! -name README.md -exec rm -rf -- {} +
 	mkdir -p internal/api/webapp
 	cp -r $(WEB_DIR)/dist/. internal/api/webapp/
 	@echo "frontend staged into internal/api/webapp"
