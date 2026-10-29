@@ -197,6 +197,20 @@ func TestResolveMatchesByHostnameWhenCandidateHasNoMAC(t *testing.T) {
 	}
 }
 
+// A failed identity lookup must be read as "this candidate already has a MAC",
+// not as "it has none". The second reading would let a hostname-only merge
+// through precisely when the database cannot tell us whether it is safe.
+func TestCandHasMACFailsClosedOnLookupError(t *testing.T) {
+	eng, store := newIdentityEngine(t)
+	if err := store.DB().Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if !candHasMAC(eng, model.Device{ID: "dev-unreachable"}) {
+		t.Fatal("a failed lookup was treated as a candidate without a MAC identity")
+	}
+}
+
 // A device the user marked as manual keeps its name even when that name looks
 // like a generated placeholder.
 func TestResolveKeepsManualDeviceName(t *testing.T) {

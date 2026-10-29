@@ -306,27 +306,23 @@ func (e *Engine) match(ing Ingest) (*model.Device, error) {
 	//    device is not locked, and only for non-randomised MACs.
 	if ing.Hostname != "" && ing.MAC != "" && !database.IsLocallyAdministeredMAC(ing.MAC) {
 		if devs, err := e.store.FindDevicesByIdentity(model.IdentityHostname, ing.Hostname); err == nil && len(devs) == 1 {
-			// Require corroboration: the candidate must share at least one
-			// address or be the only device with that hostname.
 			cand := devs[0]
+			// A candidate identified by its own MAC is a different machine that
+			// happens to share the hostname. Merging on the hostname alone
+			// would move that machine's addresses to the incoming device,
+			// which is what happened to two Macs named "Mac" on the reference
+			// network.
+			if candHasMAC(e, cand) {
+				return nil, nil
+			}
 			// Require corroboration: the candidate must share at least one
-			// address. A candidate identified by its own MAC is a different
-			// machine that happens to share the hostname, so sharing an
-			// address is not enough for it.
+			// address, or be the only device with that hostname.
 			for _, a := range ing.Addresses {
 				if dev, err := e.store.FindDeviceByAddress(familyOf(a), a.Address); err == nil && dev != nil && dev.ID == cand.ID {
-					if candHasMAC(e, cand) && cand.PrimaryMAC != "" && database.CanonicalizeMAC(cand.PrimaryMAC) != ing.MAC {
-						continue
-					}
 					return &cand, nil
 				}
 			}
-			// A candidate that already has a MAC identity of its own is a
-			// different machine that happens to share the hostname. Merging on
-			// the hostname alone would move that machine's addresses to the
-			// incoming device, which is exactly what happened to two Macs
-			// named "Mac" on the reference network.
-			if !cand.IsLocked && cand.Type != model.DeviceTypeUnknown && !candHasMAC(e, cand) {
+			if !cand.IsLocked && cand.Type != model.DeviceTypeUnknown {
 				return &cand, nil
 			}
 		}
@@ -351,10 +347,15 @@ func (e *Engine) match(ing Ingest) (*model.Device, error) {
 // Such a device is identified by hardware, not by a name that can be reused,
 // so an incoming observation that merely shares its hostname is a different
 // machine.
+//
+// A lookup failure is treated as "the candidate has a MAC identity". The
+// alternative - assuming it has none - would let a hostname-only merge
+// through, which is the exact thing this function exists to prevent. Merging
+// two devices wrongly is bad; failing to merge them is merely conservative.
 func candHasMAC(e *Engine, cand model.Device) bool {
 	ids, err := e.store.ListIdentities(cand.ID)
 	if err != nil {
-		return false
+		return true
 	}
 	for _, id := range ids {
 		if id.Type == model.IdentityMAC && id.Value != "" {
