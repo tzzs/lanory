@@ -414,9 +414,11 @@ func interfaceNames(ifaces []model.NetworkInterface) []string {
 
 // buildNetworks derives the logical network nodes.
 //
-// A network exists when a device owns either a bridge or an interface with an IP
-// address. The bridge is the primary case on OpenWrt (br-lan); a standalone
-// interface with an address (a routed VLAN, for instance) is the secondary one.
+// Only an interface that carries an address without being a bridge becomes a
+// node. A bridge is the device's own LAN side: br-lan on OpenWrt is not a
+// second box, it is the router. Its ports and the devices behind them already
+// hang off the router node, so rendering it separately produced a card that
+// belonged to nothing in the tree and fell into the "other networks" pile.
 func buildNetworks(devices []model.Device, interfaces []model.NetworkInterface) []Node {
 	byDevice := groupInterfaces(interfaces)
 	var out []Node
@@ -427,7 +429,7 @@ func buildNetworks(devices []model.Device, interfaces []model.NetworkInterface) 
 			continue
 		}
 		for _, iface := range byDevice[d.ID] {
-			if iface.Type != model.InterfaceTypeBridge && !hasIP(iface) {
+			if iface.Type == model.InterfaceTypeBridge || !hasIP(iface) {
 				continue
 			}
 			if seen[iface.BridgeID+iface.Name] {

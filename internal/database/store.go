@@ -272,7 +272,7 @@ func (s *Store) GetDeviceDetail(id string) (*model.DeviceDetail, error) {
 		return nil, err
 	}
 	detail := &model.DeviceDetail{Device: d}
-	if detail.Addresses, err = s.ListAddresses(id); err != nil {
+	if detail.Addresses, err = s.ListActiveAddresses(id, Now()); err != nil {
 		return nil, err
 	}
 	if detail.Identities, err = s.ListIdentities(id); err != nil {
@@ -639,10 +639,34 @@ func boolInt(b bool) int {
 // Addresses
 // ---------------------------------------------------------------------------
 
-// ListAddresses returns all addresses of a device.
+// ListAddresses returns every address ever observed for a device.
+//
+// This low-level method is intentionally history-preserving: discovery,
+// topology and monitoring use it to find an address that may have gone quiet.
+// User-facing detail endpoints should use ListActiveAddresses instead.
 func (s *Store) ListAddresses(deviceID string) ([]model.DeviceAddress, error) {
-	rows, err := s.db.Query(`SELECT id, device_id, address, family, interface_id, source, prefix_length, is_primary, first_seen, last_seen
-		FROM device_addresses WHERE device_id = ? ORDER BY family, address`, deviceID)
+	return s.listAddresses(deviceID, ``)
+}
+
+// ListActiveAddresses returns addresses observed recently, plus primary and
+// manually managed addresses. Discovery data is historical by design, but a
+// device detail view should not present a year-old ARP observation as current.
+// A 24-hour window is long enough to span the router's normal collection cycle.
+func (s *Store) ListActiveAddresses(deviceID string, now time.Time) ([]model.DeviceAddress, error) {
+	cutoff := now.Add(-24 * time.Hour).UTC().Format(TimeLayout)
+	return s.listAddresses(deviceID, cutoff)
+}
+
+func (s *Store) listAddresses(deviceID, cutoff string) ([]model.DeviceAddress, error) {
+	query := `SELECT id, device_id, address, family, interface_id, source, prefix_length, is_primary, first_seen, last_seen
+		FROM device_addresses WHERE device_id = ?`
+	args := []any{deviceID}
+	if cutoff != "" {
+		query += ` AND (is_primary = 1 OR source = 'manual' OR last_seen >= ?)`
+		args = append(args, cutoff)
+	}
+	query += ` ORDER BY family, address`
+	rows, err := s.db.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}

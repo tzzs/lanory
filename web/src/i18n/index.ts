@@ -150,8 +150,9 @@ const zhCN: Dict = {
   'topology.offline_hidden_show': '显示',
   'topology.multi_homed': '多网段',
   'topology.multi_homed_hint': '该设备在多个网段上都有地址（例如 LAN 侧和 WAN 侧）',
+  'topology.upstream': '上游',
+  'topology.downstream': '下游',
   'topology.zoom_for_detail': '放大查看设备详情',
-  'topology.lan_bridge': 'LAN 网桥',
 
   // ---- interface roles ----
   'role.lan': 'LAN',
@@ -214,6 +215,10 @@ const zhCN: Dict = {
   'device.model': '型号',
   'device.hostname': '主机名',
   'device.description': '备注',
+  'device.no_address': '暂无地址',
+  'device.show_all_addresses': '显示全部 {count} 个地址',
+  'device.show_fewer_addresses': '收起',
+  'device.open_details': '查看设备详情',
   'device.sources': '发现来源',
   'device.addresses': '地址列表',
   'device.identities': '身份标识',
@@ -513,8 +518,9 @@ const en: Dict = {
   'topology.offline_hidden_show': 'Show',
   'topology.multi_homed': 'Multi-subnet',
   'topology.multi_homed_hint': 'This device has addresses on more than one subnet (for example a LAN side and a WAN side)',
+  'topology.upstream': 'Upstream',
+  'topology.downstream': 'Downstream',
   'topology.zoom_for_detail': 'Zoom in for device details',
-  'topology.lan_bridge': 'LAN bridge',
 
   // ---- interface roles ----
   'role.lan': 'LAN',
@@ -575,6 +581,10 @@ const en: Dict = {
   'device.model': 'Model',
   'device.hostname': 'Hostname',
   'device.description': 'Description',
+  'device.no_address': 'No address',
+  'device.show_all_addresses': 'Show all {count} addresses',
+  'device.show_fewer_addresses': 'Show less',
+  'device.open_details': 'View device details',
   'device.sources': 'Sources',
   'device.addresses': 'Addresses',
   'device.identities': 'Identities',

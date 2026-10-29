@@ -129,3 +129,35 @@ func TestListDevicesOnlineFirstWithNameSort(t *testing.T) {
 	}
 	assertOrder(t, devices, []string{"dev-beta", "dev-gamma", "dev-alpha", "dev-zeta"})
 }
+
+func TestListActiveAddressesFiltersStaleDiscoveryButKeepsPrimary(t *testing.T) {
+	s := newTestStore(t)
+	dev := &model.Device{ID: "dev-addresses", Name: "test device"}
+	if err := s.UpsertDevice(dev); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC)
+	rows := []*model.DeviceAddress{
+		{DeviceID: dev.ID, Address: "192.168.1.10", Family: model.AddressFamilyIPv4, Source: model.SourceARP, LastSeen: now.Add(-2 * time.Hour)},
+		{DeviceID: dev.ID, Address: "192.168.1.11", Family: model.AddressFamilyIPv4, Source: model.SourceARP, LastSeen: now.Add(-48 * time.Hour)},
+		{DeviceID: dev.ID, Address: "192.168.1.12", Family: model.AddressFamilyIPv4, Source: model.SourceManual, LastSeen: now.Add(-365 * 24 * time.Hour)},
+		{DeviceID: dev.ID, Address: "192.168.1.13", Family: model.AddressFamilyIPv4, Source: model.SourceARP, IsPrimary: true, LastSeen: now.Add(-365 * 24 * time.Hour)},
+	}
+	for _, row := range rows {
+		if err := s.UpsertAddress(row); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := s.ListActiveAddresses(dev.ID, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("active address count = %d, want 3: %+v", len(got), got)
+	}
+	for _, a := range got {
+		if a.Address == "192.168.1.11" {
+			t.Fatalf("stale discovery address was returned: %+v", a)
+		}
+	}
+}

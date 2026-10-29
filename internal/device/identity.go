@@ -102,8 +102,26 @@ func (e *Engine) Resolve(ing Ingest) (*model.Device, bool, error) {
 	// Refresh volatile fields.
 	changed := false
 	if ing.Hostname != "" && ing.Hostname != dev.Hostname && !dev.IsLocked {
+		// The display name is derived from the observation that created the
+		// device. A device first seen as a bare MAC keeps that placeholder
+		// forever unless the name is refreshed here: DHCP hands out hostnames
+		// minutes later, and until then the UI shows "Unknown <mac>" for
+		// something it can already name.
+		if isDerivedName(dev) {
+			dev.Name = ing.Hostname
+		}
 		dev.Hostname = ing.Hostname
 		changed = true
+	} else if !dev.IsLocked && isDerivedName(dev) {
+		// No hostname yet, but the placeholder itself may be stale. NDP and the
+		// bridge FDB report a MAC and nothing else, so a device can be created
+		// as "Unknown 04:67:61" before ARP ever sees its address. Promote the
+		// name when this observation knows something better; never demote it,
+		// or a MAC-only observation would undo the address a previous one gave.
+		if name := displayName(ing); placeholderRank(name) > placeholderRank(dev.Name) {
+			dev.Name = name
+			changed = true
+		}
 	}
 	if ing.Vendor != "" && dev.Manufacturer == "" {
 		dev.Manufacturer = ing.Vendor
@@ -329,6 +347,13 @@ func (e *Engine) newDevice(ing Ingest) *model.Device {
 }
 
 // displayName picks the most human friendly name available.
+//
+// A device with no hostname gets a placeholder built from the strongest thing
+// we know about it. An address beats a MAC here: an address is something the
+// user can find in the router's DHCP lease table or ping, while six hex
+// characters from the middle of a MAC match nothing they can see anywhere else.
+// A link-local IPv6 does not count — it is per-interface plumbing, not a
+// handle anyone can use.
 func displayName(ing Ingest) string {
 	if ing.Hostname != "" {
 		return ing.Hostname
@@ -336,23 +361,106 @@ func displayName(ing Ingest) string {
 	if ing.Vendor != "" && ing.MAC != "" {
 		return ing.Vendor + " " + shortMAC(ing.MAC)
 	}
-	if ing.MAC != "" {
-		return "Unknown " + shortMAC(ing.MAC)
-	}
 	for _, a := range ing.Addresses {
-		if a.Address != "" {
+		if a.Address != "" && !strings.Contains(a.Address, ":") {
 			return "Unknown " + a.Address
 		}
+	}
+	for _, a := range ing.Addresses {
+		if a.Address != "" && !isLinkLocal(a.Address) {
+			return "Unknown " + a.Address
+		}
+	}
+	if ing.MAC != "" {
+		return "Unknown " + shortMAC(ing.MAC)
 	}
 	return "Unknown device"
 }
 
+// isLinkLocal reports whether an address is an IPv6 link-local address.
+func isLinkLocal(addr string) bool {
+	return strings.HasPrefix(strings.ToLower(addr), "fe80:")
+}
+
+// placeholderRank scores how useful a generated name is, so that a later
+// observation can only improve a device's placeholder.
+//
+// The ordering is the same one displayName() applies when a device is created:
+// a vendor plus a MAC tells the user what the box is, an address tells them
+// where it is, and a bare MAC suffix tells them nothing they can act on.
+func placeholderRank(name string) int {
+	switch {
+	case name == "", name == "Unknown device":
+		return 0
+	case isMACPlaceholder(name):
+		return 1
+	case strings.HasPrefix(name, "Unknown "):
+		return 2
+	default:
+		// A vendor-prefixed placeholder ("Xiaomi 77:7f:24"), or a real name
+		// that isDerivedName() let through. Never replaced by a weaker one.
+		return 3
+	}
+}
+
+// isMACPlaceholder reports whether a name is the "Unknown xx:xx:xx" fallback.
+//
+// Separators are optional: a device named before shortMAC() grouped the octets
+// carries "Unknown ddeeff", and that name must still be recognised so a later
+// observation can upgrade it.
+func isMACPlaceholder(name string) bool {
+	rest, ok := strings.CutPrefix(name, "Unknown ")
+	if !ok {
+		return false
+	}
+	hex := strings.ReplaceAll(rest, ":", "")
+	if len(hex) != 6 {
+		return false
+	}
+	for _, r := range hex {
+		if !strings.ContainsRune("0123456789abcdefABCDEF", r) {
+			return false
+		}
+	}
+	return true
+}
+
+// isDerivedName reports whether a device's name was generated from an earlier,
+// weaker observation rather than typed by the user.
+//
+// Only derived names are replaced when a hostname arrives. A name the user
+// chose in the UI is never overwritten, which is what IsLocked protects for the
+// rest of the fields and what this protects for the name alone.
+func isDerivedName(dev *model.Device) bool {
+	name := dev.Name
+	switch {
+	case name == "", name == "Unknown device":
+		return true
+	case strings.HasPrefix(name, "Unknown "):
+		return true
+	case dev.Hostname != "" && name == dev.Hostname:
+		// The name is the previous hostname, so it follows the new one.
+		return true
+	case dev.Manufacturer != "" && strings.HasPrefix(name, dev.Manufacturer+" "):
+		// "Xiaomi 77:7f:24": a vendor prefix plus a MAC suffix.
+		return true
+	}
+	return false
+}
+
+// shortMAC renders the last three octets of a MAC, grouped like a MAC.
+//
+// database.FormatMAC only formats a full 12-character address and returns a
+// six-character slice unchanged, so it cannot be used on the tail: doing so
+// produced "Unknown ddeeff", which reads as one word rather than as the end of
+// an address.
 func shortMAC(mac string) string {
 	c := database.CanonicalizeMAC(mac)
 	if len(c) < 6 {
 		return c
 	}
-	return database.FormatMAC(c[len(c)-6:])
+	tail := c[len(c)-6:]
+	return tail[0:2] + ":" + tail[2:4] + ":" + tail[4:6]
 }
 
 // newDeviceID derives a stable device ID from the strongest available identity.

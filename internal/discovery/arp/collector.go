@@ -111,6 +111,12 @@ func (c *Collector) Collect(ctx context.Context) ([]discovery.Result, error) {
 		if parsers.IPFamily(e.Address) != model.AddressFamilyIPv4 {
 			continue
 		}
+		// A zero lladdr is the kernel's unresolved sentinel, not a device
+		// identity. Normalize it to the same address-only path as a missing
+		// lladdr before the update engine sees the result.
+		if parsers.IsZeroMAC(parsers.CanonicalMAC(e.MAC)) {
+			e.MAC = ""
+		}
 		if e.MAC == "" {
 			// An unresolved address: report it so the address is known to
 			// exist, but it cannot become a device without a MAC.
@@ -189,7 +195,10 @@ func mergeProcArpMACs(entries []parsers.NeighborEntry, procArpPath string) {
 	}
 	byAddr := map[string]string{}
 	for _, e := range parseProcArp(data) {
-		if e.MAC != "" {
+		// /proc/net/arp uses the all-zero MAC for unresolved entries. It is
+		// a sentinel, not a device identity, and must not be copied onto the
+		// richer `ip neigh` observation.
+		if e.MAC != "" && !parsers.IsZeroMAC(parsers.CanonicalMAC(e.MAC)) {
 			byAddr[e.Address] = e.MAC
 		}
 	}
@@ -223,6 +232,10 @@ func parseArpTable(data []byte) []parsers.NeighborEntry {
 			}
 		}
 		if macIdx < 0 {
+			continue
+		}
+		mac := parsers.NormalizeMAC(fields[macIdx])
+		if parsers.IsZeroMAC(parsers.CanonicalMAC(mac)) {
 			continue
 		}
 		out = append(out, parsers.NeighborEntry{

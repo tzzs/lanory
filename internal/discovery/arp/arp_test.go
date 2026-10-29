@@ -255,3 +255,30 @@ func TestMergeProcArpMACsFillsMissingLLADDR(t *testing.T) {
 		t.Errorf("a MAC was invented for an unknown address: %q", entries[2].MAC)
 	}
 }
+
+func TestMergeProcArpMACsIgnoresZeroMAC(t *testing.T) {
+	dir := t.TempDir()
+	procPath := filepath.Join(dir, "arp")
+	writeFile(t, procPath, `IP address       HW type     Flags       HW address            Mask     Device
+192.168.1.10    0x1         0x0         00:00:00:00:00:00     *        eth3
+`)
+	entries := []parsers.NeighborEntry{{Address: "192.168.1.10", Interface: "eth3", State: model.NeighborFailed}}
+	mergeProcArpMACs(entries, procPath)
+	if entries[0].MAC != "" {
+		t.Fatalf("zero MAC was copied: %q", entries[0].MAC)
+	}
+}
+
+func TestCollectNormalizesZeroMACToUnresolved(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "neigh")
+	writeFile(t, path, "192.168.1.10 dev eth3 lladdr 00:00:00:00:00:00 FAILED\n")
+	c := NewWithPath(path)
+	results, err := c.Collect(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 || results[0].Neighbor == nil || results[0].Neighbor.MAC != "" {
+		t.Fatalf("zero MAC was not normalized: %+v", results)
+	}
+}

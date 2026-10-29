@@ -245,7 +245,7 @@ it('places the active WAN above the local router even when old saved positions p
   expect(nodes.find(n => n.id === wan.id)!.data.subtitle).toContain('100 Mbps')
 })
 
-it('marks a LAN bridge as a network bridge without changing its interface name', () => {
+it('keeps a network node labelled by its interface name', () => {
   const bridgeInterface = { id: 'if-br-lan', device_id: 'r', name: 'br-lan', type: 'bridge', role: 'lan', carrier: true, speed_mbps: 1000 } as import('@/types/api').NetworkInterface
   const bridge: TopologyNode = {
     id: 'net-br-lan',
@@ -256,11 +256,8 @@ it('marks a LAN bridge as a network bridge without changing its interface name',
   }
 
   const { nodes } = buildFlow({ nodes: [bridge], edges: [], layout, generated_at: generated }, { unverifiedThreshold: .6, interfaces: [bridgeInterface] })
-  const data = nodes[0].data
 
-  expect(data.label).toBe('br-lan')
-  expect(data.networkKind).toBe('bridge')
-  expect(data.networkRole).toBe('lan')
+  expect(nodes[0].data.label).toBe('br-lan')
 })
 
 describe('hideOffline', () => {
