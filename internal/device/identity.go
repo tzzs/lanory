@@ -21,6 +21,7 @@
 package device
 
 import (
+	"net"
 	"strings"
 	"time"
 
@@ -88,6 +89,12 @@ func (e *Engine) Resolve(ing Ingest) (*model.Device, bool, error) {
 	}
 	if ing.MAC != "" {
 		ing.MAC = database.CanonicalizeMAC(ing.MAC)
+		if database.IsZeroMAC(ing.MAC) {
+			// 00:00:00:00:00:00 is the kernel's unresolved sentinel. It is not
+			// an identity; keeping it here names devices "Unknown 000000" and
+			// merges unrelated addresses into one phantom.
+			ing.MAC = ""
+		}
 	}
 
 	dev, err := e.match(ing)
@@ -101,7 +108,7 @@ func (e *Engine) Resolve(ing Ingest) (*model.Device, bool, error) {
 
 	// Refresh volatile fields.
 	changed := false
-	if ing.Hostname != "" && ing.Hostname != dev.Hostname && !dev.IsLocked {
+	if ing.Hostname != "" && ing.Hostname != dev.Hostname && !dev.IsLocked && !dev.IsManual {
 		// The display name is derived from the observation that created the
 		// device. A device first seen as a bare MAC keeps that placeholder
 		// forever unless the name is refreshed here: DHCP hands out hostnames
@@ -112,7 +119,7 @@ func (e *Engine) Resolve(ing Ingest) (*model.Device, bool, error) {
 		}
 		dev.Hostname = ing.Hostname
 		changed = true
-	} else if !dev.IsLocked && isDerivedName(dev) {
+	} else if !dev.IsLocked && !dev.IsManual && isDerivedName(dev) {
 		// No hostname yet, but the placeholder itself may be stale. NDP and the
 		// bridge FDB report a MAC and nothing else, so a device can be created
 		// as "Unknown 04:67:61" before ARP ever sees its address. Promote the
@@ -437,7 +444,11 @@ func isDerivedName(dev *model.Device) bool {
 	case name == "", name == "Unknown device":
 		return true
 	case strings.HasPrefix(name, "Unknown "):
-		return true
+		rest := strings.TrimSpace(strings.TrimPrefix(name, "Unknown "))
+		// Address fallbacks are generated from an observation and may be
+		// replaced by a later hostname. Do not treat arbitrary user text such
+		// as derived merely because it starts with "Unknown ".
+		return isMACPlaceholder(name) || net.ParseIP(rest) != nil
 	case dev.Hostname != "" && name == dev.Hostname:
 		// The name is the previous hostname, so it follows the new one.
 		return true

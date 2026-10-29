@@ -1,6 +1,7 @@
 package database
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -128,6 +129,29 @@ func TestListDevicesOnlineFirstWithNameSort(t *testing.T) {
 		t.Fatalf("list: %v", err)
 	}
 	assertOrder(t, devices, []string{"dev-beta", "dev-gamma", "dev-alpha", "dev-zeta"})
+}
+
+func TestFindDeviceByAddressSkipsHiddenDevice(t *testing.T) {
+	s := newTestStore(t)
+	phantom := &model.Device{ID: "dev-ip-192.168.1.50", Name: "Unknown 000000"}
+	if err := s.UpsertDevice(phantom); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpsertAddress(&model.DeviceAddress{
+		DeviceID: phantom.ID,
+		Address:  "192.168.1.50",
+		Family:   model.AddressFamilyIPv4,
+		Source:   model.SourceARP,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.HideDevice(phantom.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	if dev, err := s.FindDeviceByAddress(model.AddressFamilyIPv4, "192.168.1.50"); !errors.Is(err, ErrNotFound) || dev != nil {
+		t.Fatalf("a hidden device must not claim an address: dev=%+v err=%v", dev, err)
+	}
 }
 
 func TestListActiveAddressesFiltersStaleDiscoveryButKeepsPrimary(t *testing.T) {

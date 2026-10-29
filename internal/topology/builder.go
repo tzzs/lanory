@@ -40,6 +40,9 @@ type StoreReader interface {
 	ListAllInterfaces() ([]model.NetworkInterface, error)
 	// ListAddresses returns the addresses of one device.
 	ListAddresses(deviceID string) ([]model.DeviceAddress, error)
+	// ListActiveAddresses returns the addresses worth displaying: recently
+	// observed, primary, or manual.
+	ListActiveAddresses(deviceID string, now time.Time) ([]model.DeviceAddress, error)
 	// ListEdges returns the topology edges.
 	ListEdges(f database.EdgeFilter) ([]model.TopologyEdge, error)
 	// ListIdentities returns the identities of one device.
@@ -109,7 +112,9 @@ func (b *Builder) Build() (*Graph, error) {
 	// 1. Device nodes.
 	for i := range devices {
 		d := devices[i]
-		addrs, _ := b.store.ListAddresses(d.ID)
+		// Node cards and the inspector show current addresses, not the full
+		// ARP history. Old observations stay in the database for evidence.
+		addrs, _ := b.store.ListActiveAddresses(d.ID, now)
 		node := deviceNode(d, ifacesByDevice[d.ID], addrs, now)
 		idx.add(node)
 	}

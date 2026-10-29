@@ -770,8 +770,15 @@ func (s *Store) UpsertAddress(a *model.DeviceAddress) error {
 
 // FindDeviceByAddress returns the device that owns an address.
 func (s *Store) FindDeviceByAddress(family model.AddressFamily, address string) (*model.Device, error) {
+	// A hidden device no longer owns its addresses for identity purposes.
+	// Otherwise an old phantom ("Unknown 000000") keeps absorbing observations
+	// of a real device that later answers on the same address, and the real
+	// device stays invisible forever. Rebuilding an address-only device keeps
+	// the same dev-ip-<address> id, so a device the user hid on purpose stays
+	// hidden.
 	row := s.db.QueryRow(`SELECT `+deviceColumns+` FROM devices d
-		WHERE d.id IN (SELECT device_id FROM device_addresses WHERE family = ? AND address = ?) LIMIT 1`,
+		WHERE d.is_hidden = 0
+		  AND d.id IN (SELECT device_id FROM device_addresses WHERE family = ? AND address = ?) LIMIT 1`,
 		string(family), address)
 	d, err := s.scanDevice(row)
 	if errors.Is(err, sql.ErrNoRows) {

@@ -90,6 +90,7 @@ func TestIsDerivedName(t *testing.T) {
 		{name: "previous hostname", dev: model.Device{Name: "tv", Hostname: "tv"}, want: true},
 		{name: "vendor placeholder", dev: model.Device{Name: "Xiaomi dd:ee:ff", Manufacturer: "Xiaomi"}, want: true},
 		{name: "typed by the user", dev: model.Device{Name: "客厅电视", Hostname: "tv"}, want: false},
+		{name: "unknown prefix typed by the user", dev: model.Device{Name: "Unknown camera", Hostname: "camera"}, want: false},
 	}
 
 	for _, tc := range tests {
