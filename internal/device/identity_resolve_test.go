@@ -120,6 +120,83 @@ func TestResolveKeepsVendorNameOverHostname(t *testing.T) {
 	}
 }
 
+// Two machines can share a hostname: "Mac" is a common one. A device that is
+// already identified by its MAC must not absorb another device that merely
+// reports the same hostname.
+func TestResolveDoesNotMergeTwoDevicesWithSameHostname(t *testing.T) {
+	eng, _ := newIdentityEngine(t)
+
+	// The first Mac is identified by its MAC and reports a hostname.
+	first, _, err := eng.Resolve(Ingest{
+		MAC:        "36:7d:04:6d:a5:f0",
+		Hostname:   "Mac",
+		Addresses:  []discovery.AddressObservation{{Address: "192.168.100.167"}},
+		Source:     model.SourceDHCP,
+		ObservedAt: time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Name != "Mac" {
+		t.Fatalf("unexpected name %q", first.Name)
+	}
+
+	// A second, different machine reports the same hostname and another
+	// address. It must become its own device.
+	second, created, err := eng.Resolve(Ingest{
+		MAC:        "72:e6:45:e9:61:61",
+		Hostname:   "Mac",
+		Addresses:  []discovery.AddressObservation{{Address: "192.168.100.232"}},
+		Source:     model.SourceDHCP,
+		ObservedAt: time.Date(2026, 10, 30, 12, 1, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !created {
+		t.Fatal("the second device was merged into the first one")
+	}
+	if second.ID == first.ID {
+		t.Fatalf("both observations landed on %s", second.ID)
+	}
+}
+
+// A device without a MAC identity may still be matched by hostname: it has
+// nothing better to identify it.
+func TestResolveMatchesByHostnameWhenCandidateHasNoMAC(t *testing.T) {
+	eng, _ := newIdentityEngine(t)
+
+	first, _, err := eng.Resolve(Ingest{
+		Hostname:   "printer",
+		Addresses:  []discovery.AddressObservation{{Address: "192.168.1.40"}},
+		Source:     model.SourceDHCP,
+		ObservedAt: time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.ID != "dev-ip-192.168.1.40" {
+		t.Fatalf("unexpected device %s", first.ID)
+	}
+
+	second, created, err := eng.Resolve(Ingest{
+		MAC:        "aa:bb:cc:dd:ee:09",
+		Hostname:   "printer",
+		Addresses:  []discovery.AddressObservation{{Address: "192.168.1.41"}},
+		Source:     model.SourceDHCP,
+		ObservedAt: time.Date(2026, 10, 30, 12, 1, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created {
+		t.Fatal("the observation should have merged into the address-only device")
+	}
+	if second.ID != first.ID {
+		t.Fatalf("landed on %s, want %s", second.ID, first.ID)
+	}
+}
+
 // A device the user marked as manual keeps its name even when that name looks
 // like a generated placeholder.
 func TestResolveKeepsManualDeviceName(t *testing.T) {

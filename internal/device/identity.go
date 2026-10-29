@@ -284,10 +284,20 @@ func (e *Engine) match(ing Ingest) (*model.Device, error) {
 
 	// 3. Randomised MAC: try to attach it to a device already known by
 	//    hostname or vendor rather than creating a duplicate.
+	//
+	//    Only a candidate that has no MAC identity of its own may be merged
+	//    this way. A candidate identified by its own MAC is a different
+	//    machine that happens to share the hostname, and a randomised MAC is
+	//    exactly the kind of identity that must not merge two of them: the
+	//    result would be one device carrying both machines' addresses.
 	if ing.MAC != "" && database.IsLocallyAdministeredMAC(ing.MAC) {
 		if ing.Hostname != "" {
 			if devs, err := e.store.FindDevicesByIdentity(model.IdentityHostname, ing.Hostname); err == nil && len(devs) > 0 {
-				return &devs[0], nil
+				for _, cand := range devs {
+					if !candHasMAC(e, cand) {
+						return &cand, nil
+					}
+				}
 			}
 		}
 	}
@@ -299,12 +309,24 @@ func (e *Engine) match(ing Ingest) (*model.Device, error) {
 			// Require corroboration: the candidate must share at least one
 			// address or be the only device with that hostname.
 			cand := devs[0]
+			// Require corroboration: the candidate must share at least one
+			// address. A candidate identified by its own MAC is a different
+			// machine that happens to share the hostname, so sharing an
+			// address is not enough for it.
 			for _, a := range ing.Addresses {
 				if dev, err := e.store.FindDeviceByAddress(familyOf(a), a.Address); err == nil && dev != nil && dev.ID == cand.ID {
+					if candHasMAC(e, cand) && cand.PrimaryMAC != "" && database.CanonicalizeMAC(cand.PrimaryMAC) != ing.MAC {
+						continue
+					}
 					return &cand, nil
 				}
 			}
-			if !cand.IsLocked && cand.Type != model.DeviceTypeUnknown {
+			// A candidate that already has a MAC identity of its own is a
+			// different machine that happens to share the hostname. Merging on
+			// the hostname alone would move that machine's addresses to the
+			// incoming device, which is exactly what happened to two Macs
+			// named "Mac" on the reference network.
+			if !cand.IsLocked && cand.Type != model.DeviceTypeUnknown && !candHasMAC(e, cand) {
 				return &cand, nil
 			}
 		}
@@ -321,6 +343,25 @@ func (e *Engine) match(ing Ingest) (*model.Device, error) {
 	}
 
 	return nil, nil
+}
+
+// candHasMAC reports whether a candidate device already has a MAC identity of
+// its own.
+//
+// Such a device is identified by hardware, not by a name that can be reused,
+// so an incoming observation that merely shares its hostname is a different
+// machine.
+func candHasMAC(e *Engine, cand model.Device) bool {
+	ids, err := e.store.ListIdentities(cand.ID)
+	if err != nil {
+		return false
+	}
+	for _, id := range ids {
+		if id.Type == model.IdentityMAC && id.Value != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func familyOf(a discovery.AddressObservation) model.AddressFamily {
