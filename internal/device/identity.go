@@ -108,17 +108,27 @@ func (e *Engine) Resolve(ing Ingest) (*model.Device, bool, error) {
 
 	// Refresh volatile fields.
 	changed := false
-	if ing.Hostname != "" && ing.Hostname != dev.Hostname && !dev.IsLocked && !dev.IsManual {
+	if ing.Hostname != "" && !dev.IsLocked && !dev.IsManual {
 		// The display name is derived from the observation that created the
 		// device. A device first seen as a bare MAC keeps that placeholder
 		// forever unless the name is refreshed here: DHCP hands out hostnames
 		// minutes later, and until then the UI shows "Unknown <mac>" for
 		// something it can already name.
-		if isDerivedName(dev) {
+		//
+		// The name is refreshed whenever it is still a generated placeholder,
+		// not only when the hostname changed. A device whose hostname was
+		// already recorded keeps its old placeholder otherwise, because
+		// "the hostname differs" is never true for it again.
+		//
+		// Only the "Unknown ..." fallbacks are replaced. A vendor-prefixed
+		// name such as "Xiaomi dd:ee:ff" says more than the hostname does.
+		if isUnknownPlaceholder(dev.Name) {
 			dev.Name = ing.Hostname
 		}
-		dev.Hostname = ing.Hostname
-		changed = true
+		if ing.Hostname != dev.Hostname {
+			dev.Hostname = ing.Hostname
+			changed = true
+		}
 	} else if !dev.IsLocked && !dev.IsManual && isDerivedName(dev) {
 		// No hostname yet, but the placeholder itself may be stale. NDP and the
 		// bridge FDB report a MAC and nothing else, so a device can be created
@@ -410,6 +420,24 @@ func placeholderRank(name string) int {
 	}
 }
 
+// isUnknownPlaceholder reports whether a name is one of the "Unknown ..."
+// fallbacks the engine generates.
+//
+// Only these are replaced by a hostname. A name that merely starts with
+// "Unknown " was written by the user ("Unknown camera") and must survive.
+func isUnknownPlaceholder(name string) bool {
+	if name == "" || name == "Unknown device" {
+		return true
+	}
+	rest, ok := strings.CutPrefix(name, "Unknown ")
+	if !ok {
+		return false
+	}
+	rest = strings.TrimSpace(rest)
+	// A MAC suffix and an address are both generated from an observation.
+	return isMACPlaceholder(name) || net.ParseIP(rest) != nil
+}
+
 // isMACPlaceholder reports whether a name is the "Unknown xx:xx:xx" fallback.
 //
 // Separators are optional: a device named before shortMAC() grouped the octets
@@ -441,14 +469,8 @@ func isMACPlaceholder(name string) bool {
 func isDerivedName(dev *model.Device) bool {
 	name := dev.Name
 	switch {
-	case name == "", name == "Unknown device":
+	case isUnknownPlaceholder(name):
 		return true
-	case strings.HasPrefix(name, "Unknown "):
-		rest := strings.TrimSpace(strings.TrimPrefix(name, "Unknown "))
-		// Address fallbacks are generated from an observation and may be
-		// replaced by a later hostname. Do not treat arbitrary user text such
-		// as derived merely because it starts with "Unknown ".
-		return isMACPlaceholder(name) || net.ParseIP(rest) != nil
 	case dev.Hostname != "" && name == dev.Hostname:
 		// The name is the previous hostname, so it follows the new one.
 		return true

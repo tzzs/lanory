@@ -56,6 +56,70 @@ func TestResolveIgnoresZeroMAC(t *testing.T) {
 	}
 }
 
+// A device whose hostname was recorded before the name could be refreshed must
+// still get its name fixed: the refresh used to require the hostname to
+// change, which never happens again for that device.
+func TestResolveRefreshesPlaceholderWhenHostnameUnchanged(t *testing.T) {
+	eng, store := newIdentityEngine(t)
+
+	dev, _, err := eng.Resolve(arpIngest("aa:bb:cc:dd:ee:02", "192.168.1.32", ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dev.Name != "Unknown 192.168.1.32" {
+		t.Fatalf("expected a placeholder name, got %q", dev.Name)
+	}
+	// Record the hostname without changing the name.
+	if _, err := store.UpdateDevice(dev.ID, map[string]any{"hostname": "printer"}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, _, err := eng.Resolve(arpIngest("aa:bb:cc:dd:ee:02", "192.168.1.32", "printer"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Name != "printer" {
+		t.Fatalf("the placeholder was not refreshed: %q", got.Name)
+	}
+}
+
+// A vendor-prefixed name says more than the hostname, so it must survive.
+func TestResolveKeepsVendorNameOverHostname(t *testing.T) {
+	eng, store := newIdentityEngine(t)
+
+	dev, _, err := eng.Resolve(Ingest{
+		MAC:        "aa:bb:cc:dd:ee:03",
+		Vendor:     "Xiaomi",
+		Addresses:  []discovery.AddressObservation{{Address: "192.168.1.33"}},
+		Source:     model.SourceARP,
+		ObservedAt: time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dev.Name != "Xiaomi dd:ee:03" {
+		t.Fatalf("unexpected name %q", dev.Name)
+	}
+	if _, err := store.UpdateDevice(dev.ID, map[string]any{"hostname": "router"}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, _, err := eng.Resolve(Ingest{
+		MAC:        "aa:bb:cc:dd:ee:03",
+		Vendor:     "Xiaomi",
+		Hostname:   "router",
+		Addresses:  []discovery.AddressObservation{{Address: "192.168.1.33"}},
+		Source:     model.SourceARP,
+		ObservedAt: time.Date(2026, 10, 30, 12, 5, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Name != "Xiaomi dd:ee:03" {
+		t.Fatalf("the vendor name was overwritten: %q", got.Name)
+	}
+}
+
 // A device the user marked as manual keeps its name even when that name looks
 // like a generated placeholder.
 func TestResolveKeepsManualDeviceName(t *testing.T) {
