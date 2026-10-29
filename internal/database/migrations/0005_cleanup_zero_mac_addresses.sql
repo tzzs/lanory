@@ -19,8 +19,7 @@
 -- The hidden phantom devices themselves are left in place: migration 0004 hid
 -- them and they remain there for audit.
 --
--- The primary address is not touched here. refreshPrimaryAddresses recomputes
--- it from the surviving rows on the next discovery run.
+-- The cached primary address is repaired by migration 0006.
 
 DELETE FROM device_addresses
 WHERE source = 'arp'
