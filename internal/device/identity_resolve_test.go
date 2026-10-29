@@ -235,3 +235,35 @@ func TestResolveKeepsManualDeviceName(t *testing.T) {
 		t.Fatalf("manual name was overwritten: %q", got.Name)
 	}
 }
+
+// A device that moved keeps its old lease in the address table. The primary
+// address must be the one observed most recently, not the first row by
+// address order - otherwise a device shows an address it no longer holds.
+func TestRefreshPrimaryAddressesPicksMostRecent(t *testing.T) {
+	eng, store := newIdentityEngine(t)
+
+	dev := &model.Device{ID: "dev-mac-aabbccddeeff", Name: "Mac"}
+	if err := store.UpsertDevice(dev); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC)
+	recent := old.Add(6 * time.Hour)
+	for _, a := range []*model.DeviceAddress{
+		{DeviceID: dev.ID, Address: "192.168.100.167", Family: model.AddressFamilyIPv4, Source: model.SourceDHCP, FirstSeen: old, LastSeen: old},
+		{DeviceID: dev.ID, Address: "192.168.100.232", Family: model.AddressFamilyIPv4, Source: model.SourceDHCP, FirstSeen: recent, LastSeen: recent},
+	} {
+		if err := store.UpsertAddress(a); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	eng.refreshPrimaryAddresses(dev)
+
+	got, err := store.GetDevice(dev.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.PrimaryIPv4 != "192.168.100.232" {
+		t.Fatalf("primary ipv4 = %q, want the most recently observed address", got.PrimaryIPv4)
+	}
+}

@@ -578,18 +578,37 @@ func (e *Engine) refreshPrimaryAddresses(dev *model.Device) {
 		return
 	}
 	var (
-		v4, v6, mac string
-		changed     bool
+		v4, v6, mac    string
+		v4Seen, v6Seen time.Time
+		v6Global       bool
+		changed        bool
 	)
 	for _, a := range addrs {
-		if a.Family == model.AddressFamilyIPv4 && v4 == "" {
-			v4 = a.Address
-		}
-		if a.Family == model.AddressFamilyIPv6 && strings.HasPrefix(a.Address, "2001:") && v6 == "" {
-			v6 = a.Address
-		}
-		if v6 == "" && a.Family == model.AddressFamilyIPv6 && !strings.HasPrefix(a.Address, "fe80:") {
-			v6 = a.Address
+		switch a.Family {
+		case model.AddressFamilyIPv4:
+			// The address the device is using now is the one observed most
+			// recently. A device that moved keeps its old leases in the table,
+			// and taking the first row (ListAddresses orders by address) would
+			// surface a stale one - a device could even show an address another
+			// device holds today.
+			if v4 == "" || a.LastSeen.After(v4Seen) {
+				v4, v4Seen = a.Address, a.LastSeen
+			}
+		case model.AddressFamilyIPv6:
+			// Link-local addresses are never useful as the device's address.
+			if strings.HasPrefix(a.Address, "fe80:") {
+				continue
+			}
+			// Prefer a globally routable address; among equals, the most recent.
+			global := strings.HasPrefix(a.Address, "2001:")
+			switch {
+			case v6 == "":
+				v6, v6Seen, v6Global = a.Address, a.LastSeen, global
+			case global && !v6Global:
+				v6, v6Seen, v6Global = a.Address, a.LastSeen, global
+			case global == v6Global && a.LastSeen.After(v6Seen):
+				v6, v6Seen, v6Global = a.Address, a.LastSeen, global
+			}
 		}
 	}
 	ids, err := e.store.ListIdentities(dev.ID)
