@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { X } from 'lucide-react'
-import { t } from '@/i18n'
+import { t, translateReason } from '@/i18n'
 import { useUIStore } from '@/stores/ui'
 import {
   useDevices,
@@ -270,7 +270,7 @@ export function DeviceDetailPanel({ onClose }: { onClose: () => void }) {
         <div className="flex items-center gap-2">
           <StatusDot state={device.state} />
           <span className="text-sm font-medium">{deviceStateLabel(device.state)}</span>
-          {device.state_reason ? <span className="text-[11px] text-muted">· {device.state_reason}</span> : null}
+          {device.state_reason ? <span className="text-[11px] text-muted">· {translateReason(device.state_reason_code, device.state_reason)}</span> : null}
         </div>
 
         {device.is_manual ? <Badge tone="accent">{t('devices.manual_badge')}</Badge> : null}

@@ -133,6 +133,7 @@ func (e *Engine) EnsureProbes(ctx context.Context, cfg AutoProbeConfig) (int, er
 			RecoverConfirm:   positiveOr(cfg.RecoverConfirm, 1),
 			State:            model.StateUnknown,
 			StateReason:      "awaiting first probe",
+			StateReasonCode:  &model.Reason{Code: model.ReasonAwaitingFirstProbe, Params: map[string]string{}},
 			CreatedAt:        time.Now().UTC(),
 		}
 		if err := lister.CreateProbe(probe); err != nil {

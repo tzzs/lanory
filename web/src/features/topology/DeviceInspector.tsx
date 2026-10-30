@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowDown, ArrowRight, ArrowUp, Lock, X } from 'lucide-react'
-import { t } from '@/i18n'
+import { t, translateReason } from '@/i18n'
 import { cn } from '@/lib/cn'
 import { useUIStore } from '@/stores/ui'
 import { useDevice, useTopology } from '@/hooks/useApi'
@@ -161,8 +161,8 @@ function DeviceInspectorBody({ deviceId, onClose }: { deviceId: string; onClose:
         {/* Why the device is in this state, when the engine knows. Truncated to
             a single line: the full sentence is on the device page. */}
         {device.state_reason ? (
-          <p className="-mt-1 truncate text-[11px] text-muted" title={device.state_reason}>
-            {device.state_reason}
+          <p className="-mt-1 truncate text-[11px] text-muted" title={translateReason(device.state_reason_code, device.state_reason)}>
+            {translateReason(device.state_reason_code, device.state_reason)}
           </p>
         ) : null}
 

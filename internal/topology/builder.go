@@ -229,12 +229,13 @@ func (b *Builder) listInterfaces() ([]model.NetworkInterface, error) {
 
 func deviceNode(d model.Device, ifaces []model.NetworkInterface, addrs []model.DeviceAddress, now time.Time) Node {
 	node := Node{
-		ID:          deviceNodeID(d.ID),
-		Kind:        NodeKindDevice,
-		Device:      &d,
-		State:       d.State,
-		StateReason: d.StateReason,
-		PrimaryMAC:  d.PrimaryMAC,
+		ID:              deviceNodeID(d.ID),
+		Kind:            NodeKindDevice,
+		Device:          &d,
+		State:           d.State,
+		StateReason:     d.StateReason,
+		StateReasonCode: d.StateReasonCode,
+		PrimaryMAC:      d.PrimaryMAC,
 	}
 	if node.PrimaryMAC == "" {
 		// Fall back to the first interface MAC.

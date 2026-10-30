@@ -23,6 +23,46 @@ func NewStore(db *DB) *Store { return &Store{db: db} }
 // DB exposes the underlying database handle for internal helpers.
 func (s *Store) DB() *DB { return s.db }
 
+// decodeReason parses the JSON reason payload added in migration 0007. Empty
+// and malformed values return nil so old or manually edited rows keep their
+// English text as the safe fallback.
+func decodeReason(raw string) *model.Reason {
+	if raw == "" {
+		return nil
+	}
+	var envelope struct {
+		Code   model.ReasonCode           `json:"code"`
+		Params map[string]json.RawMessage `json:"params"`
+	}
+	if err := json.Unmarshal([]byte(raw), &envelope); err != nil || envelope.Code == "" {
+		return nil
+	}
+	reason := &model.Reason{Code: envelope.Code, Params: map[string]string{}}
+	for key, value := range envelope.Params {
+		var text string
+		if err := json.Unmarshal(value, &text); err != nil {
+			var number json.Number
+			if err := json.Unmarshal(value, &number); err != nil {
+				continue
+			}
+			text = number.String()
+		}
+		reason.Params[key] = text
+	}
+	return reason
+}
+
+func encodeReason(reason *model.Reason) string {
+	if reason == nil || reason.Code == "" {
+		return ""
+	}
+	data, err := json.Marshal(reason)
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
 func (s *Store) now() string { return Now().Format(TimeLayout) }
 
 // ---------------------------------------------------------------------------
@@ -72,16 +112,16 @@ func parseDBTime(v any) time.Time {
 // (both devices and device_identities have one). Every query that uses this
 // constant must therefore alias the devices table as "d".
 const deviceColumns = `d.id, d.name, d.hostname, d.type, d.manufacturer, d.model, d.description,
-	d.is_manual, d.is_locked, d.is_hidden, d.type_source, d.state, d.state_reason, d.last_state_change,
+	d.is_manual, d.is_locked, d.is_hidden, d.type_source, d.state, d.state_reason, d.state_reason_code, d.last_state_change,
 	d.primary_ipv4, d.primary_ipv6, d.primary_mac, d.is_gateway, d.is_self,
 	d.first_seen, d.last_seen, d.created_at, d.updated_at`
 
 func (s *Store) scanDevice(sc interface{ Scan(...any) error }) (*model.Device, error) {
 	d := &model.Device{}
-	var typeSource, stateReason string
+	var typeSource, stateReason, stateReasonCode string
 	err := sc.Scan(
 		&d.ID, &d.Name, &d.Hostname, &d.Type, &d.Manufacturer, &d.Model, &d.Description,
-		&d.IsManual, &d.IsLocked, &d.IsHidden, &typeSource, &d.State, &stateReason, &d.LastStateChange,
+		&d.IsManual, &d.IsLocked, &d.IsHidden, &typeSource, &d.State, &stateReason, &stateReasonCode, &d.LastStateChange,
 		&d.PrimaryIPv4, &d.PrimaryIPv6, &d.PrimaryMAC, &d.IsGateway, &d.IsSelf,
 		&d.FirstSeen, &d.LastSeen, &d.CreatedAt, &d.UpdatedAt,
 	)
@@ -90,6 +130,7 @@ func (s *Store) scanDevice(sc interface{ Scan(...any) error }) (*model.Device, e
 	}
 	d.TypeSource = model.DiscoverySource(typeSource)
 	d.StateReason = stateReason
+	d.StateReasonCode = decodeReason(stateReasonCode)
 	return d, nil
 }
 
@@ -349,13 +390,13 @@ func (s *Store) UpsertDevice(d *model.Device) error {
 		}
 		_, err = s.db.Exec(`INSERT INTO devices (
 			id, name, hostname, type, manufacturer, model, description,
-			is_manual, is_locked, is_hidden, type_source, state, state_reason, last_state_change,
+			is_manual, is_locked, is_hidden, type_source, state, state_reason, state_reason_code, last_state_change,
 			primary_ipv4, primary_ipv6, primary_mac, is_gateway, is_self,
 			first_seen, last_seen, created_at, updated_at
-		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			d.ID, d.Name, d.Hostname, string(d.Type), d.Manufacturer, d.Model, d.Description,
 			boolInt(d.IsManual), boolInt(d.IsLocked), boolInt(d.IsHidden), string(d.TypeSource),
-			string(d.State), d.StateReason, d.LastStateChange.UTC().Format(TimeLayout),
+			string(d.State), d.StateReason, encodeReason(d.StateReasonCode), d.LastStateChange.UTC().Format(TimeLayout),
 			d.PrimaryIPv4, d.PrimaryIPv6, d.PrimaryMAC, boolInt(d.IsGateway), boolInt(d.IsSelf),
 			d.FirstSeen.UTC().Format(TimeLayout), d.LastSeen.UTC().Format(TimeLayout),
 			d.CreatedAt.UTC().Format(TimeLayout), d.UpdatedAt.UTC().Format(TimeLayout),
@@ -400,13 +441,18 @@ func (s *Store) UpsertDevice(d *model.Device) error {
 
 	state := existing.State
 	stateReason := existing.StateReason
+	stateReasonCode := existing.StateReasonCode
 	lastStateChange := existing.LastStateChange
 	if d.State != "" && d.State != existing.State {
 		state = d.State
 		stateReason = d.StateReason
+		stateReasonCode = d.StateReasonCode
 		lastStateChange = Now()
 	} else if d.StateReason != "" {
 		stateReason = d.StateReason
+		if d.StateReasonCode != nil {
+			stateReasonCode = d.StateReasonCode
+		}
 	}
 
 	firstSeen := existing.FirstSeen
@@ -420,13 +466,13 @@ func (s *Store) UpsertDevice(d *model.Device) error {
 
 	_, err = s.db.Exec(`UPDATE devices SET
 		name = ?, hostname = ?, type = ?, manufacturer = ?, model = ?, description = ?,
-		type_source = ?, state = ?, state_reason = ?, last_state_change = ?,
+		type_source = ?, state = ?, state_reason = ?, state_reason_code = ?, last_state_change = ?,
 		primary_ipv4 = ?, primary_ipv6 = ?, primary_mac = ?,
 		is_gateway = ?, is_self = ?, is_locked = ?, is_hidden = ?,
 		first_seen = ?, last_seen = ?, updated_at = ?
 		WHERE id = ?`,
 		name, hostname, string(devType), manufacturer, modelName, desc,
-		string(typeSource), string(state), stateReason, lastStateChange.UTC().Format(TimeLayout),
+		string(typeSource), string(state), stateReason, encodeReason(stateReasonCode), lastStateChange.UTC().Format(TimeLayout),
 		d.PrimaryIPv4, d.PrimaryIPv6, d.PrimaryMAC,
 		boolInt(d.IsGateway || existing.IsGateway), boolInt(d.IsSelf || existing.IsSelf),
 		boolInt(d.IsLocked || existing.IsLocked), boolInt(d.IsHidden || existing.IsHidden),

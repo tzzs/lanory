@@ -72,13 +72,13 @@ const stateHistorySize = 12
 // trivial while tests can supply a fake.
 type DeviceStateSetter interface {
 	// SetOnline marks the device online.
-	SetOnline(id, reason string) error
+	SetOnline(id, reason string, code *model.Reason) error
 	// SetOffline marks the device offline.
-	SetOffline(id, reason string) error
+	SetOffline(id, reason string, code *model.Reason) error
 	// SetUnknown marks the device state as unknown.
-	SetUnknown(id, reason string) error
+	SetUnknown(id, reason string, code *model.Reason) error
 	// MarkSleeping records that the device shows power saving behaviour.
-	MarkSleeping(id, reason string) error
+	MarkSleeping(id, reason string, code *model.Reason) error
 }
 
 // StateTransition records a state change with the evidence behind it, so the UI
@@ -93,6 +93,9 @@ type StateTransition struct {
 	To   model.DeviceState
 	// Reason explains the transition in human readable form.
 	Reason string
+	// ReasonCode is the translatable form of Reason: a stable code plus the
+	// parameters the message template needs.
+	ReasonCode *model.Reason
 	// Method is the detection method, e.g. "icmp" or "icmp->tcp".
 	Method string
 	// Source is the probe source that produced the evidence.
@@ -213,7 +216,8 @@ func (m *StateMachine) Snapshot(probeID string) (StateSnapshot, bool) {
 // happen" without side effects. Use Apply to record an outcome.
 func (m *StateMachine) Decide(target model.ProbeTarget, success bool) (model.DeviceState, string) {
 	history := appendOutcome(m.rawHistory(target.ID), success)
-	return m.decideHistory(target, history)
+	state, r := m.decideHistory(target, history)
+	return state, r.Text()
 }
 
 // Apply records the outcome and returns the resulting transition.
@@ -221,18 +225,19 @@ func (m *StateMachine) Apply(target model.ProbeTarget, success bool) StateTransi
 	from := m.CurrentState(target.ID)
 	st := m.stateFor(target.ID)
 	st.history = appendOutcome(st.history, success)
-	to, reason := m.decideHistory(target, st.history)
+	to, r := m.decideHistory(target, st.history)
 	st.deviceState = to
-	st.lastReason = reason
+	st.lastReason = r.text
 	return StateTransition{
-		ProbeID:  target.ID,
-		DeviceID: target.DeviceID,
-		From:     from,
-		To:       to,
-		Reason:   reason,
-		Method:   string(target.Protocol),
-		Source:   sourceLabel(target),
-		At:       time.Now().UTC(),
+		ProbeID:    target.ID,
+		DeviceID:   target.DeviceID,
+		From:       from,
+		To:         to,
+		Reason:     r.text,
+		ReasonCode: r.Reason(),
+		Method:     string(target.Protocol),
+		Source:     sourceLabel(target),
+		At:         time.Now().UTC(),
 	}
 }
 
@@ -255,7 +260,7 @@ func (m *StateMachine) rawHistory(probeID string) []bool {
 }
 
 // decideHistory implements the documented rules over an outcome window.
-func (m *StateMachine) decideHistory(target model.ProbeTarget, history []bool) (model.DeviceState, string) {
+func (m *StateMachine) decideHistory(target model.ProbeTarget, history []bool) (model.DeviceState, probeReason) {
 	threshold := positiveOr(target.FailureThreshold, 1)
 	recover := positiveOr(target.RecoverConfirm, 1)
 	src := sourceLabel(target)
@@ -267,60 +272,115 @@ func (m *StateMachine) decideHistory(target model.ProbeTarget, history []bool) (
 	// Rule 1: enough consecutive failures.
 	if failures >= threshold {
 		if !m.sourceReachable {
-			return model.StateSleeping, fmt.Sprintf(
-				"unreachable for %d consecutive probes from %s via %s, but the probe source itself lost connectivity: this says nothing about the device",
-				failures, src, proto)
+			return model.StateSleeping, newReason(
+				model.ReasonProbeUnreachableSourceDown,
+				fmt.Sprintf(
+					"unreachable for %d consecutive probes from %s via %s, but the probe source itself lost connectivity: this says nothing about the device",
+					failures, src, proto),
+				withParams(commonParams(src, proto), map[string]string{
+					"failures": itoa(failures),
+				}))
 		}
 		// The device is in the neighbour table, so it is on the segment and
 		// answered an ARP request recently. It is not gone; it just does not
 		// answer this probe method.
 		if m.presence != nil && target.Target != "" && m.presence.Seen(target.Target) {
-			return model.StateSleeping, fmt.Sprintf(
-				"unreachable for %d consecutive probes from %s via %s, but the neighbour table still lists %s: the device is on the segment and does not answer this probe method",
-				failures, src, proto, target.Target)
+			return model.StateSleeping, newReason(
+				model.ReasonProbeUnreachableStillPresent,
+				fmt.Sprintf(
+					"unreachable for %d consecutive probes from %s via %s, but the neighbour table still lists %s: the device is on the segment and does not answer this probe method",
+					failures, src, proto, target.Target),
+				withParams(commonParams(src, proto), map[string]string{
+					"failures": itoa(failures),
+					"address":  target.Target,
+				}))
 		}
 		if oscillating(history) {
 			// The device resumed after an earlier run of failures: power cycling.
-			return model.StateSleeping, fmt.Sprintf(
-				"unreachable for %d consecutive probes from %s via %s, but the device resumed after an earlier gap of %d failures: power saving, not absence",
-				failures, src, proto, threshold)
+			return model.StateSleeping, newReason(
+				model.ReasonProbeUnreachablePowerCycling,
+				fmt.Sprintf(
+					"unreachable for %d consecutive probes from %s via %s, but the device resumed after an earlier gap of %d failures: power saving, not absence",
+					failures, src, proto, threshold),
+				withParams(commonParams(src, proto), map[string]string{
+					"failures": itoa(failures),
+					"gap":      itoa(threshold),
+				}))
 		}
 		if m.CurrentState(target.ID) == model.StateSleeping && hasSuccess(history) {
 			// Already classified as power saving and still alive within the window.
-			return model.StateSleeping, fmt.Sprintf(
-				"unreachable for %d consecutive probes from %s via %s; the device was already sleeping and answered %s, so this is a deeper sleep rather than absence",
-				failures, src, proto, lastSuccessAge(history))
+			return model.StateSleeping, newReason(
+				model.ReasonProbeUnreachableDeeperSleep,
+				fmt.Sprintf(
+					"unreachable for %d consecutive probes from %s via %s; the device was already sleeping and answered %s, so this is a deeper sleep rather than absence",
+					failures, src, proto, lastSuccessAge(history)),
+				withParams(commonParams(src, proto), map[string]string{
+					"failures":     itoa(failures),
+					"last_success": lastSuccessAge(history),
+				}))
 		}
-		return model.StateOffline, fmt.Sprintf(
-			"unreachable for %d consecutive probes from %s via %s with no recent success",
-			failures, src, proto)
+		return model.StateOffline, newReason(
+			model.ReasonProbeUnreachableConsecutive,
+			fmt.Sprintf(
+				"unreachable for %d consecutive probes from %s via %s with no recent success",
+				failures, src, proto),
+			withParams(commonParams(src, proto), map[string]string{
+				"failures": itoa(failures),
+			}))
 	}
 
 	// Rule 2: oscillating pattern.
 	if failures > 0 && oscillating(history) {
-		return model.StateSleeping, fmt.Sprintf(
-			"intermittent reachability from %s via %s: %d of the last %d probes failed",
-			src, proto, countFailures(history), len(history))
+		return model.StateSleeping, newReason(
+			model.ReasonProbeIntermittent,
+			fmt.Sprintf(
+				"intermittent reachability from %s via %s: %d of the last %d probes failed",
+				src, proto, countFailures(history), len(history)),
+			withParams(commonParams(src, proto), map[string]string{
+				"failed": itoa(countFailures(history)),
+				"total":  itoa(len(history)),
+			}))
 	}
 
 	// Rule 3: answering right now.
 	if failures == 0 {
 		if successes >= recover || !hasFailure(history) {
-			return model.StateOnline, fmt.Sprintf("reachable from %s via %s", src, proto)
+			return model.StateOnline, newReason(
+				model.ReasonProbeReachable,
+				fmt.Sprintf("reachable from %s via %s", src, proto),
+				commonParams(src, proto))
 		}
-		return model.StateSleeping, fmt.Sprintf(
-			"confirming recovery from %s via %s: %d of %d required successes", src, proto, successes, recover)
+		return model.StateSleeping, newReason(
+			model.ReasonProbeConfirmingRecovery,
+			fmt.Sprintf(
+				"confirming recovery from %s via %s: %d of %d required successes", src, proto, successes, recover),
+			withParams(commonParams(src, proto), map[string]string{
+				"successes": itoa(successes),
+				"required":  itoa(recover),
+			}))
 	}
 
 	// Rule 4: failures below the threshold that are not oscillating.
 	if hasSuccess(history) {
-		return model.StateOnline, fmt.Sprintf(
-			"%d consecutive failure(s) below the threshold of %d from %s via %s: not enough evidence to change state",
-			failures, threshold, src, proto)
+		return model.StateOnline, newReason(
+			model.ReasonProbeBelowThreshold,
+			fmt.Sprintf(
+				"%d consecutive failure(s) below the threshold of %d from %s via %s: not enough evidence to change state",
+				failures, threshold, src, proto),
+			withParams(commonParams(src, proto), map[string]string{
+				"failures":  itoa(failures),
+				"threshold": itoa(threshold),
+			}))
 	}
-	return model.StateUnknown, fmt.Sprintf(
-		"no successful probe yet from %s via %s (%d failure(s), threshold %d)",
-		src, proto, failures, threshold)
+	return model.StateUnknown, newReason(
+		model.ReasonProbeNeverSucceeded,
+		fmt.Sprintf(
+			"no successful probe yet from %s via %s (%d failure(s), threshold %d)",
+			src, proto, failures, threshold),
+		withParams(commonParams(src, proto), map[string]string{
+			"failures":  itoa(failures),
+			"threshold": itoa(threshold),
+		}))
 }
 
 // counters returns the consecutive failure and success counters of a probe.

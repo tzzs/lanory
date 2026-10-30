@@ -64,18 +64,19 @@ func (n Node) toModel() model.TopologyNode {
 		kind = string(NodeKindNetwork)
 	}
 	out := model.TopologyNode{
-		ID:          n.ID,
-		Kind:        kind,
-		Device:      n.Device,
-		Interface:   n.Interface,
-		Network:     n.Network,
-		State:       n.State,
-		StateReason: n.StateReason,
-		PrimaryIP:   n.PrimaryIP,
-		PrimaryMAC:  n.PrimaryMAC,
-		Addresses:   n.Addresses,
-		Children:    n.Children,
-		Unresolved:  unresolved,
+		ID:              n.ID,
+		Kind:            kind,
+		Device:          n.Device,
+		Interface:       n.Interface,
+		Network:         n.Network,
+		State:           n.State,
+		StateReason:     n.StateReason,
+		StateReasonCode: n.StateReasonCode,
+		PrimaryIP:       n.PrimaryIP,
+		PrimaryMAC:      n.PrimaryMAC,
+		Addresses:       n.Addresses,
+		Children:        n.Children,
+		Unresolved:      unresolved,
 	}
 	// A segment node has no device, but the UI still needs a label. The reason
 	// already carries one; the state stays unknown on purpose: a segment is not

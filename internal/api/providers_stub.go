@@ -454,6 +454,10 @@ func (s *storeMonitoring) Run(context.Context, string) (*model.ProbeResult, erro
 // Status is derived from the last observed carrier and oper_state, and is
 // labelled "unverified" whenever the counters have never been refreshed, so the
 // UI cannot present a guess as a measurement.
+//
+// The reason code comes from the same derivation the live link observer uses
+// (model.LinkReasonCode), so an interface rendered through the store-backed
+// provider and one rendered through the live engine use the same wording.
 func (s *storeMonitoring) InterfaceStatus() ([]model.InterfaceStatus, error) {
 	ifaces, err := listAllInterfaces(s.store)
 	if err != nil {
@@ -472,10 +476,11 @@ func (s *storeMonitoring) InterfaceStatus() ([]model.InterfaceStatus, error) {
 			reason = "carrier up"
 		}
 		out = append(out, model.InterfaceStatus{
-			Interface: i,
-			Role:      i.Role,
-			Status:    status,
-			Reason:    reason,
+			Interface:  i,
+			Role:       i.Role,
+			Status:     status,
+			Reason:     reason,
+			ReasonCode: model.LinkReasonCode(i.Carrier, i.OperState, i.SpeedMbps),
 		})
 	}
 	sort.SliceStable(out, func(a, b int) bool { return out[a].Interface.Name < out[b].Interface.Name })

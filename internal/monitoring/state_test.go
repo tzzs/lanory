@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -369,6 +370,12 @@ func TestTransitionRecordsEvidence(t *testing.T) {
 	if !strings.Contains(tr.Reason, "lanory") {
 		t.Fatalf("reason = %q, want it to name the probe source", tr.Reason)
 	}
+	if tr.ReasonCode == nil || tr.ReasonCode.Code != model.ReasonProbeReachable {
+		t.Fatalf("reason code = %#v, want %q", tr.ReasonCode, model.ReasonProbeReachable)
+	}
+	if tr.ReasonCode.Params["source"] != "lanory" || tr.ReasonCode.Params["protocol"] != "icmp" {
+		t.Fatalf("reason params = %#v, want source/protocol", tr.ReasonCode.Params)
+	}
 	if tr.At.IsZero() {
 		t.Fatal("transition timestamp is zero")
 	}
@@ -409,4 +416,132 @@ func TestSourceLabelFallsBack(t *testing.T) {
 	if got := sourceLabel(target); got != "windows-pc" {
 		t.Fatalf("source label = %q, want windows-pc", got)
 	}
+}
+
+// TestReasonParamsCoverTheMessage asserts that every number the English
+// sentence mentions is also available as a parameter.
+//
+// The web UI renders a reason from its code and parameters, not from the
+// sentence. A number that is in the sentence but missing from the parameters
+// leaves a literal "{failures}" in the interface, so the two have to agree.
+// This is the check that caught the source-down branch losing its count.
+func TestReasonParamsCoverTheMessage(t *testing.T) {
+	scenarios := []struct {
+		name     string
+		target   model.ProbeTarget
+		outcomes []bool
+		setup    func(*StateMachine)
+		want     model.ReasonCode
+	}{
+		{
+			name:     "reachable",
+			target:   probe("p", 3, 1),
+			outcomes: []bool{true},
+			want:     model.ReasonProbeReachable,
+		},
+		{
+			name:     "unreachable consecutive",
+			target:   probe("p", 3, 1),
+			outcomes: []bool{false, false, false},
+			want:     model.ReasonProbeUnreachableConsecutive,
+		},
+		{
+			name:     "probe source down",
+			target:   probe("p", 3, 1),
+			outcomes: []bool{false, false, false},
+			setup:    func(m *StateMachine) { m.SetSourceReachable(false) },
+			want:     model.ReasonProbeUnreachableSourceDown,
+		},
+		{
+			name:     "still present",
+			target:   probe("p", 3, 1),
+			outcomes: []bool{false, false, false},
+			setup:    func(m *StateMachine) { m.WithPresence(&fakePresence{present: true}) },
+			want:     model.ReasonProbeUnreachableStillPresent,
+		},
+		{
+			name:     "power cycling",
+			target:   probe("p", 3, 1),
+			outcomes: []bool{false, false, true, false, false, false},
+			want:     model.ReasonProbeUnreachablePowerCycling,
+		},
+		{
+			// The device was already sleeping and answered earlier in the
+			// window; the window then slides the early failure out, so the
+			// silence looks like a deeper sleep rather than absence.
+			name:     "deeper sleep",
+			target:   probe("p", 3, 1),
+			outcomes: append([]bool{false, true}, make([]bool, 11)...),
+			want:     model.ReasonProbeUnreachableDeeperSleep,
+		},
+		{
+			name:     "intermittent",
+			target:   probe("p", 5, 1),
+			outcomes: []bool{false, true, false},
+			want:     model.ReasonProbeIntermittent,
+		},
+		{
+			name:     "confirming recovery",
+			target:   probe("p", 3, 2),
+			outcomes: []bool{false, true},
+			want:     model.ReasonProbeConfirmingRecovery,
+		},
+		{
+			name:     "below threshold",
+			target:   probe("p", 3, 1),
+			outcomes: []bool{true, false},
+			want:     model.ReasonProbeBelowThreshold,
+		},
+		{
+			name:     "never succeeded",
+			target:   probe("p", 3, 1),
+			outcomes: []bool{false},
+			want:     model.ReasonProbeNeverSucceeded,
+		},
+	}
+	for _, sc := range scenarios {
+		t.Run(sc.name, func(t *testing.T) {
+			m := NewStateMachine(nil)
+			if sc.setup != nil {
+				sc.setup(m)
+			}
+			var tr StateTransition
+			for _, ok := range sc.outcomes {
+				tr = m.Apply(sc.target, ok)
+			}
+			if tr.ReasonCode == nil {
+				t.Fatalf("transition %q carries no reason code", tr.Reason)
+			}
+			if tr.ReasonCode.Code != sc.want {
+				t.Fatalf("reason code = %q, want %q (reason %q)", tr.ReasonCode.Code, sc.want, tr.Reason)
+			}
+			for _, number := range numbersIn(tr.Reason) {
+				if !paramsMention(tr.ReasonCode.Params, number) {
+					t.Fatalf("reason %q mentions %q but the parameters %#v do not", tr.Reason, number, tr.ReasonCode.Params)
+				}
+			}
+		})
+	}
+}
+
+// dottedNumber matches a dotted number, so the digits of an address are not
+// mistaken for a count.
+var dottedNumber = regexp.MustCompile(`\d+\.\d+(\.\d+)*`)
+
+// plainNumber matches a bare integer.
+var plainNumber = regexp.MustCompile(`\d+`)
+
+// numbersIn returns the integers a sentence mentions.
+func numbersIn(text string) []string {
+	return plainNumber.FindAllString(dottedNumber.ReplaceAllString(text, " "), -1)
+}
+
+// paramsMention reports whether any parameter value contains the number.
+func paramsMention(params map[string]string, number string) bool {
+	for _, value := range params {
+		if strings.Contains(value, number) {
+			return true
+		}
+	}
+	return false
 }

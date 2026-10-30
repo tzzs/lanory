@@ -308,7 +308,7 @@ func (s *Store) DeleteLayout(nodeID string) error {
 // ---------------------------------------------------------------------------
 
 const probeColumns = `id, name, kind, target, port, protocol, source_id, interval, timeout, enabled,
-	device_id, failure_threshold, recover_confirm, state, state_reason,
+	device_id, failure_threshold, recover_confirm, state, state_reason, state_reason_code,
 	consecutive_failures, consecutive_successes, last_result, last_latency_ms, last_error,
 	last_run_at, last_success_at, created_at, updated_at`
 
@@ -319,9 +319,10 @@ func scanProbe(sc interface{ Scan(...any) error }) (*model.ProbeTarget, error) {
 		enabled                           int
 		deviceID                          sql.NullString
 		lastRun, lastSuccess              sql.NullTime
+		stateReasonCode                   string
 	)
 	err := sc.Scan(&p.ID, &p.Name, &kind, &p.Target, &p.Port, &protocol, &p.SourceID, &p.Interval, &p.Timeout, &enabled,
-		&deviceID, &p.FailureThreshold, &p.RecoverConfirm, &state, &p.StateReason,
+		&deviceID, &p.FailureThreshold, &p.RecoverConfirm, &state, &p.StateReason, &stateReasonCode,
 		&p.ConsecutiveFailures, &p.ConsecutiveSuccesses, &lastResult, &p.LastLatencyMS, &p.LastError,
 		&lastRun, &lastSuccess, &p.CreatedAt, &p.UpdatedAt)
 	if err != nil {
@@ -333,6 +334,7 @@ func scanProbe(sc interface{ Scan(...any) error }) (*model.ProbeTarget, error) {
 	p.Kind = model.ProbeKind(kind)
 	p.Protocol = model.ProbeProtocol(protocol)
 	p.State = model.DeviceState(state)
+	p.StateReasonCode = decodeReason(stateReasonCode)
 	p.Enabled = enabled == 1
 	p.LastResult = model.ProbeRunStatus(lastResult)
 	p.LastRunAt = scanTime(lastRun)
@@ -354,12 +356,12 @@ func (s *Store) CreateProbe(p *model.ProbeTarget) error {
 	}
 	_, err := s.db.Exec(`INSERT INTO probe_targets (
 		id, name, kind, target, port, protocol, source_id, interval, timeout, enabled,
-		device_id, failure_threshold, recover_confirm, state, state_reason,
+		device_id, failure_threshold, recover_confirm, state, state_reason, state_reason_code,
 		consecutive_failures, consecutive_successes, last_result, last_latency_ms, last_error,
 		last_run_at, last_success_at, created_at, updated_at
-	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		p.ID, p.Name, string(p.Kind), p.Target, p.Port, string(p.Protocol), p.SourceID, p.Interval, p.Timeout, boolInt(p.Enabled),
-		nullString(p.DeviceID), p.FailureThreshold, p.RecoverConfirm, string(p.State), p.StateReason,
+		nullString(p.DeviceID), p.FailureThreshold, p.RecoverConfirm, string(p.State), p.StateReason, encodeReason(p.StateReasonCode),
 		p.ConsecutiveFailures, p.ConsecutiveSuccesses, string(p.LastResult), p.LastLatencyMS, p.LastError,
 		nullTime(p.LastRunAt), nullTime(p.LastSuccessAt),
 		p.CreatedAt.UTC().Format(TimeLayout), p.UpdatedAt.UTC().Format(TimeLayout))
@@ -411,10 +413,10 @@ func (s *Store) UpdateProbe(id string, patch map[string]any) (*model.ProbeTarget
 // UpdateProbeRuntime stores the outcome of a probe run on the target row.
 func (s *Store) UpdateProbeRuntime(p *model.ProbeTarget) error {
 	_, err := s.db.Exec(`UPDATE probe_targets SET
-		state = ?, state_reason = ?, consecutive_failures = ?, consecutive_successes = ?,
+		state = ?, state_reason = ?, state_reason_code = ?, consecutive_failures = ?, consecutive_successes = ?,
 		last_result = ?, last_latency_ms = ?, last_error = ?, last_run_at = ?, last_success_at = ?, updated_at = ?
 		WHERE id = ?`,
-		string(p.State), p.StateReason, p.ConsecutiveFailures, p.ConsecutiveSuccesses,
+		string(p.State), p.StateReason, encodeReason(p.StateReasonCode), p.ConsecutiveFailures, p.ConsecutiveSuccesses,
 		string(p.LastResult), p.LastLatencyMS, p.LastError,
 		nullTime(p.LastRunAt), nullTime(p.LastSuccessAt), s.now(), p.ID)
 	return err
@@ -607,10 +609,10 @@ func (s *Store) SaveEvent(e *model.NetworkEvent) error {
 	// device_id and edge_id are nullable so history survives the deletion of the
 	// row it refers to. An empty string means "no reference".
 	_, err := s.db.Exec(`INSERT INTO network_events
-		(id, event_type, device_id, edge_id, old_value, new_value, message, evidence, timestamp)
-		VALUES (?,?,?,?,?,?,?,?,?)`,
+		(id, event_type, device_id, edge_id, old_value, new_value, message, reason_code, evidence, timestamp)
+		VALUES (?,?,?,?,?,?,?,?,?,?)`,
 		e.ID, string(e.EventType), nullString(e.DeviceID), nullString(e.EdgeID),
-		e.OldValue, e.NewValue, e.Message, e.Evidence,
+		e.OldValue, e.NewValue, e.Message, encodeReason(e.ReasonCode), e.Evidence,
 		e.Timestamp.UTC().Format(TimeLayout))
 	return err
 }
@@ -673,7 +675,7 @@ func (s *Store) ListEvents(f EventFilter) ([]model.NetworkEvent, int, error) {
 	if offset < 0 {
 		offset = 0
 	}
-	rows, err := s.db.Query(`SELECT id, event_type, device_id, edge_id, old_value, new_value, message, evidence, timestamp
+	rows, err := s.db.Query(`SELECT id, event_type, device_id, edge_id, old_value, new_value, message, reason_code, evidence, timestamp
 		FROM network_events`+clause+" ORDER BY timestamp DESC LIMIT ? OFFSET ?",
 		append(append([]any{}, args...), limit, offset)...)
 	if err != nil {
@@ -685,9 +687,11 @@ func (s *Store) ListEvents(f EventFilter) ([]model.NetworkEvent, int, error) {
 		var e model.NetworkEvent
 		var et string
 		var deviceID, edgeID sql.NullString
-		if err := rows.Scan(&e.ID, &et, &deviceID, &edgeID, &e.OldValue, &e.NewValue, &e.Message, &e.Evidence, &e.Timestamp); err != nil {
+		var reasonCode string
+		if err := rows.Scan(&e.ID, &et, &deviceID, &edgeID, &e.OldValue, &e.NewValue, &e.Message, &reasonCode, &e.Evidence, &e.Timestamp); err != nil {
 			return nil, 0, err
 		}
+		e.ReasonCode = decodeReason(reasonCode)
 		e.DeviceID = deviceID.String
 		e.EdgeID = edgeID.String
 		e.EventType = model.EventType(et)

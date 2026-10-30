@@ -391,6 +391,7 @@ func (e *Engine) newDevice(ing Ingest) *model.Device {
 		Description:      "",
 		State:            model.StateUnknown,
 		StateReason:      "waiting for first reachability check",
+		StateReasonCode:  &model.Reason{Code: model.ReasonAwaitingFirstCheck, Params: map[string]string{}},
 		LastStateChange:  now,
 		FirstSeen:        now,
 		LastSeen:         now,
@@ -638,7 +639,7 @@ func (e *Engine) refreshPrimaryAddresses(dev *model.Device) {
 }
 
 // MarkSleeping records that a device shows signs of a power saving state.
-func (e *Engine) MarkSleeping(id, reason string) error {
+func (e *Engine) MarkSleeping(id, reason string, code *model.Reason) error {
 	dev, err := e.store.GetDevice(id)
 	if err != nil {
 		return err
@@ -648,6 +649,7 @@ func (e *Engine) MarkSleeping(id, reason string) error {
 	}
 	dev.State = model.StateSleeping
 	dev.StateReason = reason
+	dev.StateReasonCode = code
 	dev.LastStateChange = time.Now().UTC()
 	if err := e.store.UpsertDevice(dev); err != nil {
 		return err
@@ -659,7 +661,7 @@ func (e *Engine) MarkSleeping(id, reason string) error {
 }
 
 // SetOffline marks a device offline after repeated failures.
-func (e *Engine) SetOffline(id, reason string) error {
+func (e *Engine) SetOffline(id, reason string, code *model.Reason) error {
 	dev, err := e.store.GetDevice(id)
 	if err != nil {
 		return err
@@ -670,6 +672,7 @@ func (e *Engine) SetOffline(id, reason string) error {
 	prev := dev.State
 	dev.State = model.StateOffline
 	dev.StateReason = reason
+	dev.StateReasonCode = code
 	dev.LastStateChange = time.Now().UTC()
 	if err := e.store.UpsertDevice(dev); err != nil {
 		return err
@@ -679,29 +682,32 @@ func (e *Engine) SetOffline(id, reason string) error {
 	}
 	if prev != model.StateOffline {
 		_ = e.store.SaveEvent(&model.NetworkEvent{
-			EventType: model.EventDeviceOffline,
-			DeviceID:  dev.ID,
-			OldValue:  string(prev),
-			NewValue:  string(model.StateOffline),
-			Message:   reason,
+			EventType:  model.EventDeviceOffline,
+			DeviceID:   dev.ID,
+			OldValue:   string(prev),
+			NewValue:   string(model.StateOffline),
+			Message:    reason,
+			ReasonCode: code,
 		})
 	}
 	return nil
 }
 
 // SetOnline marks a device online.
-func (e *Engine) SetOnline(id, reason string) error {
+func (e *Engine) SetOnline(id, reason string, code *model.Reason) error {
 	dev, err := e.store.GetDevice(id)
 	if err != nil {
 		return err
 	}
 	if dev.State == model.StateOnline {
 		dev.StateReason = reason
+		dev.StateReasonCode = code
 		return e.store.UpsertDevice(dev)
 	}
 	prev := dev.State
 	dev.State = model.StateOnline
 	dev.StateReason = reason
+	dev.StateReasonCode = code
 	dev.LastStateChange = time.Now().UTC()
 	if err := e.store.UpsertDevice(dev); err != nil {
 		return err
@@ -710,17 +716,18 @@ func (e *Engine) SetOnline(id, reason string) error {
 		e.bus.PublishDeviceOnline(dev, reason)
 	}
 	_ = e.store.SaveEvent(&model.NetworkEvent{
-		EventType: model.EventDeviceOnline,
-		DeviceID:  dev.ID,
-		OldValue:  string(prev),
-		NewValue:  string(model.StateOnline),
-		Message:   reason,
+		EventType:  model.EventDeviceOnline,
+		DeviceID:   dev.ID,
+		OldValue:   string(prev),
+		NewValue:   string(model.StateOnline),
+		Message:    reason,
+		ReasonCode: code,
 	})
 	return nil
 }
 
 // SetUnknown marks a device state as unknown.
-func (e *Engine) SetUnknown(id, reason string) error {
+func (e *Engine) SetUnknown(id, reason string, code *model.Reason) error {
 	dev, err := e.store.GetDevice(id)
 	if err != nil {
 		return err
@@ -730,6 +737,7 @@ func (e *Engine) SetUnknown(id, reason string) error {
 	}
 	dev.State = model.StateUnknown
 	dev.StateReason = reason
+	dev.StateReasonCode = code
 	dev.LastStateChange = time.Now().UTC()
 	if err := e.store.UpsertDevice(dev); err != nil {
 		return err
