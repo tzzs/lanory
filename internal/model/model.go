@@ -41,6 +41,7 @@ const (
 	DeviceTypeIoT          DeviceType = "iot"
 	DeviceTypePrinter      DeviceType = "printer"
 	DeviceTypeCamera       DeviceType = "camera"
+	DeviceTypeAudio        DeviceType = "audio"
 	DeviceTypeVM           DeviceType = "vm"
 	DeviceTypeContainer    DeviceType = "container"
 	DeviceTypeUnknown      DeviceType = "unknown"
@@ -68,6 +69,7 @@ var DeviceTypes = []DeviceType{
 	DeviceTypeIoT,
 	DeviceTypePrinter,
 	DeviceTypeCamera,
+	DeviceTypeAudio,
 	DeviceTypeVM,
 	DeviceTypeContainer,
 	DeviceTypeNetworkFiber,

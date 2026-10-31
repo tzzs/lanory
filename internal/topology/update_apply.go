@@ -857,6 +857,10 @@ func typeHint(f *macFacts) model.DeviceType {
 		return model.DeviceTypePrinter
 	case strings.Contains(h, "camera"):
 		return model.DeviceTypeCamera
+	case strings.Contains(h, "microphone"), strings.Contains(h, "mic"),
+		strings.Contains(h, "麦克风"), strings.Contains(h, "音箱"),
+		strings.Contains(h, "speaker"), strings.Contains(h, "audio"):
+		return model.DeviceTypeAudio
 	case strings.Contains(h, "nas"), strings.Contains(h, "synology"),
 		strings.Contains(h, "qnap"):
 		return model.DeviceTypeNAS

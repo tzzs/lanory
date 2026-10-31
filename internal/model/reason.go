@@ -30,8 +30,14 @@ const (
 	// describe the path rather than the device.
 	ReasonProbeUnreachableSourceDown ReasonCode = "probe.unreachable_source_down"
 	// ReasonProbeUnreachableStillPresent: the device failed N consecutive
-	// probes but is still listed in the neighbour table.
+	// probes but is still listed in the neighbour table, and it had answered
+	// earlier in the window: power saving, not absence.
 	ReasonProbeUnreachableStillPresent ReasonCode = "probe.unreachable_still_present"
+	// ReasonProbePresentNotAnswering: the device is listed in the neighbour
+	// table but has never answered this probe method. It is online — presence
+	// is the evidence — and the probe method is what is missing, which is the
+	// normal case for a Windows firewall or a printer without ICMP.
+	ReasonProbePresentNotAnswering ReasonCode = "probe.present_not_answering"
 	// ReasonProbeUnreachablePowerCycling: the device failed N consecutive
 	// probes but resumed after an earlier gap.
 	ReasonProbeUnreachablePowerCycling ReasonCode = "probe.unreachable_power_cycling"
@@ -80,6 +86,9 @@ const (
 	ReasonAwaitingFirstCheck ReasonCode = "device.awaiting_first_check"
 	// ReasonNotYetProbed: a manually created device has not been probed.
 	ReasonNotYetProbed ReasonCode = "device.not_yet_probed"
+	// ReasonDeviceSelfOnline: this is the machine Lanory runs on. It is online
+	// by definition and is never probed from itself.
+	ReasonDeviceSelfOnline ReasonCode = "device.self_online"
 	// ReasonUnknownIntermediate: several devices were observed behind one
 	// port and the device in front of them is not known.
 	ReasonUnknownIntermediate ReasonCode = "topology.unknown_intermediate"

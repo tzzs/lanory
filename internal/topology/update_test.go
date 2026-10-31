@@ -813,6 +813,15 @@ func TestUpdateIgnoresUnknownPort(t *testing.T) {
 	}
 }
 
+func TestTypeHintRecognizesMicrophoneDevices(t *testing.T) {
+	for _, hostname := range []string{"microphone", "usb-mic", "麦克风"} {
+		got := typeHint(&macFacts{Hostname: hostname})
+		if got != model.DeviceTypeAudio {
+			t.Errorf("typeHint(%q) = %q, want %q", hostname, got, model.DeviceTypeAudio)
+		}
+	}
+}
+
 func contains(haystack, needle string) bool {
 	if needle == "" {
 		return true

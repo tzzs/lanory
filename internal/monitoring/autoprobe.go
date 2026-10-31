@@ -20,6 +20,7 @@ type DeviceLister interface {
 	ListActiveAddresses(deviceID string, now time.Time) ([]model.DeviceAddress, error)
 	ListProbesByDevice(deviceID string) ([]model.ProbeTarget, error)
 	CreateProbe(p *model.ProbeTarget) error
+	UpdateProbe(id string, patch map[string]any) (*model.ProbeTarget, error)
 }
 
 // AutoProbeConfig controls automatic probe provisioning.
@@ -99,6 +100,20 @@ func (e *Engine) EnsureProbes(ctx context.Context, cfg AutoProbeConfig) (int, er
 		if err := ctx.Err(); err != nil {
 			return created, err
 		}
+		// The machine Lanory runs on is online by definition, and a probe from
+		// a host to itself measures nothing. Probing it is not merely useless:
+		// a probe created before the LAN was renumbered keeps targeting an
+		// address the router no longer owns, so the router reported itself
+		// offline in its own interface. Disable any such probe and say why the
+		// device is online; keeping the row preserves its history and allows
+		// an operator to inspect or restore it.
+		if dev.IsSelf {
+			if err := e.disableSelfProbes(lister, dev.ID); err != nil {
+				return created, err
+			}
+			e.markSelfOnline(dev.ID)
+			continue
+		}
 		if skip[dev.Type] {
 			continue
 		}
@@ -143,6 +158,42 @@ func (e *Engine) EnsureProbes(ctx context.Context, cfg AutoProbeConfig) (int, er
 	}
 	return created, nil
 }
+
+// disableSelfProbes disables every probe attached to the local host.
+//
+// It is idempotent: once the probes are disabled the next call leaves them
+// unchanged. Keeping the rows preserves their history and makes the change
+// recoverable if an operator later wants to inspect or restore one.
+func (e *Engine) disableSelfProbes(lister DeviceLister, deviceID string) error {
+	probes, err := lister.ListProbesByDevice(deviceID)
+	if err != nil {
+		return fmt.Errorf("monitoring: list probes for the local host: %w", err)
+	}
+	for _, p := range probes {
+		if !p.Enabled {
+			continue
+		}
+		if _, err := lister.UpdateProbe(p.ID, map[string]any{"enabled": false}); err != nil {
+			return fmt.Errorf("monitoring: disable probe %s of the local host: %w", p.ID, err)
+		}
+	}
+	return nil
+}
+
+// markSelfOnline records that the local host is online.
+//
+// The setter is optional: the unit-test fake store has none, and a store-only
+// build does not run probes at all. A missing setter is not an error.
+func (e *Engine) markSelfOnline(deviceID string) {
+	if e.states == nil || e.states.setter == nil {
+		return
+	}
+	_ = e.states.setter.SetOnline(deviceID, selfOnlineReason,
+		&model.Reason{Code: model.ReasonDeviceSelfOnline, Params: map[string]string{}})
+}
+
+// selfOnlineReason explains why the local host is online.
+const selfOnlineReason = "Lanory is running on this device"
 
 // pickProbeAddress chooses the address to probe for a device.
 //

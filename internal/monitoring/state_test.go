@@ -453,11 +453,18 @@ func TestReasonParamsCoverTheMessage(t *testing.T) {
 			want:     model.ReasonProbeUnreachableSourceDown,
 		},
 		{
-			name:     "still present",
+			name:     "still present after answering",
+			target:   probe("p", 3, 1),
+			outcomes: []bool{true, false, false, false},
+			setup:    func(m *StateMachine) { m.WithPresence(&fakePresence{present: true}) },
+			want:     model.ReasonProbeUnreachableStillPresent,
+		},
+		{
+			name:     "present but never answered",
 			target:   probe("p", 3, 1),
 			outcomes: []bool{false, false, false},
 			setup:    func(m *StateMachine) { m.WithPresence(&fakePresence{present: true}) },
-			want:     model.ReasonProbeUnreachableStillPresent,
+			want:     model.ReasonProbePresentNotAnswering,
 		},
 		{
 			name:     "power cycling",

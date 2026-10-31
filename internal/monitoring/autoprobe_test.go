@@ -171,6 +171,56 @@ func TestEnsureProbesUsesIPv6WhenThereIsNoIPv4(t *testing.T) {
 	}
 }
 
+// TestEnsureProbesNeverProbesTheLocalHost covers the router itself: the machine
+// Lanory runs on was probed at an address it no longer owns (the LAN had been
+// renumbered), so the router showed up as offline in its own interface. A host
+// cannot learn anything by pinging itself, and it is online by definition.
+func TestEnsureProbesNeverProbesTheLocalHost(t *testing.T) {
+	store := openTestStore(t)
+	seedDevice(t, store, "dev-self", "Router", "192.168.100.1", model.DeviceTypeRouter)
+	dev, err := store.GetDevice("dev-self")
+	if err != nil {
+		t.Fatalf("get device: %v", err)
+	}
+	dev.IsSelf = true
+	dev.IsGateway = true
+	if err := store.UpsertDevice(dev); err != nil {
+		t.Fatalf("flag self: %v", err)
+	}
+	// A probe created before the renumbering still points at the old address.
+	if err := store.CreateProbe(&model.ProbeTarget{
+		ID: "probe-stale", Name: "Router", Kind: model.ProbeKindDevice,
+		Target: "192.168.1.16", Protocol: model.ProbeICMP, DeviceID: "dev-self",
+		Interval: 60, Timeout: 3, Enabled: true,
+		FailureThreshold: 3, RecoverConfirm: 1,
+	}); err != nil {
+		t.Fatalf("seed probe: %v", err)
+	}
+
+	setter := &fakeSetter{}
+	e := NewEngine(store, nil, nil, setter, DefaultEngineConfig())
+	created, err := e.EnsureProbes(context.Background(), DefaultAutoProbeConfig())
+	if err != nil {
+		t.Fatalf("EnsureProbes: %v", err)
+	}
+	if created != 0 {
+		t.Errorf("created %d probes, want 0: the local host is never probed", created)
+	}
+	probes, err := store.ListProbesByDevice("dev-self")
+	if err != nil {
+		t.Fatalf("list probes: %v", err)
+	}
+	if len(probes) != 1 {
+		t.Errorf("the local host has %d probes, want the historical row retained", len(probes))
+	} else if probes[0].Enabled {
+		t.Error("the local host probe remains enabled")
+	}
+	on, _, _, _ := setter.counts()
+	if on != 1 {
+		t.Errorf("the local host was marked online %d times, want 1", on)
+	}
+}
+
 // --- helpers -------------------------------------------------------------
 
 func openTestStore(t *testing.T) *database.Store {

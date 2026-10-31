@@ -468,7 +468,10 @@ func TestMulticastClassification(t *testing.T) {
 }
 
 func TestVirtualNameHeuristics(t *testing.T) {
-	virtual := []string{"lo", "docker0", "dummy0", "gretap0", "erspan0", "veth123", "wg0", "tailscale0", "br-docker"}
+	// br-a2c6ac12c0e1 is what Docker names its bridge (br- plus 12 hex chars).
+	// It is a software bridge with only veth members, so it must not become a
+	// second "br-" node next to the real LAN bridge.
+	virtual := []string{"lo", "docker0", "dummy0", "gretap0", "erspan0", "veth123", "wg0", "tailscale0", "br-docker", "br-a2c6ac12c0e1"}
 	for _, n := range virtual {
 		if !LooksVirtualByName(n) {
 			t.Errorf("%s should look virtual", n)
@@ -486,7 +489,9 @@ func TestVirtualNameHeuristics(t *testing.T) {
 			t.Errorf("%s should be loopback", n)
 		}
 	}
-	for _, n := range []string{"eth0", "eth1", "eth2", "eth3", "br-lan"} {
+	// A configured OpenWrt bridge keeps its name even when that name starts
+	// with "br-" and is not Docker's 12-hex form.
+	for _, n := range []string{"eth0", "eth1", "eth2", "eth3", "br-lan", "br-guest", "br-1234"} {
 		if LooksVirtualByName(n) {
 			t.Errorf("%s must not look virtual", n)
 		}

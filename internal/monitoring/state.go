@@ -284,15 +284,35 @@ func (m *StateMachine) decideHistory(target model.ProbeTarget, history []bool) (
 		// The device is in the neighbour table, so it is on the segment and
 		// answered an ARP request recently. It is not gone; it just does not
 		// answer this probe method.
+		//
+		// Presence alone does not say whether the device is asleep or simply
+		// ignores ICMP, so the window decides:
+		//
+		//   - it answered earlier in the window and then went quiet: the power
+		//     saving pattern, so SLEEPING;
+		//   - it has never answered this method: the probe method is what is
+		//     missing, not the device, so ONLINE. A Windows PC with its
+		//     firewall on is the common case, and calling it sleeping told the
+		//     user their working machine was asleep.
 		if m.presence != nil && target.Target != "" && m.presence.Seen(target.Target) {
-			return model.StateSleeping, newReason(
-				model.ReasonProbeUnreachableStillPresent,
+			if hasSuccess(history) {
+				return model.StateSleeping, newReason(
+					model.ReasonProbeUnreachableStillPresent,
+					fmt.Sprintf(
+						"unreachable for %d consecutive probes from %s via %s, but the neighbour table still lists %s and the device answered earlier in the window: power saving, not absence",
+						failures, src, proto, target.Target),
+					withParams(commonParams(src, proto), map[string]string{
+						"failures": itoa(failures),
+						"address":  target.Target,
+					}))
+			}
+			return model.StateOnline, newReason(
+				model.ReasonProbePresentNotAnswering,
 				fmt.Sprintf(
-					"unreachable for %d consecutive probes from %s via %s, but the neighbour table still lists %s: the device is on the segment and does not answer this probe method",
-					failures, src, proto, target.Target),
+					"present in the neighbour table at %s; the device is on the segment but does not answer %s probes from %s",
+					target.Target, proto, src),
 				withParams(commonParams(src, proto), map[string]string{
-					"failures": itoa(failures),
-					"address":  target.Target,
+					"address": target.Target,
 				}))
 		}
 		if oscillating(history) {

@@ -280,7 +280,29 @@ func (a *App) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	if settings == nil {
 		settings = map[string]string{}
 	}
+	// The About card reads the database facts from this payload. They are
+	// derived, not stored, and read-only: the PATCH allow-list does not contain
+	// them, so sending one back is refused instead of being persisted.
+	a.addRuntimeSettings(settings)
 	writeJSON(w, http.StatusOK, map[string]any{"settings": settings})
+}
+
+// addRuntimeSettings adds the derived, read-only values the settings page
+// shows under "About".
+//
+// They live here because the page already fetches this endpoint; a failure to
+// read a statistic leaves the key out, which the UI renders as a dash rather
+// than a wrong number.
+func (a *App) addRuntimeSettings(settings map[string]string) {
+	if stats, err := a.store.DB().Stats(); err == nil && stats != nil {
+		settings["database.schema_version"] = strconv.Itoa(stats.SchemaVersion)
+		settings["database.size_bytes"] = strconv.FormatInt(stats.SizeBytes, 10)
+	}
+	if counts, err := a.store.DeviceCounts(); err == nil {
+		// Hidden devices are the legacy zero-MAC rows; the devices page does
+		// not count them either, so the About card must not either.
+		settings["devices.total"] = strconv.Itoa(counts.Total - counts.Hidden)
+	}
 }
 
 // handlePatchSettings serves PATCH /api/v1/settings.

@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { formatSpeed, formatBytes, formatPercent, formatLatency, confidenceBand, formatConfidence, formatEdgeLabel, formatRelativeTime, formatMac, formatDuration, groupAddresses, isMultiHomed, addressSummary, groupDeviceAddresses } from '@/lib/devices'
+import { Mic } from 'lucide-react'
+import { formatSpeed, formatBytes, formatPercent, formatLatency, confidenceBand, formatConfidence, formatEdgeLabel, formatRelativeTime, formatMac, formatDuration, groupAddresses, isMultiHomed, addressSummary, groupDeviceAddresses, deviceIcon } from '@/lib/devices'
 import type { NodeAddress } from '@/types/api'
+
+describe('deviceIcon', () => {
+  it('uses an audio icon for microphone and speaker devices', () => {
+    expect(deviceIcon('audio')).toBe(Mic)
+  })
+})
 
 describe('formatSpeed', () => {
   it('renders Mbps below 1000', () => {

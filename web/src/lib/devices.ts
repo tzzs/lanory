@@ -26,6 +26,7 @@ import {
   Cpu,
   Printer,
   Video,
+  Mic,
   Container,
   Box,
   HelpCircle,
@@ -55,6 +56,7 @@ export const DEVICE_ICONS: Record<DeviceType, LucideIcon> = {
   iot: Cpu,
   printer: Printer,
   camera: Video,
+  audio: Mic,
   vm: Boxes,
   container: Container,
   network_fiber: Cable,
@@ -122,7 +124,7 @@ export function sourceLabel(source: DiscoverySource | undefined): string {
 export const DEVICE_TYPE_OPTIONS: DeviceType[] = [
   'internet', 'modem_ont', 'router', 'firewall', 'switch', 'wireless_ap', 'mesh_node',
   'nas', 'server', 'desktop', 'laptop', 'smartphone', 'tablet', 'smartwatch', 'smart_tv',
-  'iot', 'printer', 'camera', 'vm', 'container', 'network_fiber', 'generic_node', 'unknown',
+  'iot', 'printer', 'camera', 'audio', 'vm', 'container', 'network_fiber', 'generic_node', 'unknown',
 ]
 
 export const DEVICE_STATE_OPTIONS: DeviceState[] = ['online', 'offline', 'sleeping', 'unknown']

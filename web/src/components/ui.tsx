@@ -269,7 +269,7 @@ export const Select = React.forwardRef<HTMLSelectElement, React.SelectHTMLAttrib
     <select
       ref={ref}
       className={cn(
-        'h-9 w-full rounded-md border border-border bg-surface px-2.5 text-sm text-fg',
+        'select-safe h-9 w-full rounded-md border border-border bg-surface pl-2.5 pr-9 text-sm text-fg',
         'transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:border-accent',
         'disabled:cursor-not-allowed disabled:opacity-60',
         className,

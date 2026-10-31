@@ -29,6 +29,7 @@ export type DeviceType =
   | 'iot'
   | 'printer'
   | 'camera'
+  | 'audio'
   | 'vm'
   | 'container'
   | 'network_fiber'

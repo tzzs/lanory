@@ -109,6 +109,8 @@ export function iconKeyForDeviceType(type: string | undefined): string {
       return 'server'
     case 'nas':
       return 'hard-drive'
+    case 'audio':
+      return 'audio'
     case 'modem_ont':
     case 'network_fiber':
       return 'cable'

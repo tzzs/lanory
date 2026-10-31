@@ -473,11 +473,13 @@ func (e *Engine) refreshPresence() {
 // path was creating them. That made the monitoring page empty on a fresh
 // install even though seventeen devices had been found.
 func (e *Engine) provisionProbes(ctx context.Context) {
-	created, err := e.EnsureProbes(ctx, e.cfg.AutoProbe)
-	if err != nil || created == 0 {
+	_, err := e.EnsureProbes(ctx, e.cfg.AutoProbe)
+	if err != nil {
 		return
 	}
-	// New rows must be picked up by the scheduler.
+	// Reload even when no new row was created: EnsureProbes also retires stale
+	// self-probes left by older builds, and the scheduler must stop running a
+	// probe that no longer exists in the store.
 	_ = e.reload(ctx)
 }
 
