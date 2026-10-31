@@ -167,13 +167,18 @@ func (e *Engine) EnsureProbes(ctx context.Context, cfg AutoProbeConfig) (int, er
 // address is left untouched. Keeping the rows preserves history and makes the
 // cleanup recoverable if an operator later wants to inspect or restore one.
 func (e *Engine) disableSelfProbes(lister DeviceLister, deviceID string) error {
-	active, err := lister.ListActiveAddresses(deviceID, time.Now().UTC())
+	now := time.Now().UTC()
+	addresses, err := lister.ListAddresses(deviceID)
 	if err != nil {
-		return fmt.Errorf("monitoring: list active addresses for the local host: %w", err)
+		return fmt.Errorf("monitoring: list addresses for the local host: %w", err)
 	}
-	current := make(map[string]bool, len(active))
-	for _, address := range active {
-		if address.Address != "" {
+	current := make(map[string]bool, len(addresses))
+	cutoff := now.Add(-24 * time.Hour)
+	for _, address := range addresses {
+		// Do not trust is_primary here: an address that disappeared can remain
+		// primary in the identity row until the next reconciliation. Freshness
+		// is the evidence that this is still a local address.
+		if address.Address != "" && (address.Source == model.SourceManual || !address.LastSeen.Before(cutoff)) {
 			current[address.Address] = true
 		}
 	}
