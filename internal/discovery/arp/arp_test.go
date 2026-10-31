@@ -255,3 +255,72 @@ func TestMergeProcArpMACsFillsMissingLLADDR(t *testing.T) {
 		t.Errorf("a MAC was invented for an unknown address: %q", entries[2].MAC)
 	}
 }
+
+func TestMergeProcArpMACsIgnoresZeroMAC(t *testing.T) {
+	dir := t.TempDir()
+	procPath := filepath.Join(dir, "arp")
+	writeFile(t, procPath, `IP address       HW type     Flags       HW address            Mask     Device
+192.168.1.10    0x1         0x0         00:00:00:00:00:00     *        eth3
+`)
+	entries := []parsers.NeighborEntry{{Address: "192.168.1.10", Interface: "eth3", State: model.NeighborFailed}}
+	mergeProcArpMACs(entries, procPath)
+	if entries[0].MAC != "" {
+		t.Fatalf("zero MAC was copied: %q", entries[0].MAC)
+	}
+}
+
+func TestParseArpTableKeepsZeroMACEntryAsAddressOnly(t *testing.T) {
+	data := []byte(`Address                  HWtype  HWaddress           Flags Mask            Iface
+192.168.1.10             ether   00:00:00:00:00:00   C     eth3
+192.168.1.11             ether   aa:bb:cc:dd:ee:ff   C     eth3
+`)
+	entries := parseArpTable(data)
+	if len(entries) != 2 {
+		t.Fatalf("entries = %d, want 2: %+v", len(entries), entries)
+	}
+	if entries[0].Address != "192.168.1.10" || entries[0].MAC != "" {
+		t.Fatalf("zero MAC should keep the address without an identity: %+v", entries[0])
+	}
+	if entries[0].State == model.NeighborStale || entries[0].State == model.NeighborReachable {
+		t.Fatalf("an unresolved /proc/net/arp row must not count as positive evidence: %+v", entries[0])
+	}
+	if entries[1].MAC != "aa:bb:cc:dd:ee:ff" {
+		t.Fatalf("valid MAC was lost: %+v", entries[1])
+	}
+}
+
+func TestCollectNormalizesZeroMACToUnresolved(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "neigh")
+	writeFile(t, path, "192.168.1.10 dev eth3 lladdr 00:00:00:00:00:00 FAILED\n")
+	c := NewWithPath(path)
+	results, err := c.Collect(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 || results[0].Neighbor == nil || results[0].Neighbor.MAC != "" {
+		t.Fatalf("zero MAC was not normalized: %+v", results)
+	}
+	if results[0].Neighbor.State != model.NeighborFailed {
+		t.Fatalf("a zero-MAC entry must not stay positive evidence: %+v", results[0].Neighbor)
+	}
+}
+
+// A source that claims REACHABLE for an all-zero lladdr is still unresolved: the
+// lladdr is what proves resolution, not the state word.
+func TestCollectZeroMACCannotClaimReachable(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "neigh")
+	writeFile(t, path, "192.168.1.10 dev eth3 lladdr 00:00:00:00:00:00 REACHABLE\n")
+	c := NewWithPath(path)
+	results, err := c.Collect(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected one result, got %d", len(results))
+	}
+	if results[0].Neighbor.State == model.NeighborReachable {
+		t.Fatalf("zero MAC was accepted as reachable: %+v", results[0].Neighbor)
+	}
+}

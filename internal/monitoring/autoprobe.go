@@ -17,6 +17,7 @@ import (
 type DeviceLister interface {
 	ListDevices(f database.DeviceFilter) ([]model.Device, int, error)
 	ListAddresses(deviceID string) ([]model.DeviceAddress, error)
+	ListActiveAddresses(deviceID string, now time.Time) ([]model.DeviceAddress, error)
 	ListProbesByDevice(deviceID string) ([]model.ProbeTarget, error)
 	CreateProbe(p *model.ProbeTarget) error
 }
@@ -132,6 +133,7 @@ func (e *Engine) EnsureProbes(ctx context.Context, cfg AutoProbeConfig) (int, er
 			RecoverConfirm:   positiveOr(cfg.RecoverConfirm, 1),
 			State:            model.StateUnknown,
 			StateReason:      "awaiting first probe",
+			StateReasonCode:  &model.Reason{Code: model.ReasonAwaitingFirstProbe, Params: map[string]string{}},
 			CreatedAt:        time.Now().UTC(),
 		}
 		if err := lister.CreateProbe(probe); err != nil {
@@ -147,8 +149,12 @@ func (e *Engine) EnsureProbes(ctx context.Context, cfg AutoProbeConfig) (int, er
 // IPv4 first because it needs no scope handling, then a global IPv6 address, and
 // link-local IPv6 last (it is only reachable with a zone, which a probe target
 // string cannot carry reliably).
+//
+// Only active addresses are considered. A probe aimed at an address that was
+// last seen months ago reports a live device as offline, which is worse than
+// not probing it at all.
 func pickProbeAddress(dev model.Device, lister DeviceLister) string {
-	addrs, err := lister.ListAddresses(dev.ID)
+	addrs, err := lister.ListActiveAddresses(dev.ID, time.Now().UTC())
 	if err == nil {
 		var v6, linkLocal string
 		for _, a := range addrs {

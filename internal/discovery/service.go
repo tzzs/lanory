@@ -364,6 +364,11 @@ func (s *Service) Cancel(id string) error {
 
 // StartScheduler begins the periodic discovery loop.
 //
+// The first run happens immediately: a router that just rebooted, or a service
+// that was just restarted after an upgrade, has no topology at all until a
+// scan completes. Waiting a full interval would leave the UI empty and the
+// monitor with nothing to probe.
+//
 // It returns a stop function the wiring layer calls on shutdown. When discovery
 // is disabled in the configuration nothing is scheduled, which is what
 // discovery.enabled=false is supposed to mean.
@@ -378,6 +383,15 @@ func (s *Service) StartScheduler(ctx context.Context) (func(), error) {
 	if err != nil {
 		return nil, err
 	}
+	// The default scheduler scans once at startup, so a restarted service has
+	// data without waiting for the first tick.
+	if ts, ok := s.scheduler.(*tickerScheduler); ok {
+		return ts.StartWithImmediate(ctx, interval, func() {
+			_, _ = s.Scan(ctx, ScanRequest{Trigger: "scheduled"})
+		}, func() {
+			_, _ = s.Scan(ctx, ScanRequest{Trigger: "startup"})
+		}), nil
+	}
 	return s.scheduler.Start(ctx, interval, func() {
 		_, _ = s.Scan(ctx, ScanRequest{Trigger: "scheduled"})
 	}), nil
@@ -388,6 +402,16 @@ type tickerScheduler struct{}
 
 // Start runs trigger on every tick until ctx is cancelled or stop is called.
 func (t *tickerScheduler) Start(ctx context.Context, interval time.Duration, trigger func()) func() {
+	return t.StartWithImmediate(ctx, interval, trigger, nil)
+}
+
+// StartWithImmediate runs trigger on every tick, and once immediately before
+// the first tick when onStart is given.
+//
+// The immediate run matters on a router: after a reboot or an upgrade the
+// service has no topology at all, and waiting a full interval for the first
+// tick leaves the UI empty and the monitor with nothing to probe.
+func (t *tickerScheduler) StartWithImmediate(ctx context.Context, interval time.Duration, trigger func(), onStart func()) func() {
 	if interval <= 0 {
 		return func() {}
 	}
@@ -395,6 +419,9 @@ func (t *tickerScheduler) Start(ctx context.Context, interval time.Duration, tri
 	done := make(chan struct{})
 	go func() {
 		defer ticker.Stop()
+		if onStart != nil {
+			onStart()
+		}
 		for {
 			select {
 			case <-ctx.Done():

@@ -299,6 +299,7 @@ func (a *App) handleCreateProbe(w http.ResponseWriter, r *http.Request) {
 		RecoverConfirm:   a.cfg.Monitoring.RecoverConfirm,
 		State:            model.StateUnknown,
 		StateReason:      "waiting for first probe",
+		StateReasonCode:  &model.Reason{Code: model.ReasonAwaitingFirstProbe, Params: map[string]string{}},
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}

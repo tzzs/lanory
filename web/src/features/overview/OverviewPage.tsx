@@ -6,7 +6,7 @@ import {
   WifiOff,
   HelpCircle,
 } from 'lucide-react'
-import { t } from '@/i18n'
+import { t, translateReason } from '@/i18n'
 import { useOverview, useMonitoring } from '@/hooks/useApi'
 import {
   Card,
@@ -27,6 +27,7 @@ import {
   formatSpeed,
   sourceLabel,
 } from '@/lib/devices'
+import { eventTransition } from '@/lib/events'
 import type { Device, NetworkEvent, InterfaceStatus } from '@/types/api'
 
 /* -------------------------------------------------------------------------- */
@@ -89,7 +90,7 @@ function InterfaceRow({ status }: { status: InterfaceStatus }) {
       </div>
       <div className="flex shrink-0 items-center gap-3 text-xs text-muted">
         <span className="tabular-nums">{formatSpeed(iface.speed_mbps)}</span>
-        <span className="font-mono">{up ? 'UP' : 'NO-CARRIER'}</span>
+        <span className="font-mono">{up ? t('interface.up') : t('interface.no_carrier')}</span>
       </div>
     </div>
   )
@@ -124,13 +125,14 @@ function DeviceMiniRow({ device, trailing }: { device: Device; trailing?: React.
 /* -------------------------------------------------------------------------- */
 
 function EventMiniRow({ event }: { event: NetworkEvent }) {
+  const transition = eventTransition(event.event_type, event.old_value, event.new_value)
   return (
     <li className="flex items-start justify-between gap-3 py-2">
       <div className="min-w-0">
-        <p className="truncate text-sm text-fg">{event.message || t(`event.${event.event_type}`)}</p>
+        <p className="truncate text-sm text-fg">{translateReason(event.reason_code, event.message || t(`event.${event.event_type}`))}</p>
         <p className="text-[11px] text-muted">
           {t(`event.${event.event_type}`)}
-          {event.old_value && event.new_value ? ` · ${event.old_value} → ${event.new_value}` : ''}
+          {transition ? ` · ${transition}` : ''}
         </p>
       </div>
       <span className="shrink-0 text-[11px] text-muted">{formatRelativeTime(event.timestamp)}</span>
@@ -299,7 +301,7 @@ export function OverviewPage() {
                 {data.anomalies.map((anomaly) => (
                   <li key={anomaly.id} className="py-2.5">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm text-fg">{anomaly.title}</p>
+                      <p className="text-sm text-fg">{translateReason(anomaly.reason_code, anomaly.title)}</p>
                       <Badge
                         tone={
                           anomaly.severity === 'critical'
@@ -309,10 +311,14 @@ export function OverviewPage() {
                               : 'neutral'
                         }
                       >
-                        {anomaly.severity}
+                        {t(`severity.${anomaly.severity}`)}
                       </Badge>
                     </div>
-                    {anomaly.detail ? <p className="mt-0.5 text-[11px] text-muted">{anomaly.detail}</p> : null}
+                    {anomaly.detail ? (
+                      <p className="mt-0.5 text-[11px] text-muted">
+                        {translateReason(anomaly.detail_reason_code, anomaly.detail)}
+                      </p>
+                    ) : null}
                   </li>
                 ))}
               </ul>

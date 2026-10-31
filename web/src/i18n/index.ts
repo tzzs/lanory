@@ -105,6 +105,11 @@ const zhCN: Dict = {
   'overview.down': '中断',
   'overview.view_all': '查看全部',
   'overview.never_scanned': '尚未扫描',
+  'interface.up': '已连接',
+  'interface.down': '已断开',
+  'interface.no_carrier': '无载波',
+  'interface.admin_up': '已启用',
+  'interface.admin_down': '已禁用',
 
   // ---- topology ----
   'topology.title': '网络拓扑',
@@ -150,8 +155,9 @@ const zhCN: Dict = {
   'topology.offline_hidden_show': '显示',
   'topology.multi_homed': '多网段',
   'topology.multi_homed_hint': '该设备在多个网段上都有地址（例如 LAN 侧和 WAN 侧）',
+  'topology.upstream': '上游',
+  'topology.downstream': '下游',
   'topology.zoom_for_detail': '放大查看设备详情',
-  'topology.lan_bridge': 'LAN 网桥',
 
   // ---- interface roles ----
   'role.lan': 'LAN',
@@ -214,6 +220,10 @@ const zhCN: Dict = {
   'device.model': '型号',
   'device.hostname': '主机名',
   'device.description': '备注',
+  'device.no_address': '暂无地址',
+  'device.show_all_addresses': '显示全部 {count} 个地址',
+  'device.show_fewer_addresses': '收起',
+  'device.open_details': '查看设备详情',
   'device.sources': '发现来源',
   'device.addresses': '地址列表',
   'device.identities': '身份标识',
@@ -378,6 +388,39 @@ const zhCN: Dict = {
   'event.device.merged': '设备合并',
   'event.device.hidden': '设备隐藏',
 
+  // ---- reason codes ----
+  'reason.probe.reachable': '从 {source} 通过 {protocol} 可达',
+  'reason.probe.unreachable_consecutive': '从 {source} 通过 {protocol} 连续 {failures} 次探测无响应，近期没有成功记录',
+  'reason.probe.unreachable_source_down': '从 {source} 通过 {protocol} 连续 {failures} 次探测无响应，但探测源本身失去连接，无法据此判断设备',
+  'reason.probe.unreachable_still_present': '从 {source} 通过 {protocol} 连续 {failures} 次探测无响应，但邻居表仍列出 {address}；设备仍在网段上，只是不响应此探测方式',
+  'reason.probe.unreachable_power_cycling': '从 {source} 通过 {protocol} 连续 {failures} 次探测无响应，但设备在之前 {gap} 次失败后恢复，可能处于省电状态',
+  'reason.probe.unreachable_deeper_sleep': '从 {source} 通过 {protocol} 连续 {failures} 次探测无响应；设备已处于休眠状态，最近一次成功响应为 {last_success}',
+  'reason.probe.intermittent': '从 {source} 通过 {protocol} 间歇性可达：最近 {total} 次探测中有 {failed} 次失败',
+  'reason.probe.confirming_recovery': '正在从 {source} 通过 {protocol} 确认恢复：已成功 {successes} 次，共需 {required} 次',
+  'reason.probe.below_threshold': '从 {source} 通过 {protocol} 连续失败 {failures} 次，低于 {threshold} 次阈值，证据不足以改变状态',
+  'reason.probe.never_succeeded': '设备尚未从 {source} 通过 {protocol} 成功响应（失败 {failures} 次，阈值 {threshold} 次）',
+  'reason.probe.never_probed': '设备尚未从 {source} 探测：暂无任何证据',
+  'reason.link.carrier_up': '链路已连接（{operstate}，{speed_mbps} Mbps）',
+  'reason.link.carrier_up_no_speed': '链路已连接（{operstate}）',
+  'reason.link.carrier_down': '链路断开（{operstate}）',
+  'reason.link.operstate_up_carrier_unknown': '系统状态为已启用，但物理载波未知',
+  'reason.link.no_information': '没有可用的载波或系统状态信息',
+  'reason.link.carrier_changed': '{interface} 载波状态发生变化',
+  'reason.link.speed_changed': '{interface} 协商速率发生变化',
+  'reason.probe.awaiting_first': '等待首次探测',
+  'reason.device.awaiting_first_check': '等待首次可达性检查',
+  'reason.device.not_yet_probed': '尚未探测',
+  'reason.topology.unknown_intermediate': '中间设备未知',
+  'reason.anomaly.no_carrier': '{interface} 没有物理载波；管理状态为 {admin_state}',
+  'reason.anomaly.devices_offline': '{count} 台设备离线',
+  'reason.anomaly.devices_unknown': '{count} 台设备状态未知',
+  'reason.anomaly.no_carrier_detail': '管理状态为 {admin_state}，但物理链路已断开。',
+  'reason.anomaly.devices_offline_detail': '这些设备连续多次可达性检查失败。',
+  'reason.anomaly.devices_unknown_detail': '证据不足，无法判断这些设备是否可达。启用监控以收集证据。',
+  'severity.info': '提示',
+  'severity.warning': '警告',
+  'severity.critical': '严重',
+
   // ---- discovery ----
   'discovery.scan': '执行扫描',
   'discovery.scanning': '扫描中…',
@@ -469,6 +512,11 @@ const en: Dict = {
   'overview.down': 'Down',
   'overview.view_all': 'View all',
   'overview.never_scanned': 'Never scanned',
+  'interface.up': 'UP',
+  'interface.down': 'DOWN',
+  'interface.no_carrier': 'NO-CARRIER',
+  'interface.admin_up': 'Enabled',
+  'interface.admin_down': 'Disabled',
 
   'topology.title': 'Topology',
   'topology.subtitle': 'Discovered network relationships',
@@ -513,8 +561,9 @@ const en: Dict = {
   'topology.offline_hidden_show': 'Show',
   'topology.multi_homed': 'Multi-subnet',
   'topology.multi_homed_hint': 'This device has addresses on more than one subnet (for example a LAN side and a WAN side)',
+  'topology.upstream': 'Upstream',
+  'topology.downstream': 'Downstream',
   'topology.zoom_for_detail': 'Zoom in for device details',
-  'topology.lan_bridge': 'LAN bridge',
 
   // ---- interface roles ----
   'role.lan': 'LAN',
@@ -575,6 +624,10 @@ const en: Dict = {
   'device.model': 'Model',
   'device.hostname': 'Hostname',
   'device.description': 'Description',
+  'device.no_address': 'No address',
+  'device.show_all_addresses': 'Show all {count} addresses',
+  'device.show_fewer_addresses': 'Show less',
+  'device.open_details': 'View device details',
   'device.sources': 'Sources',
   'device.addresses': 'Addresses',
   'device.identities': 'Identities',
@@ -731,6 +784,39 @@ const en: Dict = {
   'event.device.merged': 'Device merged',
   'event.device.hidden': 'Device hidden',
 
+  // ---- reason codes ----
+  'reason.probe.reachable': 'Reachable from {source} via {protocol}',
+  'reason.probe.unreachable_consecutive': 'Unreachable for {failures} consecutive probes from {source} via {protocol} with no recent success',
+  'reason.probe.unreachable_source_down': 'Unreachable for {failures} consecutive probes from {source} via {protocol}, but the probe source lost connectivity',
+  'reason.probe.unreachable_still_present': 'Unreachable for {failures} consecutive probes from {source} via {protocol}, but the neighbour table still lists {address}',
+  'reason.probe.unreachable_power_cycling': 'Unreachable for {failures} consecutive probes from {source} via {protocol}, but the device resumed after an earlier gap of {gap} failures',
+  'reason.probe.unreachable_deeper_sleep': 'Unreachable for {failures} consecutive probes from {source} via {protocol}; the device is sleeping and last answered {last_success}',
+  'reason.probe.intermittent': 'Intermittent reachability from {source} via {protocol}: {failed} of the last {total} probes failed',
+  'reason.probe.confirming_recovery': 'Confirming recovery from {source} via {protocol}: {successes} of {required} required successes',
+  'reason.probe.below_threshold': '{failures} consecutive failures below the threshold of {threshold} from {source} via {protocol}',
+  'reason.probe.never_succeeded': 'No successful probe yet from {source} via {protocol} ({failures} failures, threshold {threshold})',
+  'reason.probe.never_probed': 'Never probed from {source}: no evidence either way',
+  'reason.link.carrier_up': 'Carrier up ({operstate}, {speed_mbps} Mbps)',
+  'reason.link.carrier_up_no_speed': 'Carrier up ({operstate})',
+  'reason.link.carrier_down': 'Carrier down ({operstate})',
+  'reason.link.operstate_up_carrier_unknown': 'Operstate is up but carrier is unknown',
+  'reason.link.no_information': 'No carrier or operstate information available',
+  'reason.link.carrier_changed': '{interface} carrier state changed',
+  'reason.link.speed_changed': '{interface} negotiated speed changed',
+  'reason.probe.awaiting_first': 'Awaiting first probe',
+  'reason.device.awaiting_first_check': 'Waiting for the first reachability check',
+  'reason.device.not_yet_probed': 'Not yet probed',
+  'reason.topology.unknown_intermediate': 'Intermediate device is unknown',
+  'reason.anomaly.no_carrier': '{interface} has no carrier; administrative state is {admin_state}',
+  'reason.anomaly.devices_offline': '{count} device(s) offline',
+  'reason.anomaly.devices_unknown': '{count} device(s) have unknown state',
+  'reason.anomaly.no_carrier_detail': 'The interface is administratively {admin_state} but the physical link is down.',
+  'reason.anomaly.devices_offline_detail': 'Devices that failed several consecutive reachability checks.',
+  'reason.anomaly.devices_unknown_detail': 'Not enough evidence to say whether these devices are reachable. Enable monitoring to collect it.',
+  'severity.info': 'Info',
+  'severity.warning': 'Warning',
+  'severity.critical': 'Critical',
+
   'discovery.scan': 'Run scan',
   'discovery.scanning': 'Scanning…',
   'discovery.cancel': 'Cancel scan',
@@ -750,6 +836,14 @@ const en: Dict = {
 }
 
 const dictionaries: Record<Language, Dict> = { 'zh-CN': zhCN, en }
+
+/**
+ * The dictionaries, exposed so the contract test can compare them.
+ *
+ * A key that exists in one language but not the other is a bug the user sees
+ * as one language of a screen staying in the other language.
+ */
+export const DICTIONARIES = dictionaries
 
 let current: Language = detectLanguage()
 
@@ -820,4 +914,86 @@ export function t(key: string, params?: Record<string, string | number>): string
   return translate(key, params)
 }
 
-export const i18n = { t, translate, getLanguage, setLanguage, detectLanguage, languages: LANGUAGES }
+/**
+ * State tokens the backend stores, and the key that names each one.
+ *
+ * The kernel reports an interface as "up" or "down" and the state machine
+ * reports a device as "online" or "offline". Those tokens are what the
+ * database stores, so the wording belongs here.
+ */
+const STATE_TOKENS: Record<string, string> = {
+  up: 'interface.up',
+  down: 'interface.down',
+  online: 'state.online',
+  offline: 'state.offline',
+  sleeping: 'state.sleeping',
+  unknown: 'state.unknown',
+}
+
+/**
+ * Reason parameters whose value is an enum token rather than free text.
+ *
+ * The mapping is keyed by the parameter name, so a source id or an interface
+ * name is never rewritten: only the parameters that are known to hold an enum
+ * are looked up.
+ */
+const ENUM_PARAMS: Record<string, Record<string, string>> = {
+  admin_state: {
+    up: 'interface.admin_up',
+    down: 'interface.admin_down',
+    unknown: 'app.unknown',
+  },
+}
+
+/**
+ * Renders a state token ("up", "online") in the current language.
+ *
+ * A token that is not a known state is returned unchanged, so an IP address
+ * or a hostname that happens to look like a state survives.
+ */
+export function stateTokenLabel(token: string): string {
+  const key = STATE_TOKENS[token]
+  if (!key) return token
+  const label = translate(key)
+  return label === key ? token : label
+}
+
+/**
+ * Rewrites the enum parameters of a reason into the user's language.
+ *
+ * The backend sends the raw token because that is what it stores; the
+ * frontend owns the wording.
+ */
+function localizeParams(params: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const [name, value] of Object.entries(params)) {
+    const key = ENUM_PARAMS[name]?.[value]
+    if (!key) {
+      out[name] = value
+      continue
+    }
+    const label = translate(key)
+    out[name] = label === key ? value : label
+  }
+  return out
+}
+
+/**
+ * Renders a backend reason code in the current language.
+ *
+ * The backend still sends `fallback` for logs and old rows whose reason was
+ * written before reason codes existed. Unknown codes also use that fallback;
+ * a new server cannot make an older frontend render the wrong sentence.
+ */
+export function translateReason(
+  reason: { code?: string; params?: Record<string, string> } | null | undefined,
+  fallback = '',
+): string {
+  if (!reason?.code) return fallback
+  const params = localizeParams(reason.params ?? {})
+  const key = `reason.${reason.code}`
+  const translated = translate(key, params)
+  return translated === key ? fallback : translated
+}
+
+export const i18n = { t, translate, translateReason, stateTokenLabel, getLanguage, setLanguage, detectLanguage, languages: LANGUAGES }

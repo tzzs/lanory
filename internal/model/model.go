@@ -10,7 +10,10 @@
 // API version.
 package model
 
-import "time"
+import (
+	"strconv"
+	"time"
+)
 
 // ---------------------------------------------------------------------------
 // Enumerations
@@ -346,7 +349,14 @@ type Device struct {
 
 	State DeviceState `json:"state"`
 	// StateReason explains the current state in human readable form.
+	//
+	// The text is English and is produced by the backend. It is kept for
+	// logs, bug reports and API consumers outside the web UI; the web UI
+	// renders StateReasonCode through the translation layer instead.
 	StateReason string `json:"state_reason,omitempty"`
+	// StateReasonCode is the translatable form of StateReason: a stable code
+	// plus the parameters the message template needs.
+	StateReasonCode *Reason `json:"state_reason_code,omitempty"`
 	// LastStateChange is the timestamp of the last state transition.
 	LastStateChange time.Time `json:"last_state_change"`
 
@@ -431,6 +441,49 @@ type NetworkInterface struct {
 	LastSeen        time.Time `json:"last_seen"`
 }
 
+// LinkReasonCode derives the translatable reason code for an interface's
+// observed carrier and operstate.
+//
+// It is the single source of truth for this derivation: both the live link
+// observer (internal/monitoring) and the store-backed monitoring provider
+// (internal/api) call it, so an interface rendered through either path uses
+// the same wording. Keeping it on the model avoids a circular import between
+// the two packages.
+func LinkReasonCode(carrier bool, oper OperState, speedMbps int) *Reason {
+	params := map[string]string{"operstate": string(oper)}
+	switch {
+	case carrier && speedMbps > 0:
+		params["speed_mbps"] = strconv.Itoa(speedMbps)
+		return &Reason{Code: ReasonLinkCarrierUp, Params: params}
+	case carrier:
+		return &Reason{Code: ReasonLinkCarrierUpNoSpeed, Params: params}
+	case oper == OperDown || oper == OperNoCarrier:
+		return &Reason{Code: ReasonLinkCarrierDown, Params: params}
+	case oper == OperUp:
+		return &Reason{Code: ReasonLinkOperstateUnknownCarrier, Params: params}
+	default:
+		return &Reason{Code: ReasonLinkNoInformation, Params: params}
+	}
+}
+
+// LinkStatusFor derives the runtime status and English fallback for an
+// interface. Carrier is the physical signal and therefore takes precedence
+// over contradictory operstate values, matching the live link observer.
+func LinkStatusFor(carrier bool, oper OperState, speedMbps int) (EdgeStatus, string) {
+	switch {
+	case carrier && speedMbps > 0:
+		return EdgeStatusLinkUp, "carrier up, operstate " + string(oper) + ", " + strconv.Itoa(speedMbps) + " Mbps"
+	case carrier:
+		return EdgeStatusLinkUp, "carrier up"
+	case oper == OperDown || oper == OperNoCarrier:
+		return EdgeStatusLinkDown, "carrier down, operstate " + string(oper)
+	case oper == OperUp:
+		return EdgeStatusUnverified, "operstate up but carrier unknown"
+	default:
+		return EdgeStatusUnverified, "no carrier or operstate information available"
+	}
+}
+
 // TopologyEdge is a relation between two devices.
 type TopologyEdge struct {
 	ID                string          `json:"id"`
@@ -491,8 +544,10 @@ type ProbeTarget struct {
 	// a device back online.
 	RecoverConfirm int `json:"recover_confirm"`
 
-	State                DeviceState    `json:"state"`
-	StateReason          string         `json:"state_reason,omitempty"`
+	State       DeviceState `json:"state"`
+	StateReason string      `json:"state_reason,omitempty"`
+	// StateReasonCode is the translatable form of StateReason.
+	StateReasonCode      *Reason        `json:"state_reason_code,omitempty"`
 	ConsecutiveFailures  int            `json:"consecutive_failures"`
 	ConsecutiveSuccesses int            `json:"consecutive_successes"`
 	LastResult           ProbeRunStatus `json:"last_result,omitempty"`
@@ -526,8 +581,13 @@ type NetworkEvent struct {
 	OldValue  string    `json:"old_value,omitempty"`
 	NewValue  string    `json:"new_value,omitempty"`
 	Message   string    `json:"message,omitempty"`
-	Evidence  string    `json:"evidence,omitempty"`
-	Timestamp time.Time `json:"timestamp"`
+	// ReasonCode is the translatable form of Message: a stable code plus the
+	// parameters the message template needs. Empty for events whose message
+	// is self-describing (a speed change, for example, whose old and new
+	// values carry the meaning).
+	ReasonCode *Reason   `json:"reason_code,omitempty"`
+	Evidence   string    `json:"evidence,omitempty"`
+	Timestamp  time.Time `json:"timestamp"`
 }
 
 // TopologyLayout persists a node position.
@@ -594,7 +654,9 @@ type InterfaceStatus struct {
 	Interface NetworkInterface `json:"interface"`
 	Role      InterfaceRole    `json:"role"`
 	Status    EdgeStatus       `json:"status"`
-	Reason    string           `json:"reason,omitempty"`
+	// Reason is the English fallback; ReasonCode is the translatable form.
+	Reason     string  `json:"reason,omitempty"`
+	ReasonCode *Reason `json:"reason_code,omitempty"`
 }
 
 // NetworkStatus describes a logical network (bridge or interface with an IP).
@@ -610,11 +672,21 @@ type NetworkStatus struct {
 
 // Anomaly is a network level problem surfaced on the overview page.
 type Anomaly struct {
-	ID       string    `json:"id"`
-	Severity string    `json:"severity"` // info | warning | critical
-	Title    string    `json:"title"`
-	Detail   string    `json:"detail"`
-	Since    time.Time `json:"since"`
+	ID       string `json:"id"`
+	Severity string `json:"severity"` // info | warning | critical
+	// Title and Detail are the English text produced by the backend. The web
+	// UI renders ReasonCode and DetailReasonCode through the translation layer
+	// instead.
+	Title  string `json:"title"`
+	Detail string `json:"detail"`
+	// ReasonCode is the translatable form of Title: a stable code plus the
+	// parameters the templates need.
+	ReasonCode *Reason `json:"reason_code,omitempty"`
+	// DetailReasonCode is the translatable form of Detail. The two lines are
+	// separate sentences, so they need separate codes: one code cannot carry
+	// two different messages.
+	DetailReasonCode *Reason   `json:"detail_reason_code,omitempty"`
+	Since            time.Time `json:"since"`
 }
 
 // Topology is the payload of GET /topology.
@@ -627,16 +699,17 @@ type Topology struct {
 
 // TopologyNode is a node in the topology graph.
 type TopologyNode struct {
-	ID          string            `json:"id"`
-	Kind        string            `json:"kind"` // device | network
-	Device      *Device           `json:"device,omitempty"`
-	Interface   *NetworkInterface `json:"interface,omitempty"`
-	Network     *NetworkStatus    `json:"network,omitempty"`
-	State       DeviceState       `json:"state"`
-	StateReason string            `json:"state_reason,omitempty"`
-	PrimaryIP   string            `json:"primary_ip,omitempty"`
-	PrimaryMAC  string            `json:"primary_mac,omitempty"`
-	Children    []string          `json:"children,omitempty"`
+	ID              string            `json:"id"`
+	Kind            string            `json:"kind"` // device | network
+	Device          *Device           `json:"device,omitempty"`
+	Interface       *NetworkInterface `json:"interface,omitempty"`
+	Network         *NetworkStatus    `json:"network,omitempty"`
+	State           DeviceState       `json:"state"`
+	StateReason     string            `json:"state_reason,omitempty"`
+	StateReasonCode *Reason           `json:"state_reason_code,omitempty"`
+	PrimaryIP       string            `json:"primary_ip,omitempty"`
+	PrimaryMAC      string            `json:"primary_mac,omitempty"`
+	Children        []string          `json:"children,omitempty"`
 	// Addresses lists every address observed for the node, one entry per
 	// address. A router is the canonical multi-homed case: 192.168.100.1 on the
 	// LAN side and 192.168.1.4 on the WAN side are the same device, and a

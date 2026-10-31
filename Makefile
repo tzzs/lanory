@@ -58,7 +58,15 @@ web:
 	cd $(WEB_DIR) && npm run build
 
 ## webapp: stage web/dist into internal/api/webapp for go:embed
+##
+## The staged copy is cleared first. `go:embed` embeds every file in the
+## directory, so an asset left behind by a previous build (Vite hashes filenames,
+## so a rebuild produces a new name and does not overwrite the old one) would be
+## compiled into the binary and served forever, inflating the package. README.md
+## is kept: it is tracked, and it keeps the embed directive valid on a checkout
+## where the frontend has never been built.
 webapp: web
+	find internal/api/webapp -mindepth 1 -maxdepth 1 ! -name README.md -exec rm -rf -- {} +
 	mkdir -p internal/api/webapp
 	cp -r $(WEB_DIR)/dist/. internal/api/webapp/
 	@echo "frontend staged into internal/api/webapp"

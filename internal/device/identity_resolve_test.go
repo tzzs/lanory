@@ -1,0 +1,269 @@
+package device
+
+import (
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/lanory/lanory/internal/database"
+	"github.com/lanory/lanory/internal/discovery"
+	"github.com/lanory/lanory/internal/model"
+)
+
+// noopPublisher satisfies the engine's publisher without recording anything.
+type noopPublisher struct{}
+
+func (noopPublisher) PublishDeviceUpdated(*model.Device, string) {}
+func (noopPublisher) PublishDeviceOnline(*model.Device, string)  {}
+func (noopPublisher) PublishDeviceOffline(*model.Device, string) {}
+func (noopPublisher) PublishTopologyUpdated(string)              {}
+
+func newIdentityEngine(t *testing.T) (*Engine, *database.Store) {
+	t.Helper()
+	db, err := database.Open(filepath.Join(t.TempDir(), "identity.db"))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	store := database.NewStore(db)
+	return New(store, noopPublisher{}), store
+}
+
+func arpIngest(mac, address, hostname string) Ingest {
+	return Ingest{
+		MAC:        mac,
+		Hostname:   hostname,
+		Addresses:  []discovery.AddressObservation{{Address: address}},
+		Source:     model.SourceARP,
+		ObservedAt: time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC),
+	}
+}
+
+// A zero MAC is the kernel's unresolved sentinel. It must never become an
+// identity or a device name such as "Unknown 000000".
+func TestResolveIgnoresZeroMAC(t *testing.T) {
+	eng, _ := newIdentityEngine(t)
+
+	dev, _, err := eng.Resolve(arpIngest("00:00:00:00:00:00", "192.168.1.30", ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dev.ID != "dev-ip-192.168.1.30" {
+		t.Fatalf("device id = %q, want the address-based id", dev.ID)
+	}
+	if dev.Name == "Unknown 000000" {
+		t.Fatalf("zero MAC leaked into the name: %q", dev.Name)
+	}
+}
+
+// A device whose hostname was recorded before the name could be refreshed must
+// still get its name fixed: the refresh used to require the hostname to
+// change, which never happens again for that device.
+func TestResolveRefreshesPlaceholderWhenHostnameUnchanged(t *testing.T) {
+	eng, store := newIdentityEngine(t)
+
+	dev, _, err := eng.Resolve(arpIngest("aa:bb:cc:dd:ee:02", "192.168.1.32", ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dev.Name != "Unknown 192.168.1.32" {
+		t.Fatalf("expected a placeholder name, got %q", dev.Name)
+	}
+	// Record the hostname without changing the name.
+	if _, err := store.UpdateDevice(dev.ID, map[string]any{"hostname": "printer"}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, _, err := eng.Resolve(arpIngest("aa:bb:cc:dd:ee:02", "192.168.1.32", "printer"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Name != "printer" {
+		t.Fatalf("the placeholder was not refreshed: %q", got.Name)
+	}
+}
+
+// A vendor-prefixed name says more than the hostname, so it must survive.
+func TestResolveKeepsVendorNameOverHostname(t *testing.T) {
+	eng, store := newIdentityEngine(t)
+
+	dev, _, err := eng.Resolve(Ingest{
+		MAC:        "aa:bb:cc:dd:ee:03",
+		Vendor:     "Xiaomi",
+		Addresses:  []discovery.AddressObservation{{Address: "192.168.1.33"}},
+		Source:     model.SourceARP,
+		ObservedAt: time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dev.Name != "Xiaomi dd:ee:03" {
+		t.Fatalf("unexpected name %q", dev.Name)
+	}
+	if _, err := store.UpdateDevice(dev.ID, map[string]any{"hostname": "router"}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, _, err := eng.Resolve(Ingest{
+		MAC:        "aa:bb:cc:dd:ee:03",
+		Vendor:     "Xiaomi",
+		Hostname:   "router",
+		Addresses:  []discovery.AddressObservation{{Address: "192.168.1.33"}},
+		Source:     model.SourceARP,
+		ObservedAt: time.Date(2026, 10, 30, 12, 5, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Name != "Xiaomi dd:ee:03" {
+		t.Fatalf("the vendor name was overwritten: %q", got.Name)
+	}
+}
+
+// Two machines can share a hostname: "Mac" is a common one. A device that is
+// already identified by its MAC must not absorb another device that merely
+// reports the same hostname.
+func TestResolveDoesNotMergeTwoDevicesWithSameHostname(t *testing.T) {
+	eng, _ := newIdentityEngine(t)
+
+	// The first Mac is identified by its MAC and reports a hostname.
+	first, _, err := eng.Resolve(Ingest{
+		MAC:        "36:7d:04:6d:a5:f0",
+		Hostname:   "Mac",
+		Addresses:  []discovery.AddressObservation{{Address: "192.168.100.167"}},
+		Source:     model.SourceDHCP,
+		ObservedAt: time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Name != "Mac" {
+		t.Fatalf("unexpected name %q", first.Name)
+	}
+
+	// A second, different machine reports the same hostname and another
+	// address. It must become its own device.
+	second, created, err := eng.Resolve(Ingest{
+		MAC:        "72:e6:45:e9:61:61",
+		Hostname:   "Mac",
+		Addresses:  []discovery.AddressObservation{{Address: "192.168.100.232"}},
+		Source:     model.SourceDHCP,
+		ObservedAt: time.Date(2026, 10, 30, 12, 1, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !created {
+		t.Fatal("the second device was merged into the first one")
+	}
+	if second.ID == first.ID {
+		t.Fatalf("both observations landed on %s", second.ID)
+	}
+}
+
+// A device without a MAC identity may still be matched by hostname: it has
+// nothing better to identify it.
+func TestResolveMatchesByHostnameWhenCandidateHasNoMAC(t *testing.T) {
+	eng, _ := newIdentityEngine(t)
+
+	first, _, err := eng.Resolve(Ingest{
+		Hostname:   "printer",
+		Addresses:  []discovery.AddressObservation{{Address: "192.168.1.40"}},
+		Source:     model.SourceDHCP,
+		ObservedAt: time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.ID != "dev-ip-192.168.1.40" {
+		t.Fatalf("unexpected device %s", first.ID)
+	}
+
+	second, created, err := eng.Resolve(Ingest{
+		MAC:        "aa:bb:cc:dd:ee:09",
+		Hostname:   "printer",
+		Addresses:  []discovery.AddressObservation{{Address: "192.168.1.41"}},
+		Source:     model.SourceDHCP,
+		ObservedAt: time.Date(2026, 10, 30, 12, 1, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created {
+		t.Fatal("the observation should have merged into the address-only device")
+	}
+	if second.ID != first.ID {
+		t.Fatalf("landed on %s, want %s", second.ID, first.ID)
+	}
+}
+
+// A failed identity lookup must be read as "this candidate already has a MAC",
+// not as "it has none". The second reading would let a hostname-only merge
+// through precisely when the database cannot tell us whether it is safe.
+func TestCandHasMACFailsClosedOnLookupError(t *testing.T) {
+	eng, store := newIdentityEngine(t)
+	if err := store.DB().Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if !candHasMAC(eng, model.Device{ID: "dev-unreachable"}) {
+		t.Fatal("a failed lookup was treated as a candidate without a MAC identity")
+	}
+}
+
+// A device the user marked as manual keeps its name even when that name looks
+// like a generated placeholder.
+func TestResolveKeepsManualDeviceName(t *testing.T) {
+	eng, store := newIdentityEngine(t)
+
+	dev, _, err := eng.Resolve(arpIngest("aa:bb:cc:dd:ee:01", "192.168.1.31", ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.UpdateDevice(dev.ID, map[string]any{
+		"is_manual": true,
+		"name":      "Unknown 192.168.1.31",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, _, err := eng.Resolve(arpIngest("aa:bb:cc:dd:ee:01", "192.168.1.31", "printer"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Name != "Unknown 192.168.1.31" {
+		t.Fatalf("manual name was overwritten: %q", got.Name)
+	}
+}
+
+// A device that moved keeps its old lease in the address table. The primary
+// address must be the one observed most recently, not the first row by
+// address order - otherwise a device shows an address it no longer holds.
+func TestRefreshPrimaryAddressesPicksMostRecent(t *testing.T) {
+	eng, store := newIdentityEngine(t)
+
+	dev := &model.Device{ID: "dev-mac-aabbccddeeff", Name: "Mac"}
+	if err := store.UpsertDevice(dev); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC)
+	recent := old.Add(6 * time.Hour)
+	for _, a := range []*model.DeviceAddress{
+		{DeviceID: dev.ID, Address: "192.168.100.167", Family: model.AddressFamilyIPv4, Source: model.SourceDHCP, FirstSeen: old, LastSeen: old},
+		{DeviceID: dev.ID, Address: "192.168.100.232", Family: model.AddressFamilyIPv4, Source: model.SourceDHCP, FirstSeen: recent, LastSeen: recent},
+	} {
+		if err := store.UpsertAddress(a); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	eng.refreshPrimaryAddresses(dev)
+
+	got, err := store.GetDevice(dev.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.PrimaryIPv4 != "192.168.100.232" {
+		t.Fatalf("primary ipv4 = %q, want the most recently observed address", got.PrimaryIPv4)
+	}
+}

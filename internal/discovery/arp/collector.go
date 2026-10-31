@@ -111,6 +111,17 @@ func (c *Collector) Collect(ctx context.Context) ([]discovery.Result, error) {
 		if parsers.IPFamily(e.Address) != model.AddressFamilyIPv4 {
 			continue
 		}
+		// A zero lladdr is the kernel's unresolved sentinel, not a device
+		// identity. Normalize it to the same address-only path as a missing
+		// lladdr before the update engine sees the result.
+		if parsers.IsZeroMAC(parsers.CanonicalMAC(e.MAC)) {
+			e.MAC = ""
+			// The all-zero lladdr means resolution never completed, whatever
+			// state the source claimed. Keeping a "reachable" state here would
+			// let the topology update turn the kernel's negative cache into an
+			// "Unknown <IP>" device.
+			e.State = model.NeighborFailed
+		}
 		if e.MAC == "" {
 			// An unresolved address: report it so the address is known to
 			// exist, but it cannot become a device without a MAC.
@@ -189,7 +200,10 @@ func mergeProcArpMACs(entries []parsers.NeighborEntry, procArpPath string) {
 	}
 	byAddr := map[string]string{}
 	for _, e := range parseProcArp(data) {
-		if e.MAC != "" {
+		// /proc/net/arp uses the all-zero MAC for unresolved entries. It is
+		// a sentinel, not a device identity, and must not be copied onto the
+		// richer `ip neigh` observation.
+		if e.MAC != "" && !parsers.IsZeroMAC(parsers.CanonicalMAC(e.MAC)) {
 			byAddr[e.Address] = e.MAC
 		}
 	}
@@ -225,9 +239,13 @@ func parseArpTable(data []byte) []parsers.NeighborEntry {
 		if macIdx < 0 {
 			continue
 		}
+		mac := parsers.NormalizeMAC(fields[macIdx])
+		if parsers.IsZeroMAC(parsers.CanonicalMAC(mac)) {
+			mac = ""
+		}
 		out = append(out, parsers.NeighborEntry{
 			Address:   fields[0],
-			MAC:       parsers.NormalizeMAC(fields[macIdx]),
+			MAC:       mac,
 			Interface: lastField(fields),
 		})
 	}
@@ -270,6 +288,14 @@ func parseProcArp(data []byte) []parsers.NeighborEntry {
 			e.State = model.NeighborReachable
 		} else {
 			e.State = model.NeighborStale
+		}
+		if parsers.IsZeroMAC(parsers.CanonicalMAC(e.MAC)) {
+			// The all-zero hardware address is the unresolved placeholder. It
+			// carries no identity, and marking the row STALE would let the
+			// topology update create an "Unknown <IP>" device from the kernel's
+			// negative cache.
+			e.MAC = ""
+			e.State = model.NeighborFailed
 		}
 		out = append(out, e)
 	}

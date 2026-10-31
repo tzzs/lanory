@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { t } from '@/i18n'
+import { t, translateReason } from '@/i18n'
 import { useEvents } from '@/hooks/useApi'
 import { Card, Button, Select, Input, Badge, Skeleton, EmptyState, ErrorState, Table, THead, TBody, TR, TH, TD, PageHeader } from '@/components/ui'
 import { formatRelativeTime, formatTimestamp } from '@/lib/devices'
+import { eventTransition } from '@/lib/events'
 import type { EventType } from '@/types/api'
 
 const EVENT_TYPES: EventType[] = [
@@ -146,10 +147,10 @@ export function EventsPage() {
                       )}
                     </TD>
                     <TD className="text-xs">
-                      {event.message || '—'}
+                      {translateReason(event.reason_code, event.message || '—')}
                       {event.old_value && event.new_value ? (
                         <span className="ml-1.5 font-mono text-muted">
-                          {event.old_value} → {event.new_value}
+                          {eventTransition(event.event_type, event.old_value, event.new_value)}
                         </span>
                       ) : null}
                     </TD>

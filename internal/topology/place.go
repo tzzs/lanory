@@ -307,16 +307,17 @@ func groupUnresolved(
 		}
 
 		seg := Node{
-			ID:          segID,
-			Kind:        NodeKindSegment,
-			Parent:      deviceNodeID(owner),
-			State:       model.StateUnknown,
-			StateReason: "unknown intermediate device",
-			Reason:      "several devices observed behind " + port + "; the intermediate device is not known",
-			Unverified:  true,
-			Unresolved:  true,
-			Bridge:      bridge,
-			Port:        port,
+			ID:              segID,
+			Kind:            NodeKindSegment,
+			Parent:          deviceNodeID(owner),
+			State:           model.StateUnknown,
+			StateReason:     "unknown intermediate device",
+			StateReasonCode: &model.Reason{Code: model.ReasonUnknownIntermediate, Params: map[string]string{}},
+			Reason:          "several devices observed behind " + port + "; the intermediate device is not known",
+			Unverified:      true,
+			Unresolved:      true,
+			Bridge:          bridge,
+			Port:            port,
 		}
 		seg.Network = &model.NetworkStatus{
 			ID:   segID,

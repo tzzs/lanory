@@ -16,6 +16,32 @@ response shape without updating this file and the other side.
 - Booleans are real booleans, never `0`/`1` strings.
 - Empty lists are `[]`, never `null`.
 
+## Reason codes
+
+Every piece of text that explains *why* something is in its current state is
+produced twice: as an English sentence, and as a reason code.
+
+```json
+{"code": "probe.unreachable_consecutive", "params": {"failures": "12", "source": "lanory", "protocol": "icmp"}}
+```
+
+The English sentence (`state_reason`, `message`, `title`, `detail`) is what a
+log file, a bug report and an API consumer outside the web UI read. The reason
+code is what a UI renders in the user's language: the code names the template,
+the parameters fill it in. A sentence baked into the database cannot be
+translated after the fact; a code plus parameters can.
+
+The fields are:
+
+- `Device.state_reason_code`, `ProbeTarget.state_reason_code`
+- `NetworkEvent.reason_code`
+- `Anomaly.reason_code` (the title) and `Anomaly.detail_reason_code` (the
+  explanatory line under it)
+
+Both fields are optional. A row written before reason codes existed, or one
+whose text matched no known template, has no code: a client falls back to the
+English text. Codes are stable; the sentences behind them are not.
+
 ## Health
 
 `GET /api/v1/health` → `{"status":"ok","version":"0.1.0","demo_mode":false,"uptime_seconds":123}`
@@ -32,7 +58,7 @@ response shape without updating this file and the other side.
   "recent_new_devices": [...],
   "recent_offline_devices": [...],
   "recent_events": [...],
-  "anomalies": [{"id": "...", "severity": "warning", "title": "...", "detail": "...", "since": "..."}],
+  "anomalies": [{"id": "...", "severity": "warning", "title": "...", "detail": "...", "reason_code": {"code": "anomaly.devices_offline", "params": {"count": "2"}}, "detail_reason_code": {"code": "anomaly.devices_offline_detail", "params": {"count": "2"}}, "since": "..."}],
   "last_scan_at": "...",
   "discovery_enabled": true,
   "demo_mode": false,

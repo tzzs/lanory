@@ -133,13 +133,30 @@ func TestOverviewRoute(t *testing.T) {
 	}
 
 	// No-carrier must surface as an anomaly, because that is the whole point.
+	// Both of its lines carry a reason code: a translated title with an
+	// English detail underneath is exactly what the UI must never show.
 	var sawAnomaly bool
 	for _, an := range got.Anomalies {
 		if an.Severity == "" || an.Title == "" {
 			t.Errorf("anomaly %q must have a severity and a title", an.ID)
 		}
+		if an.ReasonCode == nil || an.ReasonCode.Code == "" {
+			t.Errorf("anomaly %q must carry a reason code for its title", an.ID)
+		}
+		if an.DetailReasonCode == nil || an.DetailReasonCode.Code == "" {
+			t.Errorf("anomaly %q must carry a reason code for its detail", an.ID)
+		}
 		if an.ID == "anom-link-if-eth3" {
 			sawAnomaly = true
+			if an.ReasonCode.Code != model.ReasonAnomalyNoCarrier {
+				t.Errorf("anomaly code = %q, want %q", an.ReasonCode.Code, model.ReasonAnomalyNoCarrier)
+			}
+			if an.DetailReasonCode.Code != model.ReasonAnomalyNoCarrierDetail {
+				t.Errorf("anomaly detail code = %q, want %q", an.DetailReasonCode.Code, model.ReasonAnomalyNoCarrierDetail)
+			}
+			if an.ReasonCode.Params["interface"] != "eth3" {
+				t.Errorf("anomaly interface param = %q, want eth3", an.ReasonCode.Params["interface"])
+			}
 		}
 	}
 	if !sawAnomaly {
