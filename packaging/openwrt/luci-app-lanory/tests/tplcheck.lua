@@ -14,6 +14,9 @@ local blocks, exprs, texts = 0, 0, 0
 for code in src:gmatch("<%%(.-)%%>") do
   if code:match("^#") then
     -- comment
+  elseif code:match("^%+") then
+    blocks = blocks + 1
+    lua_src = lua_src .. "include(" .. string.format("%q", code:sub(2):match("^%s*(.-)%s*$")) .. ")\n"
   elseif code:match("^:") then
     texts = texts + 1
     lua_src = lua_src .. "local _t = translate(" .. string.format("%q", code:sub(2)) .. ")\n"
