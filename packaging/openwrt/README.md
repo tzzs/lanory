@@ -51,7 +51,7 @@ Treat the version numbers in `Makefile` as the target, not as a test result.
 | `/var/lib/lanory/lanory.db` | SQLite database (WAL), preserved on upgrade *and* uninstall |
 | `/usr/share/lanory/README.md` | short deployment note for the device |
 
-Optional: `luci-app-lanory` adds a menu entry under **Services → Lanory**.
+Optional: `luci-app-lanory` adds a localized menu entry under **Services → Lanory Network Topology** (English) or **Services → Lanory 网络拓扑** (Simplified Chinese).
 
 ## Package names
 

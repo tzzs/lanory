@@ -221,6 +221,16 @@ if [ -f "$MENU_JSON" ] && grep -q 'admin/services/lanory' "$MENU_JSON"; then
 else
 	fail "menu.d does not register admin/services/lanory"
 fi
+if grep -q '"title": "Lanory Network Topology"' "$MENU_JSON" && grep -q '_([" ]*"Lanory Network Topology"' "$DIR/luci-app-lanory/luasrc/controller/lanory.lua"; then
+	pass "menu JSON and Lua controller use the same translatable title"
+else
+	fail "menu JSON and Lua controller titles do not match"
+fi
+if [ -f "$DIR/luci-app-lanory/po/zh-cn/lanory.po" ] && grep -q 'msgstr "Lanory 网络拓扑"' "$DIR/luci-app-lanory/po/zh-cn/lanory.po"; then
+	pass "Simplified Chinese LuCI menu translation is present"
+else
+	fail "Simplified Chinese LuCI menu translation is missing"
+fi
 
 # The Lua controller must not re-declare acl_depends: that field is only
 # consulted when the Lua runtime processes the controller, and LuCI 25.12 does

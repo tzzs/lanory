@@ -1,6 +1,6 @@
 {
 	"admin/services/lanory": {
-		"title": "Lanory",
+		"title": "Lanory Network Topology",
 		"order": 60,
 		"action": {
 			"type": "template",

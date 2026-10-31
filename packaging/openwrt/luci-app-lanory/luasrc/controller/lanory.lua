@@ -34,7 +34,7 @@ function index()
 	-- registers the leaf pages; re-declaring the acl dependency here would make
 	-- the node vanish whenever the Lua runtime is absent (LuCI 25.12 does not
 	-- install it by default), because depends.acl is then only seen from Lua.
-	entry({"admin", "services", "lanory"}, template("lanory/overview"), _("Lanory"), 60)
+	entry({"admin", "services", "lanory"}, template("lanory/overview"), _("Lanory Network Topology"), 60)
 
 	-- Child routes stay addressable but untitled: React owns the only tab bar.
 	entry({"admin", "services", "lanory", "overview"}, template("lanory/overview"))

@@ -36,12 +36,16 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import ast
 import gzip
 import hashlib
 import io
+import json
 import os
+import re
 import shutil
 import stat
+import struct
 import sys
 import tarfile
 import time
@@ -597,6 +601,94 @@ LUCI_LAYOUT = [
     ("luasrc/view/lanory/overview.htm", "usr/lib/lua/luci/view/lanory/overview.htm", 0o644),
 ]
 
+
+def luci_hash(data: bytes) -> int:
+    """Return LuCI's SuperFastHash for a translation key or value."""
+    length = len(data)
+    if not length:
+        return 0
+
+    def get16(offset: int) -> int:
+        return data[offset] | (data[offset + 1] << 8)
+
+    value = length
+    remaining = length & 3
+    blocks = length >> 2
+    offset = 0
+    for _ in range(blocks):
+        value = (value + get16(offset)) & 0xFFFFFFFF
+        tmp = ((get16(offset + 2) << 11) ^ value) & 0xFFFFFFFF
+        value = (((value << 16) & 0xFFFFFFFF) ^ tmp) & 0xFFFFFFFF
+        offset += 4
+        value = (value + (value >> 11)) & 0xFFFFFFFF
+
+    if remaining == 3:
+        value = (value + get16(offset)) & 0xFFFFFFFF
+        value ^= (value << 16) & 0xFFFFFFFF
+        value ^= data[offset + 2] << 18
+        value = (value + (value >> 11)) & 0xFFFFFFFF
+    elif remaining == 2:
+        value = (value + get16(offset)) & 0xFFFFFFFF
+        value ^= (value << 11) & 0xFFFFFFFF
+        value = (value + (value >> 17)) & 0xFFFFFFFF
+    elif remaining == 1:
+        value = (value + data[offset]) & 0xFFFFFFFF
+        value ^= (value << 10) & 0xFFFFFFFF
+        value = (value + (value >> 1)) & 0xFFFFFFFF
+
+    value ^= (value << 3) & 0xFFFFFFFF
+    value = (value + (value >> 5)) & 0xFFFFFFFF
+    value ^= (value << 4) & 0xFFFFFFFF
+    value = (value + (value >> 17)) & 0xFFFFFFFF
+    value ^= (value << 25) & 0xFFFFFFFF
+    value = (value + (value >> 6)) & 0xFFFFFFFF
+    return value
+
+
+def _parse_luci_po_messages(source: str) -> list[tuple[str, str]]:
+    """Read singular msgid/msgstr pairs from a PO catalog."""
+    fields: dict[str, str] = {}
+    current: str | None = None
+    messages = []
+    for line in source.splitlines() + [""]:
+        match = re.match(r'^(msgid|msgstr)\s+"((?:\\.|[^"\\])*)"\s*$', line)
+        if match:
+            current = match.group(1)
+            fields[current] = ast.literal_eval('"' + match.group(2) + '"')
+            continue
+        continuation = re.match(r'^"((?:\\.|[^"\\])*)"\s*$', line)
+        if continuation and current:
+            fields[current] = fields.get(current, "") + ast.literal_eval('"' + continuation.group(1) + '"')
+            continue
+        if not line.strip() or line.lstrip().startswith("#"):
+            if fields.get("msgid") and fields.get("msgstr"):
+                messages.append((fields["msgid"], fields["msgstr"]))
+            fields = {}
+            current = None
+    return messages
+
+
+def compile_luci_po(source: str) -> bytes:
+    """Compile simple singular PO entries into a LuCI LMO catalog."""
+    messages = _parse_luci_po_messages(source)
+    data = bytearray()
+    index = []
+    for key, translated in messages:
+        key_bytes = key.encode("utf-8")
+        value_bytes = translated.encode("utf-8")
+        if not value_bytes:
+            continue
+        offset = len(data)
+        data.extend(value_bytes)
+        data.extend(bytes((-len(value_bytes)) % 4))
+        index.append((luci_hash(key_bytes), 1, offset, len(value_bytes)))
+
+    for entry in sorted(index):
+        data.extend(struct.pack("!IIII", *entry))
+    data.extend(struct.pack("!I", len(data) - len(index) * 16))
+    return bytes(data)
+
+
 def build_luci_apk(version: str, out_dir: str) -> str:
     """Build the luci-app-lanory package.
 
@@ -612,6 +704,17 @@ def build_luci_apk(version: str, out_dir: str) -> str:
             raise SystemExit(f"missing LuCI source: {path}")
         with open(path, "rb") as fh:
             entries.append((dst, mode, fh.read()))
+
+    menu_path = os.path.join(LUCI_ROOT, "root/usr/share/luci/menu.d/luci-app-lanory.json")
+    with open(menu_path, "rb") as menu_file:
+        menu_title = json.load(menu_file)["admin/services/lanory"]["title"]
+    po_path = os.path.join(LUCI_ROOT, "po/zh-cn/lanory.po")
+    with open(po_path, "r", encoding="utf-8") as po_file:
+        po_source = po_file.read()
+    catalog = compile_luci_po(po_source)
+    if not catalog or not any(key == menu_title for key, _translated in _parse_luci_po_messages(po_source)):
+        raise SystemExit(f"menu title has no matching LuCI translation: {po_path}")
+    entries.append(("usr/lib/lua/luci/i18n/lanory.zh-cn.lmo", 0o644, catalog))
 
     # The install script: the menu entry only appears once LuCI has rebuilt its
     # index, and the index is cached in /tmp.
