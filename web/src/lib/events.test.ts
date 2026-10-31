@@ -30,6 +30,12 @@ describe('eventValueLabel', () => {
     expect(eventValueLabel('device.ip_changed', '192.168.100.150')).toBe('192.168.100.150')
     expect(eventValueLabel('device.discovered', 'up')).toBe('up')
   })
+
+  it('does not translate free values on a generic device update', () => {
+    setLanguage('zh-CN')
+    expect(eventValueLabel('device.updated', 'up')).toBe('up')
+    expect(eventTransition('device.updated', 'online', 'offline')).toBe('online → offline')
+  })
 })
 
 describe('eventTransition', () => {

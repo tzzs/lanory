@@ -278,6 +278,9 @@ UPDATE network_events SET reason_code = json_object(
     )
 )
 WHERE message LIKE 'unreachable for % consecutive probes from % via % with no recent success (detected by % probe from %)'
+  AND substr(message, instr(message, ' via ') + 5, instr(message, ' with no recent success') - instr(message, ' via ') - 5) IN ('icmp', 'tcp', 'http', 'dns', 'arp')
+  AND substr(message, instr(message, ' (detected by ') + 14, instr(message, ' probe from ') - instr(message, ' (detected by ') - 14) = substr(message, instr(message, ' via ') + 5, instr(message, ' with no recent success') - instr(message, ' via ') - 5)
+  AND rtrim(substr(message, instr(message, ' probe from ') + 12), ')') = substr(message, instr(message, ' from ') + 6, instr(message, ' via ') - instr(message, ' from ') - 6)
   AND reason_code = '';
 
 -- "unreachable for N consecutive probes from S via P, but the probe source itself lost connectivity: this says nothing about the device"
@@ -290,6 +293,9 @@ UPDATE network_events SET reason_code = json_object(
     )
 )
 WHERE message LIKE 'unreachable for % consecutive probes from % via %, but the probe source itself lost connectivity: this says nothing about the device (detected by % probe from %)'
+  AND substr(message, instr(message, ' via ') + 5, instr(message, ', but the probe source itself lost connectivity') - instr(message, ' via ') - 5) IN ('icmp', 'tcp', 'http', 'dns', 'arp')
+  AND substr(message, instr(message, ' (detected by ') + 14, instr(message, ' probe from ') - instr(message, ' (detected by ') - 14) = substr(message, instr(message, ' via ') + 5, instr(message, ', but the probe source itself lost connectivity') - instr(message, ' via ') - 5)
+  AND rtrim(substr(message, instr(message, ' probe from ') + 12), ')') = substr(message, instr(message, ' from ') + 6, instr(message, ' via ') - instr(message, ' from ') - 6)
   AND reason_code = '';
 
 -- "unreachable for N consecutive probes from S via P, but the neighbour table still lists T: the device is on the segment and does not answer this probe method"
@@ -303,6 +309,9 @@ UPDATE network_events SET reason_code = json_object(
     )
 )
 WHERE message LIKE 'unreachable for % consecutive probes from % via %, but the neighbour table still lists %: the device is on the segment and does not answer this probe method (detected by % probe from %)'
+  AND substr(message, instr(message, ' via ') + 5, instr(message, ', but the neighbour table still lists') - instr(message, ' via ') - 5) IN ('icmp', 'tcp', 'http', 'dns', 'arp')
+  AND substr(message, instr(message, ' (detected by ') + 14, instr(message, ' probe from ') - instr(message, ' (detected by ') - 14) = substr(message, instr(message, ' via ') + 5, instr(message, ', but the neighbour table still lists') - instr(message, ' via ') - 5)
+  AND rtrim(substr(message, instr(message, ' probe from ') + 12), ')') = substr(message, instr(message, ' from ') + 6, instr(message, ' via ') - instr(message, ' from ') - 6)
   AND reason_code = '';
 
 -- "unreachable for N consecutive probes from S via P, but the device resumed after an earlier gap of T failures: power saving, not absence"
@@ -316,6 +325,9 @@ UPDATE network_events SET reason_code = json_object(
     )
 )
 WHERE message LIKE 'unreachable for % consecutive probes from % via %, but the device resumed after an earlier gap of % failures: power saving, not absence (detected by % probe from %)'
+  AND substr(message, instr(message, ' via ') + 5, instr(message, ', but the device resumed after an earlier gap') - instr(message, ' via ') - 5) IN ('icmp', 'tcp', 'http', 'dns', 'arp')
+  AND substr(message, instr(message, ' (detected by ') + 14, instr(message, ' probe from ') - instr(message, ' (detected by ') - 14) = substr(message, instr(message, ' via ') + 5, instr(message, ', but the device resumed after an earlier gap') - instr(message, ' via ') - 5)
+  AND rtrim(substr(message, instr(message, ' probe from ') + 12), ')') = substr(message, instr(message, ' from ') + 6, instr(message, ' via ') - instr(message, ' from ') - 6)
   AND reason_code = '';
 
 -- "unreachable for N consecutive probes from S via P; the device was already sleeping and answered A, so this is a deeper sleep rather than absence"
@@ -329,6 +341,9 @@ UPDATE network_events SET reason_code = json_object(
     )
 )
 WHERE message LIKE 'unreachable for % consecutive probes from % via %; the device was already sleeping and answered %, so this is a deeper sleep rather than absence (detected by % probe from %)'
+  AND substr(message, instr(message, ' via ') + 5, instr(message, '; the device was already sleeping') - instr(message, ' via ') - 5) IN ('icmp', 'tcp', 'http', 'dns', 'arp')
+  AND substr(message, instr(message, ' (detected by ') + 14, instr(message, ' probe from ') - instr(message, ' (detected by ') - 14) = substr(message, instr(message, ' via ') + 5, instr(message, '; the device was already sleeping') - instr(message, ' via ') - 5)
+  AND rtrim(substr(message, instr(message, ' probe from ') + 12), ')') = substr(message, instr(message, ' from ') + 6, instr(message, ' via ') - instr(message, ' from ') - 6)
   AND reason_code = '';
 
 -- "intermittent reachability from S via P: X of the last Y probes failed"
@@ -342,6 +357,9 @@ UPDATE network_events SET reason_code = json_object(
     )
 )
 WHERE message LIKE 'intermittent reachability from % via %: % of the last % probes failed (detected by % probe from %)'
+  AND substr(message, instr(message, ' via ') + 5, instr(message, ': ') - instr(message, ' via ') - 5) IN ('icmp', 'tcp', 'http', 'dns', 'arp')
+  AND substr(message, instr(message, ' (detected by ') + 14, instr(message, ' probe from ') - instr(message, ' (detected by ') - 14) = substr(message, instr(message, ' via ') + 5, instr(message, ': ') - instr(message, ' via ') - 5)
+  AND rtrim(substr(message, instr(message, ' probe from ') + 12), ')') = substr(message, instr(message, ' from ') + 6, instr(message, ' via ') - instr(message, ' from ') - 6)
   AND reason_code = '';
 
 -- "confirming recovery from S via P: X of Y required successes"
@@ -355,6 +373,9 @@ UPDATE network_events SET reason_code = json_object(
     )
 )
 WHERE message LIKE 'confirming recovery from % via %: % of % required successes (detected by % probe from %)'
+  AND substr(message, instr(message, ' via ') + 5, instr(message, ': ') - instr(message, ' via ') - 5) IN ('icmp', 'tcp', 'http', 'dns', 'arp')
+  AND substr(message, instr(message, ' (detected by ') + 14, instr(message, ' probe from ') - instr(message, ' (detected by ') - 14) = substr(message, instr(message, ' via ') + 5, instr(message, ': ') - instr(message, ' via ') - 5)
+  AND rtrim(substr(message, instr(message, ' probe from ') + 12), ')') = substr(message, instr(message, ' from ') + 6, instr(message, ' via ') - instr(message, ' from ') - 6)
   AND reason_code = '';
 
 -- "N consecutive failure(s) below the threshold of T from S via P: not enough evidence to change state"
@@ -368,6 +389,7 @@ UPDATE network_events SET reason_code = json_object(
     )
 )
 WHERE message LIKE '% consecutive failure(s) below the threshold of % from % via %: not enough evidence to change state (detected by % probe from %)'
+  AND substr(message, instr(message, ' via ') + 5, instr(message, ': not enough evidence to change state') - instr(message, ' via ') - 5) IN ('icmp', 'tcp', 'http', 'dns', 'arp')
   AND reason_code = '';
 
 -- "no successful probe yet from S via P (N failure(s), threshold T)"
@@ -381,6 +403,7 @@ UPDATE network_events SET reason_code = json_object(
     )
 )
 WHERE message LIKE 'no successful probe yet from % via % (% failure(s), threshold %) (detected by % probe from %)'
+  AND substr(message, instr(message, ' via ') + 5, instr(message, ' (') - instr(message, ' via ') - 5) IN ('icmp', 'tcp', 'http', 'dns', 'arp')
   AND reason_code = '';
 
 -- "reachable from S via P"
@@ -392,6 +415,9 @@ UPDATE network_events SET reason_code = json_object(
     )
 )
 WHERE message LIKE 'reachable from % via % (detected by % probe from %)'
+  AND substr(message, instr(message, ' via ') + 5, instr(message, ' (detected by ') - instr(message, ' via ') - 5) IN ('icmp', 'tcp', 'http', 'dns', 'arp')
+  AND substr(message, instr(message, ' (detected by ') + 14, instr(message, ' probe from ') - instr(message, ' (detected by ') - 14) = substr(message, instr(message, ' via ') + 5, instr(message, ' (detected by ') - instr(message, ' via ') - 5)
+  AND rtrim(substr(message, instr(message, ' probe from ') + 12), ')') = substr(message, instr(message, ' from ') + 6, instr(message, ' via ') - instr(message, ' from ') - 6)
   AND reason_code = '';
 
 -- "never probed from S: no evidence either way"

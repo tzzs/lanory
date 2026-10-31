@@ -466,6 +466,24 @@ func LinkReasonCode(carrier bool, oper OperState, speedMbps int) *Reason {
 	}
 }
 
+// LinkStatusFor derives the runtime status and English fallback for an
+// interface. Carrier is the physical signal and therefore takes precedence
+// over contradictory operstate values, matching the live link observer.
+func LinkStatusFor(carrier bool, oper OperState, speedMbps int) (EdgeStatus, string) {
+	switch {
+	case carrier && speedMbps > 0:
+		return EdgeStatusLinkUp, "carrier up, operstate " + string(oper) + ", " + strconv.Itoa(speedMbps) + " Mbps"
+	case carrier:
+		return EdgeStatusLinkUp, "carrier up"
+	case oper == OperDown || oper == OperNoCarrier:
+		return EdgeStatusLinkDown, "carrier down, operstate " + string(oper)
+	case oper == OperUp:
+		return EdgeStatusUnverified, "operstate up but carrier unknown"
+	default:
+		return EdgeStatusUnverified, "no carrier or operstate information available"
+	}
+}
+
 // TopologyEdge is a relation between two devices.
 type TopologyEdge struct {
 	ID                string          `json:"id"`

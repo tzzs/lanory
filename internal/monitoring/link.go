@@ -439,21 +439,7 @@ func edgeReasonCodeFor(s linkSample) *model.Reason {
 }
 
 func edgeStatusFor(s linkSample) (model.EdgeStatus, string) {
-	switch {
-	case s.carrier:
-		if s.speed > 0 {
-			return model.EdgeStatusLinkUp, fmt.Sprintf("carrier up, operstate %s, %d Mbps", s.oper, s.speed)
-		}
-		return model.EdgeStatusLinkUp, "carrier up"
-	case s.oper == "down" || s.oper == "no-carrier":
-		return model.EdgeStatusLinkDown, fmt.Sprintf("carrier down, operstate %s", s.oper)
-	case s.oper == "up":
-		// operstate up without carrier is contradictory; report unverified
-		// rather than guessing.
-		return model.EdgeStatusUnverified, "operstate up but carrier unknown"
-	default:
-		return model.EdgeStatusUnverified, "no carrier or operstate information available"
-	}
+	return model.LinkStatusFor(s.carrier, model.OperState(s.oper), s.speed)
 }
 
 // carrierLabel renders a carrier value for event messages.

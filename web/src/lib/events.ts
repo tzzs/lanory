@@ -17,7 +17,6 @@ export function eventValueLabel(eventType: EventType | string, value: string): s
   switch (eventType) {
     case 'device.online':
     case 'device.offline':
-    case 'device.updated':
       return stateTokenLabel(value)
     case 'link.up':
     case 'link.down':

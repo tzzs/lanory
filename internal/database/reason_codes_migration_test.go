@@ -439,8 +439,90 @@ func TestReasonCodeMigrationBackfillsLinkEvents(t *testing.T) {
 	}
 }
 
+// TestReasonCodeMigrationRejectsAmbiguousEventTemplates asserts that a message
+// which only resembles a known template is left uncoded. A wrong code is worse
+// than no code: the UI would replace the original English text with a false
+// translation.
+func TestReasonCodeMigrationRejectsAmbiguousEventTemplates(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ambiguous-events.db")
+	raw := openSchemaVersion6(t, dbPath)
+
+	cases := []struct {
+		name    string
+		message string
+		want    *model.Reason
+	}{
+		{
+			name:    "protocol has trailing free text",
+			message: "reachable from lanory via icmp noise (detected by icmp probe from lanory)",
+		},
+		{
+			name:    "suffix is incomplete",
+			message: "reachable from lanory via icmp (detected by icmp probe)",
+		},
+		{
+			name:    "similar consecutive message",
+			message: "unreachable for 3 consecutive probes from lanory via icmp noise with no recent success (detected by icmp probe from lanory)",
+		},
+		{
+			name:    "source contains a marker",
+			message: "reachable from lanory via office via icmp (detected by icmp probe from lanory)",
+		},
+		{
+			name:    "detection protocol disagrees",
+			message: "reachable from lanory via icmp (detected by tcp probe from lanory)",
+		},
+		{
+			name:    "detection source disagrees",
+			message: "reachable from lanory via icmp (detected by icmp probe from another source)",
+		},
+	}
+	for i, tc := range cases {
+		if _, err := raw.Exec(
+			`INSERT INTO network_events (id, event_type, message) VALUES (?, 'device.updated', ?)`,
+			fmt.Sprintf("evt-ambiguous-%d", i), tc.message,
+		); err != nil {
+			t.Fatalf("insert %s: %v", tc.name, err)
+		}
+	}
+	valid := "reachable from probe room via icmp (detected by icmp probe from probe room)"
+	if _, err := raw.Exec(
+		`INSERT INTO network_events (id, event_type, message) VALUES ('evt-valid-spaced-source', 'device.updated', ?)`, valid,
+	); err != nil {
+		t.Fatalf("insert valid spaced source: %v", err)
+	}
+	if err := raw.Close(); err != nil {
+		t.Fatalf("close legacy database: %v", err)
+	}
+
+	db, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("open and migrate legacy database: %v", err)
+	}
+	defer db.Close()
+
+	events, _, err := NewStore(db).ListEvents(EventFilter{Limit: 100})
+	if err != nil {
+		t.Fatalf("list events: %v", err)
+	}
+	if len(events) != len(cases)+1 {
+		t.Fatalf("got %d events, want %d", len(events), len(cases)+1)
+	}
+	for _, event := range events {
+		if event.ID == "evt-valid-spaced-source" {
+			assertReason(t, "valid spaced source", event.ReasonCode, model.ReasonProbeReachable, map[string]string{
+				"source": "probe room", "protocol": "icmp",
+			})
+			continue
+		}
+		if event.ReasonCode != nil {
+			t.Fatalf("ambiguous event %q got reason %#v, want no code", event.Message, event.ReasonCode)
+		}
+	}
+}
+
 // assertReason checks a decoded reason against the expected code and
-// parameters.
+// parameters, including rejecting unexpected parameters.
 func assertReason(t *testing.T, what string, got *model.Reason, want model.ReasonCode, params map[string]string) {
 	t.Helper()
 	if got == nil {
@@ -448,6 +530,9 @@ func assertReason(t *testing.T, what string, got *model.Reason, want model.Reaso
 	}
 	if got.Code != want {
 		t.Fatalf("%s code = %q, want %q", what, got.Code, want)
+	}
+	if len(got.Params) != len(params) {
+		t.Fatalf("%s has %d params %#v, want %d %#v", what, len(got.Params), got.Params, len(params), params)
 	}
 	for key, value := range params {
 		if got.Params[key] != value {

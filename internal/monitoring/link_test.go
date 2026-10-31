@@ -277,6 +277,7 @@ func TestEdgeStatusFor(t *testing.T) {
 		want   model.EdgeStatus
 	}{
 		{"carrier up with speed", linkSample{carrier: true, oper: "up", speed: 1000}, model.EdgeStatusLinkUp},
+		{"carrier up despite contradictory operstate", linkSample{carrier: true, oper: "down"}, model.EdgeStatusLinkUp},
 		{"carrier up without speed", linkSample{carrier: true, oper: "up"}, model.EdgeStatusLinkUp},
 		{"carrier up but operstate unknown", linkSample{carrier: true}, model.EdgeStatusLinkUp},
 		{"carrier down", linkSample{carrier: false, oper: "down"}, model.EdgeStatusLinkDown},

@@ -465,16 +465,7 @@ func (s *storeMonitoring) InterfaceStatus() ([]model.InterfaceStatus, error) {
 	}
 	out := make([]model.InterfaceStatus, 0, len(ifaces))
 	for _, i := range ifaces {
-		status := model.EdgeStatusUnverified
-		reason := "no reachability data has been collected yet"
-		switch {
-		case !i.Carrier && i.OperState == model.OperNoCarrier:
-			status = model.EdgeStatusLinkDown
-			reason = "no carrier"
-		case i.Carrier && i.OperState == model.OperUp:
-			status = model.EdgeStatusLinkUp
-			reason = "carrier up"
-		}
+		status, reason := model.LinkStatusFor(i.Carrier, i.OperState, i.SpeedMbps)
 		out = append(out, model.InterfaceStatus{
 			Interface:  i,
 			Role:       i.Role,
