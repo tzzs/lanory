@@ -173,7 +173,10 @@ func (e *Engine) disableSelfProbes(lister DeviceLister, deviceID string) error {
 		return fmt.Errorf("monitoring: list addresses for the local host: %w", err)
 	}
 	current := make(map[string]bool, len(addresses))
-	cutoff := now.Add(-24 * time.Hour)
+	// Discovery refreshes the local interfaces every few minutes. A two-hour
+	// window leaves room for a delayed run while excluding addresses left by a
+	// previous LAN configuration, which may otherwise remain primary for a day.
+	cutoff := now.Add(-2 * time.Hour)
 	for _, address := range addresses {
 		// Do not trust is_primary here: an address that disappeared can remain
 		// primary in the identity row until the next reconciliation. Freshness
