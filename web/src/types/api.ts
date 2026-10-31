@@ -367,6 +367,7 @@ export interface NodeAddress {
   interface?: string
   side: InterfaceRole
   is_primary?: boolean
+  last_seen?: string
 }
 
 export interface Topology {

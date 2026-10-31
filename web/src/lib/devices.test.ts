@@ -300,6 +300,15 @@ describe('groupDeviceAddresses', () => {
     expect(groups.every((group) => group.cidr === '')).toBe(true)
   })
 
+  it('orders currently observed addresses ahead of older primary addresses', () => {
+    const groups = groupDeviceAddresses([
+      addr({ address: '2001:db8::1', family: 'ipv6', prefix_length: 64, is_primary: true, last_seen: '2026-10-30T10:00:00Z' }),
+      addr({ address: '2001:db8::2', family: 'ipv6', prefix_length: 64, last_seen: '2026-11-01T10:00:00Z' }),
+    ], [])
+
+    expect(groups[0].addresses[0].address).toBe('2001:db8::2')
+  })
+
   it('leaves a remote device address without a side', () => {
     const groups = groupDeviceAddresses([addr({ address: '192.0.2.20', prefix_length: 24 })], [])
     expect(groups).toHaveLength(1)

@@ -185,3 +185,39 @@ func TestListActiveAddressesFiltersStaleDiscoveryButKeepsPrimary(t *testing.T) {
 		}
 	}
 }
+
+func TestListCurrentAddressesExcludesStalePrimaryAndSortsCurrentFirst(t *testing.T) {
+	s := newTestStore(t)
+	dev := &model.Device{ID: "dev-current-addresses", Name: "test device"}
+	if err := s.UpsertDevice(dev); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	rows := []*model.DeviceAddress{
+		{DeviceID: dev.ID, Address: "192.0.2.10", Family: model.AddressFamilyIPv4, Source: model.SourceARP, IsPrimary: true, LastSeen: now.Add(-48 * time.Hour)},
+		{DeviceID: dev.ID, Address: "192.0.2.11", Family: model.AddressFamilyIPv4, Source: model.SourceARP, LastSeen: now.Add(-3 * time.Hour)},
+		{DeviceID: dev.ID, Address: "192.0.2.12", Family: model.AddressFamilyIPv4, Source: model.SourceARP, LastSeen: now.Add(-1 * time.Hour)},
+		{DeviceID: dev.ID, Address: "192.0.2.13", Family: model.AddressFamilyIPv4, Source: model.SourceManual, LastSeen: now.Add(-365 * 24 * time.Hour)},
+	}
+	for _, row := range rows {
+		if err := s.UpsertAddress(row); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got, err := s.ListCurrentAddresses(dev.ID, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("current address count = %d, want 3: %+v", len(got), got)
+	}
+	if got[0].Address != "192.0.2.12" || got[1].Address != "192.0.2.11" {
+		t.Fatalf("current addresses not ordered by freshness: %q, %q", got[0].Address, got[1].Address)
+	}
+	for _, address := range got {
+		if address.Address == "192.0.2.10" {
+			t.Fatal("stale primary address was returned as current")
+		}
+	}
+}

@@ -297,7 +297,12 @@ export function groupAddresses(addresses: NodeAddress[] | undefined): AddressGro
   }
   const groups = [...byKey.values()]
   for (const group of groups) {
-    group.addresses.sort((a, b) => Number(!!b.is_primary) - Number(!!a.is_primary) || a.address.localeCompare(b.address))
+    group.addresses.sort(
+      (a, b) =>
+        (b.last_seen ?? '').localeCompare(a.last_seen ?? '') ||
+        Number(!!b.is_primary) - Number(!!a.is_primary) ||
+        a.address.localeCompare(b.address),
+    )
   }
   groups.sort((a, b) => (SIDE_ORDER[a.side] ?? 5) - (SIDE_ORDER[b.side] ?? 5) || a.cidr.localeCompare(b.cidr))
   return groups
@@ -353,6 +358,7 @@ export function groupDeviceAddresses(
       cidr: subnetOfAddress(a.address, a.prefix_length),
       side: (a.interface_id && roleByIface.get(a.interface_id)) || 'unknown',
       is_primary: a.is_primary,
+      last_seen: a.last_seen,
     }))
   return groupAddresses(mapped)
 }

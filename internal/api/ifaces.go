@@ -229,7 +229,7 @@ func deviceDetail(store *database.Store, id string) (*model.DeviceDetail, error)
 	}
 	detail := &model.DeviceDetail{Device: d}
 
-	if detail.Addresses, err = store.ListActiveAddresses(id, database.Now()); err != nil {
+	if detail.Addresses, err = store.ListCurrentAddresses(id, database.Now()); err != nil {
 		return nil, err
 	}
 	if detail.Identities, err = store.ListIdentities(id); err != nil {

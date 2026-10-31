@@ -17,11 +17,11 @@ import type { AddressGroup } from '@/lib/devices'
 
 const DEFAULT_VISIBLE_ADDRESSES = 2
 
-/** Label for a group: the side when known, else the subnet, else unknown. */
-function groupLabel(group: AddressGroup): string {
+/** Label for a group when its network side is known. */
+function groupLabel(group: AddressGroup): string | undefined {
   if (group.side && group.side !== 'unknown') return t(`role.${group.side}`)
   if (group.cidr) return group.cidr
-  return t('app.unknown')
+  return undefined
 }
 
 export function AddressGroups({
@@ -53,7 +53,7 @@ export function AddressGroups({
             key={`${group.cidr}|${group.side}|${group.addresses[0]?.address ?? ''}`}
             className="flex max-w-full flex-col items-end gap-0.5"
           >
-            {groups.length > 1 ? (
+            {groups.length > 1 && groupLabel(group) ? (
               <span className="text-[10px] uppercase tracking-wide text-muted">
                 {groupLabel(group)}
                 {group.cidr && group.side !== 'unknown' ? ` · ${group.cidr}` : ''}
@@ -62,7 +62,7 @@ export function AddressGroups({
             {groupAddresses.map((address) => (
               <span
                 key={address.address}
-                className="max-w-full break-all text-right font-mono"
+                className="max-w-full overflow-x-auto whitespace-nowrap text-right font-mono"
                 title={address.address}
               >
                 {address.address}

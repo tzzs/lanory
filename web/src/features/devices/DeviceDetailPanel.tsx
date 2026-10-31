@@ -293,8 +293,8 @@ export function DeviceDetailPanel({ onClose }: { onClose: () => void }) {
             {t('device.identities')}
           </h4>
           <dl className="divide-y divide-border">
-            <FieldRow label={t('device.ip')} mono>
-              <AddressGroups groups={addressGroups} />
+            <FieldRow label={t('device.ip')} mono className="flex-col items-stretch gap-1">
+              <AddressGroups groups={addressGroups} className="w-full items-stretch" />
             </FieldRow>
             <FieldRow label={t('device.mac')} mono>
               {device.primary_mac ? formatMac(device.primary_mac) : '—'}
@@ -392,7 +392,7 @@ export function DeviceDetailPanel({ onClose }: { onClose: () => void }) {
               <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted">
                 {t('device.history')}
               </h4>
-              {events.length > 5 ? (
+              {events.length > 3 ? (
                 <button
                   type="button"
                   className="shrink-0 text-[11px] text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
@@ -403,7 +403,7 @@ export function DeviceDetailPanel({ onClose }: { onClose: () => void }) {
               ) : null}
             </div>
             <ul className="space-y-1.5">
-              {(historyExpanded ? events : events.slice(0, 5)).map((event) => (
+              {(historyExpanded ? events : events.slice(0, 3)).map((event) => (
                 <li key={event.id} className="text-xs">
                   <span className="text-muted">{formatRelativeTime(event.timestamp)}</span>{' '}
                   <span className="text-fg break-words">{event.message || t(`event.${event.event_type}`)}</span>

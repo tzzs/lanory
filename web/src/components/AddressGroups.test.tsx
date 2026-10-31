@@ -32,7 +32,7 @@ describe('AddressGroups', () => {
     expect(screen.getByText('2001:db8:100::3')).toBeTruthy()
   })
 
-  it('allows long IPv6 values to wrap inside the value column', () => {
+  it('keeps long IPv6 addresses on one line in a horizontally scrollable row', () => {
     render(
       <AddressGroups
         groups={[{
@@ -48,6 +48,21 @@ describe('AddressGroups', () => {
     )
 
     const address = screen.getByText('fd26:397c:65d0:0:1137:fb2f:c692:9257')
-    expect(address.className).toContain('break-all')
+    expect(address.className).toContain('whitespace-nowrap')
+    expect(address.className).toContain('overflow-x-auto')
+  })
+
+  it('does not label an address with an unresolved interface side as unknown', () => {
+    render(
+      <AddressGroups
+        groups={[
+          { cidr: '', side: 'unknown', addresses: [{ address: '2001:db8::1', family: 'ipv6', side: 'unknown' }] },
+          { cidr: '', side: 'unknown', addresses: [{ address: '2001:db8::2', family: 'ipv6', side: 'unknown' }] },
+        ]}
+      />,
+    )
+
+    expect(screen.queryAllByText('Unknown')).toHaveLength(0)
+    expect(screen.queryAllByText('未知')).toHaveLength(0)
   })
 })

@@ -313,7 +313,7 @@ func (s *Store) GetDeviceDetail(id string) (*model.DeviceDetail, error) {
 		return nil, err
 	}
 	detail := &model.DeviceDetail{Device: d}
-	if detail.Addresses, err = s.ListActiveAddresses(id, Now()); err != nil {
+	if detail.Addresses, err = s.ListCurrentAddresses(id, Now()); err != nil {
 		return nil, err
 	}
 	if detail.Identities, err = s.ListIdentities(id); err != nil {
@@ -695,12 +695,43 @@ func (s *Store) ListAddresses(deviceID string) ([]model.DeviceAddress, error) {
 }
 
 // ListActiveAddresses returns addresses observed recently, plus primary and
-// manually managed addresses. Discovery data is historical by design, but a
-// device detail view should not present a year-old ARP observation as current.
-// A 24-hour window is long enough to span the router's normal collection cycle.
+// manually managed addresses. Monitoring and topology use this wider view to
+// preserve stable identities between discovery runs.
 func (s *Store) ListActiveAddresses(deviceID string, now time.Time) ([]model.DeviceAddress, error) {
 	cutoff := now.Add(-24 * time.Hour).UTC().Format(TimeLayout)
 	return s.listAddresses(deviceID, cutoff)
+}
+
+// ListCurrentAddresses returns manually managed addresses and discovery
+// addresses observed within the last 24 hours. Unlike the monitoring view,
+// stale discovered primary addresses are not treated as current.
+func (s *Store) ListCurrentAddresses(deviceID string, now time.Time) ([]model.DeviceAddress, error) {
+	cutoff := now.Add(-24 * time.Hour).UTC().Format(TimeLayout)
+	return s.listCurrentAddresses(deviceID, cutoff)
+}
+
+func (s *Store) listCurrentAddresses(deviceID, cutoff string) ([]model.DeviceAddress, error) {
+	rows, err := s.db.Query(`SELECT id, device_id, address, family, interface_id, source, prefix_length, is_primary, first_seen, last_seen
+		FROM device_addresses
+		WHERE device_id = ? AND (source = 'manual' OR last_seen >= ?)
+		ORDER BY last_seen DESC, is_primary DESC, address`, deviceID, cutoff)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []model.DeviceAddress
+	for rows.Next() {
+		var address model.DeviceAddress
+		var source string
+		var primary int
+		if err := rows.Scan(&address.ID, &address.DeviceID, &address.Address, &address.Family, &address.InterfaceID, &source, &address.PrefixLength, &primary, &address.FirstSeen, &address.LastSeen); err != nil {
+			return nil, err
+		}
+		address.Source = model.DiscoverySource(source)
+		address.IsPrimary = primary == 1
+		out = append(out, address)
+	}
+	return out, rows.Err()
 }
 
 func (s *Store) listAddresses(deviceID, cutoff string) ([]model.DeviceAddress, error) {

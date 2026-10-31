@@ -139,7 +139,7 @@ describe('DeviceDetailPanel', () => {
       id: `event-${index}`,
       device_id: device.id,
       event_type: 'device.updated',
-      timestamp: `2024-05-01T10:0${index}:00Z`,
+      timestamp: `2024-05-01T10:0${5 - index}:00Z`,
       message: `Event ${index}`,
       metadata: {},
     }))
@@ -151,7 +151,7 @@ describe('DeviceDetailPanel', () => {
     renderPanel(() => {})
 
     expect(screen.getByText('Event 0')).toBeTruthy()
-    expect(screen.queryByText('Event 5')).toBeNull()
+    expect(screen.queryByText('Event 3')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /显示全部 6 条记录|show all 6 events/i }))
     expect(screen.getByText('Event 5')).toBeTruthy()
   })
@@ -161,7 +161,7 @@ describe('DeviceDetailPanel', () => {
       id: `event-${index}`,
       device_id: device.id,
       event_type: 'device.updated',
-      timestamp: `2024-05-01T10:0${index}:00Z`,
+      timestamp: `2024-05-01T10:0${5 - index}:00Z`,
       message: `Event ${index}`,
       metadata: {},
     }))
