@@ -5,7 +5,7 @@
 
 BINARY      := lanory
 GO          ?= go
-VERSION     ?= 0.1.0
+VERSION     ?= 0.1.7
 COMMIT      := $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
 LDFLAGS     := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT)
 

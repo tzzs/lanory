@@ -326,9 +326,32 @@ export function hideOffline(
     }
   }
 
-  const visibleNodes = nodes.filter((n) => kept.has(n.id))
+  let visibleNodes = nodes.filter((n) => kept.has(n.id))
   const visibleIDs = new Set(visibleNodes.map((n) => n.id))
   const visibleEdges = edges.filter((e) => visibleIDs.has(e.source) && visibleIDs.has(e.target))
+
+  // Repack unpinned unresolved-group members after offline devices are removed.
+  // Their original coordinates remain in `nodes`, so showing offline devices
+  // restores the full group without losing the saved layout.
+  const byId = new Map(visibleNodes.map(node => [node.id, node]))
+  for (const group of visibleNodes.filter(node => node.data.group)) {
+    const members = visibleNodes.filter(node => node.parentId === group.id)
+    if (!members.length || members.some(member => !member.draggable)) continue
+
+    const columns = Math.min(4, Math.ceil(Math.sqrt(members.length)))
+    const rows = Math.ceil(members.length / columns)
+    byId.set(group.id, {
+      ...group,
+      data: { ...group.data, memberCount: members.length },
+      style: { ...group.style, width: columns * 228 + 16, height: 86 + rows * 112 },
+    })
+    members.forEach((member, index) => {
+      const position = { x: 24 + (index % columns) * 228, y: 78 + Math.floor(index / columns) * 112 }
+      const updated = { ...member, position }
+      byId.set(member.id, updated)
+    })
+  }
+  visibleNodes = visibleNodes.map(node => byId.get(node.id) ?? node)
   return { nodes: visibleNodes, edges: visibleEdges, hidden: hidden.size }
 }
 
