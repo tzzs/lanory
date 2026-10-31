@@ -213,11 +213,32 @@ func TestEnsureProbesNeverProbesTheLocalHost(t *testing.T) {
 	if len(probes) != 1 {
 		t.Errorf("the local host has %d probes, want the historical row retained", len(probes))
 	} else if probes[0].Enabled {
-		t.Error("the local host probe remains enabled")
+		t.Error("the stale local host probe remains enabled")
+	}
+
+	if err := store.CreateProbe(&model.ProbeTarget{
+		ID: "probe-current", Name: "Router current", Kind: model.ProbeKindDevice,
+		Target: "192.168.100.1", Protocol: model.ProbeICMP, DeviceID: "dev-self",
+		Interval: 60, Timeout: 3, Enabled: true,
+		FailureThreshold: 3, RecoverConfirm: 1,
+	}); err != nil {
+		t.Fatalf("seed current probe: %v", err)
+	}
+	if _, err := e.EnsureProbes(context.Background(), DefaultAutoProbeConfig()); err != nil {
+		t.Fatalf("EnsureProbes current address: %v", err)
+	}
+	probes, err = store.ListProbesByDevice("dev-self")
+	if err != nil {
+		t.Fatalf("list probes after current address: %v", err)
+	}
+	for _, p := range probes {
+		if p.ID == "probe-current" && !p.Enabled {
+			t.Error("the current local address probe was disabled")
+		}
 	}
 	on, _, _, _ := setter.counts()
-	if on != 1 {
-		t.Errorf("the local host was marked online %d times, want 1", on)
+	if on < 1 {
+		t.Errorf("the local host was marked online %d times, want at least 1", on)
 	}
 }
 

@@ -159,22 +159,35 @@ func (e *Engine) EnsureProbes(ctx context.Context, cfg AutoProbeConfig) (int, er
 	return created, nil
 }
 
-// disableSelfProbes disables every probe attached to the local host.
+// disableSelfProbes disables stale probes attached to the local host.
 //
-// It is idempotent: once the probes are disabled the next call leaves them
-// unchanged. Keeping the rows preserves their history and makes the change
-// recoverable if an operator later wants to inspect or restore one.
+// A probe is stale when its target is not one of the host's current active
+// addresses. This limits cleanup to old probes left behind by an address change
+// (for example 192.168.1.16 after the LAN moved to 192.168.100.1); a current
+// address is left untouched. Keeping the rows preserves history and makes the
+// cleanup recoverable if an operator later wants to inspect or restore one.
 func (e *Engine) disableSelfProbes(lister DeviceLister, deviceID string) error {
+	active, err := lister.ListActiveAddresses(deviceID, time.Now().UTC())
+	if err != nil {
+		return fmt.Errorf("monitoring: list active addresses for the local host: %w", err)
+	}
+	current := make(map[string]bool, len(active))
+	for _, address := range active {
+		if address.Address != "" {
+			current[address.Address] = true
+		}
+	}
+
 	probes, err := lister.ListProbesByDevice(deviceID)
 	if err != nil {
 		return fmt.Errorf("monitoring: list probes for the local host: %w", err)
 	}
 	for _, p := range probes {
-		if !p.Enabled {
+		if !p.Enabled || current[p.Target] {
 			continue
 		}
 		if _, err := lister.UpdateProbe(p.ID, map[string]any{"enabled": false}); err != nil {
-			return fmt.Errorf("monitoring: disable probe %s of the local host: %w", p.ID, err)
+			return fmt.Errorf("monitoring: disable stale probe %s of the local host: %w", p.ID, err)
 		}
 	}
 	return nil
