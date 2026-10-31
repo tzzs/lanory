@@ -225,6 +225,11 @@ export function DeviceDetailPanel({ onClose }: { onClose: () => void }) {
   const detail = useDeviceDetail(selectedDeviceId)
   const [editOpen, setEditOpen] = useState(false)
   const [mergeOpen, setMergeOpen] = useState(false)
+  const [historyExpanded, setHistoryExpanded] = useState(false)
+
+  useEffect(() => {
+    setHistoryExpanded(false)
+  }, [selectedDeviceId])
 
   if (detail.isLoading) {
     return (
@@ -267,10 +272,16 @@ export function DeviceDetailPanel({ onClose }: { onClose: () => void }) {
 
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
         {/* state */}
-        <div className="flex items-center gap-2">
-          <StatusDot state={device.state} />
-          <span className="text-sm font-medium">{deviceStateLabel(device.state)}</span>
-          {device.state_reason ? <span className="text-[11px] text-muted">· {translateReason(device.state_reason_code, device.state_reason)}</span> : null}
+        <div className="flex min-w-0 items-start gap-2">
+          <span className="flex shrink-0 items-center gap-2 whitespace-nowrap text-sm font-medium">
+            <StatusDot state={device.state} />
+            {deviceStateLabel(device.state)}
+          </span>
+          {device.state_reason ? (
+            <span className="min-w-0 text-[11px] leading-5 text-muted">
+              · {translateReason(device.state_reason_code, device.state_reason)}
+            </span>
+          ) : null}
         </div>
 
         {device.is_manual ? <Badge tone="accent">{t('devices.manual_badge')}</Badge> : null}
@@ -377,14 +388,25 @@ export function DeviceDetailPanel({ onClose }: { onClose: () => void }) {
         {/* history */}
         {events.length > 0 ? (
           <section>
-            <h4 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted">
-              {t('device.history')}
-            </h4>
+            <div className="mb-1.5 flex items-center justify-between gap-2">
+              <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+                {t('device.history')}
+              </h4>
+              {events.length > 5 ? (
+                <button
+                  type="button"
+                  className="shrink-0 text-[11px] text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+                  onClick={() => setHistoryExpanded((value) => !value)}
+                >
+                  {historyExpanded ? t('device.show_fewer_history') : t('device.show_all_history', { count: events.length })}
+                </button>
+              ) : null}
+            </div>
             <ul className="space-y-1.5">
-              {events.slice(0, 8).map((event) => (
+              {(historyExpanded ? events : events.slice(0, 5)).map((event) => (
                 <li key={event.id} className="text-xs">
                   <span className="text-muted">{formatRelativeTime(event.timestamp)}</span>{' '}
-                  <span className="text-fg">{event.message || t(`event.${event.event_type}`)}</span>
+                  <span className="text-fg break-words">{event.message || t(`event.${event.event_type}`)}</span>
                 </li>
               ))}
             </ul>

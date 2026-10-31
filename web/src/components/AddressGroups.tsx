@@ -10,9 +10,12 @@
  * when there is something to distinguish.
  */
 
+import { useState } from 'react'
 import { t } from '@/i18n'
 import { cn } from '@/lib/cn'
 import type { AddressGroup } from '@/lib/devices'
+
+const DEFAULT_VISIBLE_ADDRESSES = 2
 
 /** Label for a group: the side when known, else the subnet, else unknown. */
 function groupLabel(group: AddressGroup): string {
@@ -31,28 +34,52 @@ export function AddressGroups({
   fallback?: string
   className?: string
 }) {
+  const [expanded, setExpanded] = useState(false)
+  const addresses = groups.flatMap((group) => group.addresses)
+  const visibleAddresses = expanded ? addresses : addresses.slice(0, DEFAULT_VISIBLE_ADDRESSES)
+  const hiddenCount = addresses.length - visibleAddresses.length
+
   if (groups.length === 0) {
     return <span className="text-muted">{fallback ?? '—'}</span>
   }
 
-  if (groups.length === 1) {
-    return <span className={cn('font-mono', className)}>{groups[0].addresses.map((a) => a.address).join(', ')}</span>
-  }
-
   return (
-    <span className={cn('flex flex-col items-end gap-1', className)}>
-      {groups.map((group) => (
-        <span
-          key={`${group.cidr}|${group.side}|${group.addresses[0]?.address ?? ''}`}
-          className="flex flex-col items-end"
-        >
-          <span className="text-[10px] uppercase tracking-wide text-muted">
-            {groupLabel(group)}
-            {group.cidr && group.side !== 'unknown' ? ` · ${group.cidr}` : ''}
+    <span className={cn('flex min-w-0 flex-col items-end gap-1', className)}>
+      {groups.map((group) => {
+        const groupAddresses = group.addresses.filter((address) => visibleAddresses.includes(address))
+        if (groupAddresses.length === 0) return null
+        return (
+          <span
+            key={`${group.cidr}|${group.side}|${group.addresses[0]?.address ?? ''}`}
+            className="flex max-w-full flex-col items-end gap-0.5"
+          >
+            {groups.length > 1 ? (
+              <span className="text-[10px] uppercase tracking-wide text-muted">
+                {groupLabel(group)}
+                {group.cidr && group.side !== 'unknown' ? ` · ${group.cidr}` : ''}
+              </span>
+            ) : null}
+            {groupAddresses.map((address) => (
+              <span
+                key={address.address}
+                className="max-w-full break-all text-right font-mono"
+                title={address.address}
+              >
+                {address.address}
+              </span>
+            ))}
           </span>
-          <span className="font-mono">{group.addresses.map((a) => a.address).join(', ')}</span>
-        </span>
-      ))}
+        )
+      })}
+      {hiddenCount > 0 || expanded ? (
+        <button
+          type="button"
+          className="text-[11px] text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+          onClick={() => setExpanded((value) => !value)}
+        >
+          {expanded ? t('device.show_fewer_addresses') : t('device.show_all_addresses', { count: addresses.length })}
+        </button>
+      ) : null}
     </span>
   )
 }

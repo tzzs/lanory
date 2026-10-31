@@ -324,7 +324,7 @@ export function DevicesPage() {
         </Card>
       </div>
 
-      {detailPanelOpen && routeId ? <DeviceDetailPanel onClose={() => { setDetailPanelOpen(false); void navigate('/devices') }} /> : null}
+      {detailPanelOpen && routeId ? <DeviceDetailPanel key={routeId} onClose={() => { setDetailPanelOpen(false); void navigate('/devices') }} /> : null}
 
       <AddDeviceModal open={addOpen} onClose={() => setAddOpen(false)} />
     </div>

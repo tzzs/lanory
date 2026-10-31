@@ -133,4 +133,60 @@ describe('DeviceDetailPanel', () => {
     expect(classes).toContain('fixed')
     expect(classes).toContain('lg:static')
   })
+
+  it('shows a compact history with an explicit way to reveal all events', () => {
+    const events = Array.from({ length: 6 }, (_, index) => ({
+      id: `event-${index}`,
+      device_id: device.id,
+      event_type: 'device.updated',
+      timestamp: `2024-05-01T10:0${index}:00Z`,
+      message: `Event ${index}`,
+      metadata: {},
+    }))
+    useDeviceDetail.mockReturnValue({
+      data: { ...detail, events },
+      isLoading: false,
+      isError: false,
+    })
+    renderPanel(() => {})
+
+    expect(screen.getByText('Event 0')).toBeTruthy()
+    expect(screen.queryByText('Event 5')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /显示全部 6 条记录|show all 6 events/i }))
+    expect(screen.getByText('Event 5')).toBeTruthy()
+  })
+
+  it('resets history disclosure when the selected device changes', () => {
+    const events = Array.from({ length: 6 }, (_, index) => ({
+      id: `event-${index}`,
+      device_id: device.id,
+      event_type: 'device.updated',
+      timestamp: `2024-05-01T10:0${index}:00Z`,
+      message: `Event ${index}`,
+      metadata: {},
+    }))
+    useDeviceDetail.mockReturnValue({
+      data: { ...detail, events },
+      isLoading: false,
+      isError: false,
+    })
+    const view = renderPanel(() => {})
+    fireEvent.click(screen.getByRole('button', { name: /显示全部 6 条记录|show all 6 events/i }))
+    expect(screen.getByText('Event 5')).toBeTruthy()
+
+    const nextDevice = { ...device, id: 'device-b', name: 'Bedroom AP' }
+    useUIStore.setState({ selectedDeviceId: nextDevice.id })
+    useDeviceDetail.mockReturnValue({
+      data: { ...detail, device: nextDevice, events },
+      isLoading: false,
+      isError: false,
+    })
+    view.rerender(
+      <MemoryRouter>
+        <DeviceDetailPanel onClose={() => {}} />
+      </MemoryRouter>,
+    )
+
+    expect(screen.queryByText('Event 5')).toBeNull()
+  })
 })
