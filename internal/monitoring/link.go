@@ -94,9 +94,10 @@ func (o *LinkObserver) SetSysRoot(root string) {
 
 // LinkStatus is the runtime status of one interface.
 type LinkStatus struct {
-	Interface model.NetworkInterface `json:"interface"`
-	Status    model.EdgeStatus       `json:"status"`
-	Reason    string                 `json:"reason,omitempty"`
+	Interface  model.NetworkInterface `json:"interface"`
+	Status     model.EdgeStatus       `json:"status"`
+	Reason     string                 `json:"reason,omitempty"`
+	ReasonCode *model.Reason          `json:"reason_code,omitempty"`
 }
 
 // Observe polls the interface state once and returns the status of every
@@ -164,7 +165,7 @@ func (o *LinkObserver) Observe() ([]LinkStatus, error) {
 			o.detectTransitions(name, prev, sample, now)
 		}
 		o.last[name] = sample
-		out = append(out, LinkStatus{Interface: iface, Status: status, Reason: reason})
+		out = append(out, LinkStatus{Interface: iface, Status: status, Reason: reason, ReasonCode: edgeReasonCodeFor(sample)})
 	}
 	return out, nil
 }
@@ -201,6 +202,10 @@ func (o *LinkObserver) detectTransitions(name string, prev, cur linkSample, now 
 			OldValue:  carrierLabel(prev.carrier),
 			NewValue:  carrierLabel(cur.carrier),
 			Message:   fmt.Sprintf("%s carrier %s -> %s", name, carrierLabel(prev.carrier), carrierLabel(cur.carrier)),
+			ReasonCode: &model.Reason{
+				Code:   model.ReasonLinkCarrierChanged,
+				Params: map[string]string{"interface": name, "old": carrierLabel(prev.carrier), "new": carrierLabel(cur.carrier)},
+			},
 			Evidence:  fmt.Sprintf("sysfs: /sys/class/net/%s/carrier", name),
 			Timestamp: now,
 		}
@@ -215,6 +220,10 @@ func (o *LinkObserver) detectTransitions(name string, prev, cur linkSample, now 
 			OldValue:  strconv.Itoa(prev.lastSpeed),
 			NewValue:  strconv.Itoa(cur.lastSpeed),
 			Message:   fmt.Sprintf("%s negotiated speed %d Mbps -> %d Mbps", name, prev.lastSpeed, cur.lastSpeed),
+			ReasonCode: &model.Reason{
+				Code:   model.ReasonLinkSpeedChanged,
+				Params: map[string]string{"interface": name, "old_mbps": strconv.Itoa(prev.lastSpeed), "new_mbps": strconv.Itoa(cur.lastSpeed)},
+			},
 			Evidence:  fmt.Sprintf("sysfs: /sys/class/net/%s/speed", name),
 			Timestamp: now,
 		}
@@ -425,22 +434,12 @@ func readSysfsString(dir, attr string) (string, bool) {
 //
 // oper_state is only consulted when carrier says nothing, because carrier
 // reflects the physical link while oper_state reflects the kernel view.
+func edgeReasonCodeFor(s linkSample) *model.Reason {
+	return model.LinkReasonCode(s.carrier, model.OperState(s.oper), s.speed)
+}
+
 func edgeStatusFor(s linkSample) (model.EdgeStatus, string) {
-	switch {
-	case s.carrier:
-		if s.speed > 0 {
-			return model.EdgeStatusLinkUp, fmt.Sprintf("carrier up, operstate %s, %d Mbps", s.oper, s.speed)
-		}
-		return model.EdgeStatusLinkUp, "carrier up"
-	case s.oper == "down" || s.oper == "no-carrier":
-		return model.EdgeStatusLinkDown, fmt.Sprintf("carrier down, operstate %s", s.oper)
-	case s.oper == "up":
-		// operstate up without carrier is contradictory; report unverified
-		// rather than guessing.
-		return model.EdgeStatusUnverified, "operstate up but carrier unknown"
-	default:
-		return model.EdgeStatusUnverified, "no carrier or operstate information available"
-	}
+	return model.LinkStatusFor(s.carrier, model.OperState(s.oper), s.speed)
 }
 
 // carrierLabel renders a carrier value for event messages.

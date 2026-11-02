@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/lanory/lanory/internal/database"
+	"github.com/lanory/lanory/internal/discovery/parsers"
 	"github.com/lanory/lanory/internal/model"
 )
 
@@ -99,6 +100,11 @@ func listAllInterfaces(store *database.Store) ([]model.NetworkInterface, error) 
 		iface, err := scanInterfaceRow(rows)
 		if err != nil {
 			return nil, err
+		}
+		// Software interfaces written by an older collector build are filtered
+		// here too, so a Docker bridge cannot become a network segment.
+		if parsers.LooksVirtualByName(iface.Name) {
+			continue
 		}
 		out = append(out, *iface)
 	}

@@ -51,7 +51,27 @@ func LooksVirtualByName(name string) bool {
 			return true
 		}
 	}
-	return false
+	return isContainerBridgeName(n)
+}
+
+// isContainerBridgeName reports whether name is a Docker bridge.
+//
+// Docker names its bridge "br-" followed by the first 12 hex characters of the
+// network id. The plain "br-" prefix cannot be treated as virtual: an OpenWrt
+// LAN bridge is br-lan and is a real forwarding device built from physical
+// ports. The exact length and alphabet separate the two without guessing.
+func isContainerBridgeName(name string) bool {
+	rest, ok := strings.CutPrefix(name, "br-")
+	if !ok || len(rest) != 12 {
+		return false
+	}
+	for i := 0; i < len(rest); i++ {
+		c := rest[i]
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 // IsLoopbackName reports whether the name denotes the loopback device.
@@ -98,6 +118,8 @@ func VirtualReason(name string) string {
 	case strings.HasPrefix(n, "gre"):
 		return "gre tunnel"
 	case strings.HasPrefix(n, "br-docker"), strings.HasPrefix(n, "docker"):
+		return "container bridge"
+	case isContainerBridgeName(n):
 		return "container bridge"
 	case LooksVirtualByName(n):
 		return "virtual interface"

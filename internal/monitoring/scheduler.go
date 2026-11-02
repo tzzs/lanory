@@ -473,11 +473,13 @@ func (e *Engine) refreshPresence() {
 // path was creating them. That made the monitoring page empty on a fresh
 // install even though seventeen devices had been found.
 func (e *Engine) provisionProbes(ctx context.Context) {
-	created, err := e.EnsureProbes(ctx, e.cfg.AutoProbe)
-	if err != nil || created == 0 {
+	_, err := e.EnsureProbes(ctx, e.cfg.AutoProbe)
+	if err != nil {
 		return
 	}
-	// New rows must be picked up by the scheduler.
+	// Reload even when no new row was created: EnsureProbes also retires stale
+	// self-probes left by older builds, and the scheduler must stop running a
+	// probe that no longer exists in the store.
 	_ = e.reload(ctx)
 }
 
@@ -639,6 +641,7 @@ func (e *Engine) finish(target model.ProbeTarget, rec ProbeRecord) {
 
 	target.State = transition.To
 	target.StateReason = transition.Reason
+	target.StateReasonCode = transition.ReasonCode
 	target.ConsecutiveFailures = failures
 	target.ConsecutiveSuccesses = successes
 	target.LastResult = rec.Result.Status
@@ -684,13 +687,13 @@ func (e *Engine) applyTransition(target model.ProbeTarget, rec ProbeRecord, tr S
 	if setter := e.states.Setter(); setter != nil {
 		switch tr.To {
 		case model.StateOnline:
-			_ = setter.SetOnline(target.DeviceID, reason)
+			_ = setter.SetOnline(target.DeviceID, reason, tr.ReasonCode)
 		case model.StateOffline:
-			_ = setter.SetOffline(target.DeviceID, reason)
+			_ = setter.SetOffline(target.DeviceID, reason, tr.ReasonCode)
 		case model.StateSleeping:
-			_ = setter.MarkSleeping(target.DeviceID, reason)
+			_ = setter.MarkSleeping(target.DeviceID, reason, tr.ReasonCode)
 		default:
-			_ = setter.SetUnknown(target.DeviceID, reason)
+			_ = setter.SetUnknown(target.DeviceID, reason, tr.ReasonCode)
 		}
 	}
 
@@ -707,11 +710,12 @@ func (e *Engine) applyTransition(target model.ProbeTarget, rec ProbeRecord, tr S
 	}
 	if e.store != nil {
 		_ = e.store.SaveEvent(&model.NetworkEvent{
-			EventType: eventType,
-			DeviceID:  target.DeviceID,
-			OldValue:  string(tr.From),
-			NewValue:  string(tr.To),
-			Message:   reason,
+			EventType:  eventType,
+			DeviceID:   target.DeviceID,
+			OldValue:   string(tr.From),
+			NewValue:   string(tr.To),
+			Message:    reason,
+			ReasonCode: tr.ReasonCode,
 			Evidence: fmt.Sprintf("probe=%s protocol=%s latency=%dms source=%s",
 				target.ID, string(rec.Protocol), rec.Result.LatencyMS, tr.Source),
 			Timestamp: rec.Result.Timestamp,
@@ -750,11 +754,15 @@ func (e *Engine) Status(recentLimit int) (model.MonitoringStatus, error) {
 		return out, nil
 	}
 	for _, s := range statuses {
+		// The live observer already derived a reason code from the sample; keep
+		// it rather than re-deriving, so a contradictory operstate the observer
+		// resolved one way is not re-resolved differently here.
 		out.Interfaces = append(out.Interfaces, model.InterfaceStatus{
-			Interface: s.Interface,
-			Role:      s.Interface.Role,
-			Status:    s.Status,
-			Reason:    s.Reason,
+			Interface:  s.Interface,
+			Role:       s.Interface.Role,
+			Status:     s.Status,
+			Reason:     s.Reason,
+			ReasonCode: s.ReasonCode,
 		})
 	}
 	return out, nil

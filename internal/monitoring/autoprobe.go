@@ -17,8 +17,10 @@ import (
 type DeviceLister interface {
 	ListDevices(f database.DeviceFilter) ([]model.Device, int, error)
 	ListAddresses(deviceID string) ([]model.DeviceAddress, error)
+	ListActiveAddresses(deviceID string, now time.Time) ([]model.DeviceAddress, error)
 	ListProbesByDevice(deviceID string) ([]model.ProbeTarget, error)
 	CreateProbe(p *model.ProbeTarget) error
+	UpdateProbe(id string, patch map[string]any) (*model.ProbeTarget, error)
 }
 
 // AutoProbeConfig controls automatic probe provisioning.
@@ -98,6 +100,20 @@ func (e *Engine) EnsureProbes(ctx context.Context, cfg AutoProbeConfig) (int, er
 		if err := ctx.Err(); err != nil {
 			return created, err
 		}
+		// The machine Lanory runs on is online by definition, and a probe from
+		// a host to itself measures nothing. Probing it is not merely useless:
+		// a probe created before the LAN was renumbered keeps targeting an
+		// address the router no longer owns, so the router reported itself
+		// offline in its own interface. Disable any such probe and say why the
+		// device is online; keeping the row preserves its history and allows
+		// an operator to inspect or restore it.
+		if dev.IsSelf {
+			if err := e.disableSelfProbes(lister, dev.ID); err != nil {
+				return created, err
+			}
+			e.markSelfOnline(dev.ID)
+			continue
+		}
 		if skip[dev.Type] {
 			continue
 		}
@@ -132,6 +148,7 @@ func (e *Engine) EnsureProbes(ctx context.Context, cfg AutoProbeConfig) (int, er
 			RecoverConfirm:   positiveOr(cfg.RecoverConfirm, 1),
 			State:            model.StateUnknown,
 			StateReason:      "awaiting first probe",
+			StateReasonCode:  &model.Reason{Code: model.ReasonAwaitingFirstProbe, Params: map[string]string{}},
 			CreatedAt:        time.Now().UTC(),
 		}
 		if err := lister.CreateProbe(probe); err != nil {
@@ -142,13 +159,74 @@ func (e *Engine) EnsureProbes(ctx context.Context, cfg AutoProbeConfig) (int, er
 	return created, nil
 }
 
+// disableSelfProbes disables stale probes attached to the local host.
+//
+// A probe is stale when its target is not one of the host's current active
+// addresses. This limits cleanup to old probes left behind by an address change
+// (for example 192.168.1.16 after the LAN moved to 192.168.100.1); a current
+// address is left untouched. Keeping the rows preserves history and makes the
+// cleanup recoverable if an operator later wants to inspect or restore one.
+func (e *Engine) disableSelfProbes(lister DeviceLister, deviceID string) error {
+	now := time.Now().UTC()
+	addresses, err := lister.ListAddresses(deviceID)
+	if err != nil {
+		return fmt.Errorf("monitoring: list addresses for the local host: %w", err)
+	}
+	current := make(map[string]bool, len(addresses))
+	// Discovery refreshes the local interfaces every few minutes. A two-hour
+	// window leaves room for a delayed run while excluding addresses left by a
+	// previous LAN configuration, which may otherwise remain primary for a day.
+	cutoff := now.Add(-2 * time.Hour)
+	for _, address := range addresses {
+		// Do not trust is_primary here: an address that disappeared can remain
+		// primary in the identity row until the next reconciliation. Freshness
+		// is the evidence that this is still a local address.
+		if address.Address != "" && (address.Source == model.SourceManual || !address.LastSeen.Before(cutoff)) {
+			current[address.Address] = true
+		}
+	}
+
+	probes, err := lister.ListProbesByDevice(deviceID)
+	if err != nil {
+		return fmt.Errorf("monitoring: list probes for the local host: %w", err)
+	}
+	for _, p := range probes {
+		if !p.Enabled || current[p.Target] {
+			continue
+		}
+		if _, err := lister.UpdateProbe(p.ID, map[string]any{"enabled": false}); err != nil {
+			return fmt.Errorf("monitoring: disable stale probe %s of the local host: %w", p.ID, err)
+		}
+	}
+	return nil
+}
+
+// markSelfOnline records that the local host is online.
+//
+// The setter is optional: the unit-test fake store has none, and a store-only
+// build does not run probes at all. A missing setter is not an error.
+func (e *Engine) markSelfOnline(deviceID string) {
+	if e.states == nil || e.states.setter == nil {
+		return
+	}
+	_ = e.states.setter.SetOnline(deviceID, selfOnlineReason,
+		&model.Reason{Code: model.ReasonDeviceSelfOnline, Params: map[string]string{}})
+}
+
+// selfOnlineReason explains why the local host is online.
+const selfOnlineReason = "Lanory is running on this device"
+
 // pickProbeAddress chooses the address to probe for a device.
 //
 // IPv4 first because it needs no scope handling, then a global IPv6 address, and
 // link-local IPv6 last (it is only reachable with a zone, which a probe target
 // string cannot carry reliably).
+//
+// Only active addresses are considered. A probe aimed at an address that was
+// last seen months ago reports a live device as offline, which is worse than
+// not probing it at all.
 func pickProbeAddress(dev model.Device, lister DeviceLister) string {
-	addrs, err := lister.ListAddresses(dev.ID)
+	addrs, err := lister.ListActiveAddresses(dev.ID, time.Now().UTC())
 	if err == nil {
 		var v6, linkLocal string
 		for _, a := range addrs {

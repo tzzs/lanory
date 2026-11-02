@@ -7,6 +7,8 @@ import { setTheme, type ThemeMode } from '@/lib/theme'
 import { Card, CardHeader, CardBody, Button, Input, Label, Checkbox, Badge, Skeleton, FieldRow, ErrorState, PageHeader, SectionHeader } from '@/components/ui'
 import { formatBytes, formatRelativeTime } from '@/lib/devices'
 
+const READ_ONLY_SETTINGS = new Set(['database.schema_version', 'database.size_bytes', 'devices.total'])
+
 const THEME_OPTIONS: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
   { value: 'light', label: 'settings.theme_light', icon: Sun },
   { value: 'dark', label: 'settings.theme_dark', icon: Moon },
@@ -323,7 +325,12 @@ export function SettingsPage() {
         <Button
           variant="primary"
           disabled={!dirty || patch.isPending}
-          onClick={() => patch.mutate(values as Record<string, string>)}
+          onClick={() => {
+            const editable = Object.fromEntries(
+              Object.entries(values).filter(([key]) => !READ_ONLY_SETTINGS.has(key)),
+            )
+            patch.mutate(editable)
+          }}
         >
           {patch.isPending ? t('app.loading') : t('app.save')}
         </Button>

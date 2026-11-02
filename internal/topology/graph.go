@@ -58,8 +58,9 @@ type Node struct {
 	// Interface is set for a network node backed by an interface.
 	Interface *model.NetworkInterface
 	// State and StateReason mirror the device state for rendering.
-	State       model.DeviceState
-	StateReason string
+	State           model.DeviceState
+	StateReason     string
+	StateReasonCode *model.Reason
 	// PrimaryIP and PrimaryMAC are the cached display values.
 	PrimaryIP  string
 	PrimaryMAC string

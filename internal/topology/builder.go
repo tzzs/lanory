@@ -40,6 +40,9 @@ type StoreReader interface {
 	ListAllInterfaces() ([]model.NetworkInterface, error)
 	// ListAddresses returns the addresses of one device.
 	ListAddresses(deviceID string) ([]model.DeviceAddress, error)
+	// ListActiveAddresses returns the addresses worth displaying: recently
+	// observed, primary, or manual.
+	ListActiveAddresses(deviceID string, now time.Time) ([]model.DeviceAddress, error)
 	// ListEdges returns the topology edges.
 	ListEdges(f database.EdgeFilter) ([]model.TopologyEdge, error)
 	// ListIdentities returns the identities of one device.
@@ -109,7 +112,9 @@ func (b *Builder) Build() (*Graph, error) {
 	// 1. Device nodes.
 	for i := range devices {
 		d := devices[i]
-		addrs, _ := b.store.ListAddresses(d.ID)
+		// Node cards and the inspector show current addresses, not the full
+		// ARP history. Old observations stay in the database for evidence.
+		addrs, _ := b.store.ListActiveAddresses(d.ID, now)
 		node := deviceNode(d, ifacesByDevice[d.ID], addrs, now)
 		idx.add(node)
 	}
@@ -224,12 +229,13 @@ func (b *Builder) listInterfaces() ([]model.NetworkInterface, error) {
 
 func deviceNode(d model.Device, ifaces []model.NetworkInterface, addrs []model.DeviceAddress, now time.Time) Node {
 	node := Node{
-		ID:          deviceNodeID(d.ID),
-		Kind:        NodeKindDevice,
-		Device:      &d,
-		State:       d.State,
-		StateReason: d.StateReason,
-		PrimaryMAC:  d.PrimaryMAC,
+		ID:              deviceNodeID(d.ID),
+		Kind:            NodeKindDevice,
+		Device:          &d,
+		State:           d.State,
+		StateReason:     d.StateReason,
+		StateReasonCode: d.StateReasonCode,
+		PrimaryMAC:      d.PrimaryMAC,
 	}
 	if node.PrimaryMAC == "" {
 		// Fall back to the first interface MAC.
@@ -414,9 +420,11 @@ func interfaceNames(ifaces []model.NetworkInterface) []string {
 
 // buildNetworks derives the logical network nodes.
 //
-// A network exists when a device owns either a bridge or an interface with an IP
-// address. The bridge is the primary case on OpenWrt (br-lan); a standalone
-// interface with an address (a routed VLAN, for instance) is the secondary one.
+// Only an interface that carries an address without being a bridge becomes a
+// node. A bridge is the device's own LAN side: br-lan on OpenWrt is not a
+// second box, it is the router. Its ports and the devices behind them already
+// hang off the router node, so rendering it separately produced a card that
+// belonged to nothing in the tree and fell into the "other networks" pile.
 func buildNetworks(devices []model.Device, interfaces []model.NetworkInterface) []Node {
 	byDevice := groupInterfaces(interfaces)
 	var out []Node
@@ -427,7 +435,7 @@ func buildNetworks(devices []model.Device, interfaces []model.NetworkInterface) 
 			continue
 		}
 		for _, iface := range byDevice[d.ID] {
-			if iface.Type != model.InterfaceTypeBridge && !hasIP(iface) {
+			if iface.Type == model.InterfaceTypeBridge || !hasIP(iface) {
 				continue
 			}
 			if seen[iface.BridgeID+iface.Name] {

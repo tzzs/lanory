@@ -439,19 +439,12 @@ func TestFixtureTopologyBuild(t *testing.T) {
 		}
 	}
 
-	// A network node for br-lan must exist and reference the LAN subnet.
-	var brLAN *Node
-	for i := range g.Nodes {
-		if g.Nodes[i].Kind == NodeKindNetwork && g.Nodes[i].Network != nil &&
-			g.Nodes[i].Network.Name == "br-lan" {
-			brLAN = &g.Nodes[i]
+	// br-lan is the router itself, so it must not surface as a separate network
+	// node: that card had no parent and landed in the "other networks" pile.
+	for _, n := range g.Nodes {
+		if n.Kind == NodeKindNetwork && n.Network != nil && n.Network.Name == "br-lan" {
+			t.Fatalf("br-lan must not become a network node, got %s", n.ID)
 		}
-	}
-	if brLAN == nil {
-		t.Fatal("no network node for br-lan")
-	}
-	if brLAN.Network.CIDR != "192.168.100.1/24" {
-		t.Errorf("br-lan cidr = %q, want 192.168.100.1/24", brLAN.Network.CIDR)
 	}
 
 	// Devices behind eth1 must not be attributed to a fabricated switch.

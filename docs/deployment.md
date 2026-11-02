@@ -282,7 +282,12 @@ sqlite3 /var/lib/lanory/lanory.db ".backup /tmp/lanory.backup.db"
 ## Upgrade
 
 - **OpenWrt:** install the new APK/IPK over the old one. `/var/lib/lanory` is
-  preserved; migrations run at startup.
+  preserved; migrations run at startup. The package manager does **not** restart
+  the service, so the running process keeps the old binary until you run
+  `/etc/init.d/lanory restart`. Confirm with `version` and `uptime_seconds` in
+  `/api/v1/health`; a stale `version` after an upgrade means the restart did not
+  happen. Details:
+  [packaging/openwrt/README.md](../packaging/openwrt/README.md#restart-the-service-after-an-upgrade).
 - **Generic Linux:** replace the binary, then `systemctl restart lanory`.
 
 Migrations are versioned and forward-only (`internal/database/migrations`). There

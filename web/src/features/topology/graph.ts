@@ -35,8 +35,6 @@ export interface TopologyNodeData extends Record<string, unknown> {
   annotation?: boolean
   group?: boolean
   subtitle?: string
-  networkKind?: 'bridge' | 'interface'
-  networkRole?: string
   memberCount?: number
   /**
    * Whether the card renders its detail lines (address, state text).
@@ -111,6 +109,8 @@ export function iconKeyForDeviceType(type: string | undefined): string {
       return 'server'
     case 'nas':
       return 'hard-drive'
+    case 'audio':
+      return 'audio'
     case 'modem_ont':
     case 'network_fiber':
       return 'cable'
@@ -133,7 +133,6 @@ export function buildFlow(payload: TopologyPayload, options: BuildOptions): { no
         ? node.network?.name ?? 'network'
         : node.device?.name ?? 'device'
 
-    const networkInterface = node.interface ?? options.interfaces?.find(i => i.id === node.network?.interface_id)
     const data: TopologyNodeData = {
       nodeId: node.device?.id ?? node.id,
       label,
@@ -151,8 +150,6 @@ export function buildFlow(payload: TopologyPayload, options: BuildOptions): { no
       demo: node.device?.discovery_sources?.includes('demo'),
       group: tree.groups.has(node.id),
       subtitle: node.unresolved ? t('topology.segment_hint') : node.kind === 'network' ? [node.network?.cidr, node.network?.role?.toUpperCase()].filter(Boolean).join(' · ') : undefined,
-      networkKind: node.kind === 'network' ? (networkInterface?.type === 'bridge' ? 'bridge' : 'interface') : undefined,
-      networkRole: node.kind === 'network' ? node.network?.role : undefined,
       memberCount: tree.groups.get(node.id)?.length,
       showDetail,
     }
@@ -329,9 +326,32 @@ export function hideOffline(
     }
   }
 
-  const visibleNodes = nodes.filter((n) => kept.has(n.id))
+  let visibleNodes = nodes.filter((n) => kept.has(n.id))
   const visibleIDs = new Set(visibleNodes.map((n) => n.id))
   const visibleEdges = edges.filter((e) => visibleIDs.has(e.source) && visibleIDs.has(e.target))
+
+  // Repack unpinned unresolved-group members after offline devices are removed.
+  // Their original coordinates remain in `nodes`, so showing offline devices
+  // restores the full group without losing the saved layout.
+  const byId = new Map(visibleNodes.map(node => [node.id, node]))
+  for (const group of visibleNodes.filter(node => node.data.group)) {
+    const members = visibleNodes.filter(node => node.parentId === group.id)
+    if (!members.length || members.some(member => !member.draggable)) continue
+
+    const columns = Math.min(4, Math.ceil(Math.sqrt(members.length)))
+    const rows = Math.ceil(members.length / columns)
+    byId.set(group.id, {
+      ...group,
+      data: { ...group.data, memberCount: members.length },
+      style: { ...group.style, width: columns * 228 + 16, height: 86 + rows * 112 },
+    })
+    members.forEach((member, index) => {
+      const position = { x: 24 + (index % columns) * 228, y: 78 + Math.floor(index / columns) * 112 }
+      const updated = { ...member, position }
+      byId.set(member.id, updated)
+    })
+  }
+  visibleNodes = visibleNodes.map(node => byId.get(node.id) ?? node)
   return { nodes: visibleNodes, edges: visibleEdges, hidden: hidden.size }
 }
 

@@ -21,6 +21,7 @@
 package device
 
 import (
+	"net"
 	"strings"
 	"time"
 
@@ -88,6 +89,12 @@ func (e *Engine) Resolve(ing Ingest) (*model.Device, bool, error) {
 	}
 	if ing.MAC != "" {
 		ing.MAC = database.CanonicalizeMAC(ing.MAC)
+		if database.IsZeroMAC(ing.MAC) {
+			// 00:00:00:00:00:00 is the kernel's unresolved sentinel. It is not
+			// an identity; keeping it here names devices "Unknown 000000" and
+			// merges unrelated addresses into one phantom.
+			ing.MAC = ""
+		}
 	}
 
 	dev, err := e.match(ing)
@@ -101,9 +108,37 @@ func (e *Engine) Resolve(ing Ingest) (*model.Device, bool, error) {
 
 	// Refresh volatile fields.
 	changed := false
-	if ing.Hostname != "" && ing.Hostname != dev.Hostname && !dev.IsLocked {
-		dev.Hostname = ing.Hostname
-		changed = true
+	if ing.Hostname != "" && !dev.IsLocked && !dev.IsManual {
+		// The display name is derived from the observation that created the
+		// device. A device first seen as a bare MAC keeps that placeholder
+		// forever unless the name is refreshed here: DHCP hands out hostnames
+		// minutes later, and until then the UI shows "Unknown <mac>" for
+		// something it can already name.
+		//
+		// The name is refreshed whenever it is still a generated placeholder,
+		// not only when the hostname changed. A device whose hostname was
+		// already recorded keeps its old placeholder otherwise, because
+		// "the hostname differs" is never true for it again.
+		//
+		// Only the "Unknown ..." fallbacks are replaced. A vendor-prefixed
+		// name such as "Xiaomi dd:ee:ff" says more than the hostname does.
+		if isUnknownPlaceholder(dev.Name) {
+			dev.Name = ing.Hostname
+		}
+		if ing.Hostname != dev.Hostname {
+			dev.Hostname = ing.Hostname
+			changed = true
+		}
+	} else if !dev.IsLocked && !dev.IsManual && isDerivedName(dev) {
+		// No hostname yet, but the placeholder itself may be stale. NDP and the
+		// bridge FDB report a MAC and nothing else, so a device can be created
+		// as "Unknown 04:67:61" before ARP ever sees its address. Promote the
+		// name when this observation knows something better; never demote it,
+		// or a MAC-only observation would undo the address a previous one gave.
+		if name := displayName(ing); placeholderRank(name) > placeholderRank(dev.Name) {
+			dev.Name = name
+			changed = true
+		}
 	}
 	if ing.Vendor != "" && dev.Manufacturer == "" {
 		dev.Manufacturer = ing.Vendor
@@ -249,10 +284,20 @@ func (e *Engine) match(ing Ingest) (*model.Device, error) {
 
 	// 3. Randomised MAC: try to attach it to a device already known by
 	//    hostname or vendor rather than creating a duplicate.
+	//
+	//    Only a candidate that has no MAC identity of its own may be merged
+	//    this way. A candidate identified by its own MAC is a different
+	//    machine that happens to share the hostname, and a randomised MAC is
+	//    exactly the kind of identity that must not merge two of them: the
+	//    result would be one device carrying both machines' addresses.
 	if ing.MAC != "" && database.IsLocallyAdministeredMAC(ing.MAC) {
 		if ing.Hostname != "" {
 			if devs, err := e.store.FindDevicesByIdentity(model.IdentityHostname, ing.Hostname); err == nil && len(devs) > 0 {
-				return &devs[0], nil
+				for _, cand := range devs {
+					if !candHasMAC(e, cand) {
+						return &cand, nil
+					}
+				}
 			}
 		}
 	}
@@ -261,9 +306,17 @@ func (e *Engine) match(ing Ingest) (*model.Device, error) {
 	//    device is not locked, and only for non-randomised MACs.
 	if ing.Hostname != "" && ing.MAC != "" && !database.IsLocallyAdministeredMAC(ing.MAC) {
 		if devs, err := e.store.FindDevicesByIdentity(model.IdentityHostname, ing.Hostname); err == nil && len(devs) == 1 {
-			// Require corroboration: the candidate must share at least one
-			// address or be the only device with that hostname.
 			cand := devs[0]
+			// A candidate identified by its own MAC is a different machine that
+			// happens to share the hostname. Merging on the hostname alone
+			// would move that machine's addresses to the incoming device,
+			// which is what happened to two Macs named "Mac" on the reference
+			// network.
+			if candHasMAC(e, cand) {
+				return nil, nil
+			}
+			// Require corroboration: the candidate must share at least one
+			// address, or be the only device with that hostname.
 			for _, a := range ing.Addresses {
 				if dev, err := e.store.FindDeviceByAddress(familyOf(a), a.Address); err == nil && dev != nil && dev.ID == cand.ID {
 					return &cand, nil
@@ -286,6 +339,30 @@ func (e *Engine) match(ing Ingest) (*model.Device, error) {
 	}
 
 	return nil, nil
+}
+
+// candHasMAC reports whether a candidate device already has a MAC identity of
+// its own.
+//
+// Such a device is identified by hardware, not by a name that can be reused,
+// so an incoming observation that merely shares its hostname is a different
+// machine.
+//
+// A lookup failure is treated as "the candidate has a MAC identity". The
+// alternative - assuming it has none - would let a hostname-only merge
+// through, which is the exact thing this function exists to prevent. Merging
+// two devices wrongly is bad; failing to merge them is merely conservative.
+func candHasMAC(e *Engine, cand model.Device) bool {
+	ids, err := e.store.ListIdentities(cand.ID)
+	if err != nil {
+		return true
+	}
+	for _, id := range ids {
+		if id.Type == model.IdentityMAC && id.Value != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func familyOf(a discovery.AddressObservation) model.AddressFamily {
@@ -314,6 +391,7 @@ func (e *Engine) newDevice(ing Ingest) *model.Device {
 		Description:      "",
 		State:            model.StateUnknown,
 		StateReason:      "waiting for first reachability check",
+		StateReasonCode:  &model.Reason{Code: model.ReasonAwaitingFirstCheck, Params: map[string]string{}},
 		LastStateChange:  now,
 		FirstSeen:        now,
 		LastSeen:         now,
@@ -329,6 +407,13 @@ func (e *Engine) newDevice(ing Ingest) *model.Device {
 }
 
 // displayName picks the most human friendly name available.
+//
+// A device with no hostname gets a placeholder built from the strongest thing
+// we know about it. An address beats a MAC here: an address is something the
+// user can find in the router's DHCP lease table or ping, while six hex
+// characters from the middle of a MAC match nothing they can see anywhere else.
+// A link-local IPv6 does not count — it is per-interface plumbing, not a
+// handle anyone can use.
 func displayName(ing Ingest) string {
 	if ing.Hostname != "" {
 		return ing.Hostname
@@ -336,23 +421,122 @@ func displayName(ing Ingest) string {
 	if ing.Vendor != "" && ing.MAC != "" {
 		return ing.Vendor + " " + shortMAC(ing.MAC)
 	}
-	if ing.MAC != "" {
-		return "Unknown " + shortMAC(ing.MAC)
-	}
 	for _, a := range ing.Addresses {
-		if a.Address != "" {
+		if a.Address != "" && !strings.Contains(a.Address, ":") {
 			return "Unknown " + a.Address
 		}
+	}
+	for _, a := range ing.Addresses {
+		if a.Address != "" && !isLinkLocal(a.Address) {
+			return "Unknown " + a.Address
+		}
+	}
+	if ing.MAC != "" {
+		return "Unknown " + shortMAC(ing.MAC)
 	}
 	return "Unknown device"
 }
 
+// isLinkLocal reports whether an address is an IPv6 link-local address.
+func isLinkLocal(addr string) bool {
+	return strings.HasPrefix(strings.ToLower(addr), "fe80:")
+}
+
+// placeholderRank scores how useful a generated name is, so that a later
+// observation can only improve a device's placeholder.
+//
+// The ordering is the same one displayName() applies when a device is created:
+// a vendor plus a MAC tells the user what the box is, an address tells them
+// where it is, and a bare MAC suffix tells them nothing they can act on.
+func placeholderRank(name string) int {
+	switch {
+	case name == "", name == "Unknown device":
+		return 0
+	case isMACPlaceholder(name):
+		return 1
+	case strings.HasPrefix(name, "Unknown "):
+		return 2
+	default:
+		// A vendor-prefixed placeholder ("Xiaomi 77:7f:24"), or a real name
+		// that isDerivedName() let through. Never replaced by a weaker one.
+		return 3
+	}
+}
+
+// isUnknownPlaceholder reports whether a name is one of the "Unknown ..."
+// fallbacks the engine generates.
+//
+// Only these are replaced by a hostname. A name that merely starts with
+// "Unknown " was written by the user ("Unknown camera") and must survive.
+func isUnknownPlaceholder(name string) bool {
+	if name == "" || name == "Unknown device" {
+		return true
+	}
+	rest, ok := strings.CutPrefix(name, "Unknown ")
+	if !ok {
+		return false
+	}
+	rest = strings.TrimSpace(rest)
+	// A MAC suffix and an address are both generated from an observation.
+	return isMACPlaceholder(name) || net.ParseIP(rest) != nil
+}
+
+// isMACPlaceholder reports whether a name is the "Unknown xx:xx:xx" fallback.
+//
+// Separators are optional: a device named before shortMAC() grouped the octets
+// carries "Unknown ddeeff", and that name must still be recognised so a later
+// observation can upgrade it.
+func isMACPlaceholder(name string) bool {
+	rest, ok := strings.CutPrefix(name, "Unknown ")
+	if !ok {
+		return false
+	}
+	hex := strings.ReplaceAll(rest, ":", "")
+	if len(hex) != 6 {
+		return false
+	}
+	for _, r := range hex {
+		if !strings.ContainsRune("0123456789abcdefABCDEF", r) {
+			return false
+		}
+	}
+	return true
+}
+
+// isDerivedName reports whether a device's name was generated from an earlier,
+// weaker observation rather than typed by the user.
+//
+// Only derived names are replaced when a hostname arrives. A name the user
+// chose in the UI is never overwritten, which is what IsLocked protects for the
+// rest of the fields and what this protects for the name alone.
+func isDerivedName(dev *model.Device) bool {
+	name := dev.Name
+	switch {
+	case isUnknownPlaceholder(name):
+		return true
+	case dev.Hostname != "" && name == dev.Hostname:
+		// The name is the previous hostname, so it follows the new one.
+		return true
+	case dev.Manufacturer != "" && strings.HasPrefix(name, dev.Manufacturer+" "):
+		// "Xiaomi 77:7f:24": a vendor prefix plus a MAC suffix.
+		return true
+	}
+	return false
+}
+
+// shortMAC renders the last three octets of a MAC, grouped like a MAC.
+//
+// database.FormatMAC only formats a full 12-character address and returns a
+// six-character slice unchanged, so it cannot be used on the tail: doing so
+// produced "Unknown ddeeff", which reads as one word rather than as the end of
+// an address.
 func shortMAC(mac string) string {
 	c := database.CanonicalizeMAC(mac)
 	if len(c) < 6 {
 		return c
 	}
-	return database.FormatMAC(c[len(c)-6:])
+	tail := c[len(c)-6:]
+	return tail[0:2] + ":" + tail[2:4] + ":" + tail[4:6]
 }
 
 // newDeviceID derives a stable device ID from the strongest available identity.
@@ -395,18 +579,37 @@ func (e *Engine) refreshPrimaryAddresses(dev *model.Device) {
 		return
 	}
 	var (
-		v4, v6, mac string
-		changed     bool
+		v4, v6, mac    string
+		v4Seen, v6Seen time.Time
+		v6Global       bool
+		changed        bool
 	)
 	for _, a := range addrs {
-		if a.Family == model.AddressFamilyIPv4 && v4 == "" {
-			v4 = a.Address
-		}
-		if a.Family == model.AddressFamilyIPv6 && strings.HasPrefix(a.Address, "2001:") && v6 == "" {
-			v6 = a.Address
-		}
-		if v6 == "" && a.Family == model.AddressFamilyIPv6 && !strings.HasPrefix(a.Address, "fe80:") {
-			v6 = a.Address
+		switch a.Family {
+		case model.AddressFamilyIPv4:
+			// The address the device is using now is the one observed most
+			// recently. A device that moved keeps its old leases in the table,
+			// and taking the first row (ListAddresses orders by address) would
+			// surface a stale one - a device could even show an address another
+			// device holds today.
+			if v4 == "" || a.LastSeen.After(v4Seen) {
+				v4, v4Seen = a.Address, a.LastSeen
+			}
+		case model.AddressFamilyIPv6:
+			// Link-local addresses are never useful as the device's address.
+			if strings.HasPrefix(a.Address, "fe80:") {
+				continue
+			}
+			// Prefer a globally routable address; among equals, the most recent.
+			global := strings.HasPrefix(a.Address, "2001:")
+			switch {
+			case v6 == "":
+				v6, v6Seen, v6Global = a.Address, a.LastSeen, global
+			case global && !v6Global:
+				v6, v6Seen, v6Global = a.Address, a.LastSeen, global
+			case global == v6Global && a.LastSeen.After(v6Seen):
+				v6, v6Seen, v6Global = a.Address, a.LastSeen, global
+			}
 		}
 	}
 	ids, err := e.store.ListIdentities(dev.ID)
@@ -436,7 +639,7 @@ func (e *Engine) refreshPrimaryAddresses(dev *model.Device) {
 }
 
 // MarkSleeping records that a device shows signs of a power saving state.
-func (e *Engine) MarkSleeping(id, reason string) error {
+func (e *Engine) MarkSleeping(id, reason string, code *model.Reason) error {
 	dev, err := e.store.GetDevice(id)
 	if err != nil {
 		return err
@@ -446,6 +649,7 @@ func (e *Engine) MarkSleeping(id, reason string) error {
 	}
 	dev.State = model.StateSleeping
 	dev.StateReason = reason
+	dev.StateReasonCode = code
 	dev.LastStateChange = time.Now().UTC()
 	if err := e.store.UpsertDevice(dev); err != nil {
 		return err
@@ -457,7 +661,7 @@ func (e *Engine) MarkSleeping(id, reason string) error {
 }
 
 // SetOffline marks a device offline after repeated failures.
-func (e *Engine) SetOffline(id, reason string) error {
+func (e *Engine) SetOffline(id, reason string, code *model.Reason) error {
 	dev, err := e.store.GetDevice(id)
 	if err != nil {
 		return err
@@ -468,6 +672,7 @@ func (e *Engine) SetOffline(id, reason string) error {
 	prev := dev.State
 	dev.State = model.StateOffline
 	dev.StateReason = reason
+	dev.StateReasonCode = code
 	dev.LastStateChange = time.Now().UTC()
 	if err := e.store.UpsertDevice(dev); err != nil {
 		return err
@@ -477,29 +682,32 @@ func (e *Engine) SetOffline(id, reason string) error {
 	}
 	if prev != model.StateOffline {
 		_ = e.store.SaveEvent(&model.NetworkEvent{
-			EventType: model.EventDeviceOffline,
-			DeviceID:  dev.ID,
-			OldValue:  string(prev),
-			NewValue:  string(model.StateOffline),
-			Message:   reason,
+			EventType:  model.EventDeviceOffline,
+			DeviceID:   dev.ID,
+			OldValue:   string(prev),
+			NewValue:   string(model.StateOffline),
+			Message:    reason,
+			ReasonCode: code,
 		})
 	}
 	return nil
 }
 
 // SetOnline marks a device online.
-func (e *Engine) SetOnline(id, reason string) error {
+func (e *Engine) SetOnline(id, reason string, code *model.Reason) error {
 	dev, err := e.store.GetDevice(id)
 	if err != nil {
 		return err
 	}
 	if dev.State == model.StateOnline {
 		dev.StateReason = reason
+		dev.StateReasonCode = code
 		return e.store.UpsertDevice(dev)
 	}
 	prev := dev.State
 	dev.State = model.StateOnline
 	dev.StateReason = reason
+	dev.StateReasonCode = code
 	dev.LastStateChange = time.Now().UTC()
 	if err := e.store.UpsertDevice(dev); err != nil {
 		return err
@@ -508,17 +716,18 @@ func (e *Engine) SetOnline(id, reason string) error {
 		e.bus.PublishDeviceOnline(dev, reason)
 	}
 	_ = e.store.SaveEvent(&model.NetworkEvent{
-		EventType: model.EventDeviceOnline,
-		DeviceID:  dev.ID,
-		OldValue:  string(prev),
-		NewValue:  string(model.StateOnline),
-		Message:   reason,
+		EventType:  model.EventDeviceOnline,
+		DeviceID:   dev.ID,
+		OldValue:   string(prev),
+		NewValue:   string(model.StateOnline),
+		Message:    reason,
+		ReasonCode: code,
 	})
 	return nil
 }
 
 // SetUnknown marks a device state as unknown.
-func (e *Engine) SetUnknown(id, reason string) error {
+func (e *Engine) SetUnknown(id, reason string, code *model.Reason) error {
 	dev, err := e.store.GetDevice(id)
 	if err != nil {
 		return err
@@ -528,6 +737,7 @@ func (e *Engine) SetUnknown(id, reason string) error {
 	}
 	dev.State = model.StateUnknown
 	dev.StateReason = reason
+	dev.StateReasonCode = code
 	dev.LastStateChange = time.Now().UTC()
 	if err := e.store.UpsertDevice(dev); err != nil {
 		return err

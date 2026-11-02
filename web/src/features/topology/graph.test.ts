@@ -245,7 +245,7 @@ it('places the active WAN above the local router even when old saved positions p
   expect(nodes.find(n => n.id === wan.id)!.data.subtitle).toContain('100 Mbps')
 })
 
-it('marks a LAN bridge as a network bridge without changing its interface name', () => {
+it('keeps a network node labelled by its interface name', () => {
   const bridgeInterface = { id: 'if-br-lan', device_id: 'r', name: 'br-lan', type: 'bridge', role: 'lan', carrier: true, speed_mbps: 1000 } as import('@/types/api').NetworkInterface
   const bridge: TopologyNode = {
     id: 'net-br-lan',
@@ -256,11 +256,8 @@ it('marks a LAN bridge as a network bridge without changing its interface name',
   }
 
   const { nodes } = buildFlow({ nodes: [bridge], edges: [], layout, generated_at: generated }, { unverifiedThreshold: .6, interfaces: [bridgeInterface] })
-  const data = nodes[0].data
 
-  expect(data.label).toBe('br-lan')
-  expect(data.networkKind).toBe('bridge')
-  expect(data.networkRole).toBe('lan')
+  expect(nodes[0].data.label).toBe('br-lan')
 })
 
 describe('hideOffline', () => {
@@ -337,6 +334,37 @@ describe('hideOffline', () => {
     const result = hideOffline(nodes, built.edges)
     expect(result.nodes.map((n) => n.id).sort()).toEqual(['dev-child', 'dev-router'])
     expect(result.hidden).toBe(0)
+  })
+
+  it('packs visible unresolved-group members together after offline devices are hidden', () => {
+    const ids = ['a-online', 'b-offline', 'c-online', 'd-offline', 'e-online', 'f-offline', 'g-online', 'h-offline', 'i-online', 'j-offline']
+    const segment: TopologyNode = { id: 'segment', kind: 'network', state: 'unknown', unresolved: true, children: ids }
+    const nodes = [...ids.map(id => stateful(id, id.endsWith('offline') ? 'offline' : 'online')), segment]
+    const built = buildFlow({ nodes, edges: [], layout: [], generated_at: generated }, { unverifiedThreshold: 0.6 })
+    const visible = hideOffline(built.nodes, built.edges)
+    const segmentNode = visible.nodes.find(node => node.id === 'segment')!
+    const members = visible.nodes.filter(node => node.parentId === 'segment')
+
+    expect(members).toHaveLength(5)
+    const rowCounts = new Map<number, number>()
+    members.forEach(member => rowCounts.set(member.position.y, (rowCounts.get(member.position.y) ?? 0) + 1))
+    expect([...rowCounts.values()].sort()).toEqual([2, 3])
+    expect(new Set(members.map(member => member.position.x)).size).toBe(3)
+    expect(segmentNode.style?.width).toBeLessThan(built.nodes.find(node => node.id === 'segment')!.style!.width as number)
+    expect(segmentNode.style?.height).toBeLessThan(built.nodes.find(node => node.id === 'segment')!.style!.height as number)
+  })
+
+  it('preserves a group layout when any member is pinned', () => {
+    const ids = ['a-online', 'b-offline', 'c-online', 'd-online', 'e-online', 'f-online']
+    const segment: TopologyNode = { id: 'segment', kind: 'network', state: 'unknown', unresolved: true, children: ids }
+    const nodes = [...ids.map(id => stateful(id, id === 'b-offline' ? 'offline' : 'online')), segment]
+    const pinnedLayout = [{ id: 'saved-c', node_id: 'c-online', x: 900, y: 500, pinned: true, updated_at: generated }]
+    const built = buildFlow({ nodes, edges: [], layout: pinnedLayout, generated_at: generated }, { unverifiedThreshold: 0.6 })
+    const original = built.nodes.find(node => node.id === 'e-online')!
+    const visible = hideOffline(built.nodes, built.edges)
+    const preserved = visible.nodes.find(node => node.id === 'e-online')!
+
+    expect(preserved.position).toEqual(original.position)
   })
 
   it('never drops network nodes', () => {

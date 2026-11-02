@@ -551,6 +551,43 @@ func TestServiceSchedulerDisabled(t *testing.T) {
 	}
 }
 
+// A router that just restarted has no topology. The scheduler must scan once
+// at startup instead of leaving the UI empty until the first tick.
+func TestTickerSchedulerRunsImmediatelyOnStart(t *testing.T) {
+	sch := &tickerScheduler{}
+	started := make(chan struct{}, 1)
+	stop := sch.StartWithImmediate(context.Background(), time.Hour, func() {}, func() {
+		started <- struct{}{}
+	})
+	defer stop()
+
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the startup scan never ran")
+	}
+}
+
+// The immediate run must not replace the periodic one.
+func TestTickerSchedulerImmediateRunDoesNotSuppressTicks(t *testing.T) {
+	sch := &tickerScheduler{}
+	var mu sync.Mutex
+	var ticks int
+	stop := sch.StartWithImmediate(context.Background(), 10*time.Millisecond, func() {
+		mu.Lock()
+		ticks++
+		mu.Unlock()
+	}, func() {})
+	defer stop()
+
+	time.Sleep(80 * time.Millisecond)
+	mu.Lock()
+	defer mu.Unlock()
+	if ticks == 0 {
+		t.Fatal("the periodic trigger never fired")
+	}
+}
+
 func TestTickerSchedulerStops(t *testing.T) {
 	sch := &tickerScheduler{}
 	var mu sync.Mutex

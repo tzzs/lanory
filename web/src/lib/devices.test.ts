@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { formatSpeed, formatBytes, formatPercent, formatLatency, confidenceBand, formatConfidence, formatEdgeLabel, formatRelativeTime, formatMac, formatDuration, groupAddresses, isMultiHomed, addressSummary, groupDeviceAddresses } from '@/lib/devices'
+import { Mic } from 'lucide-react'
+import { formatSpeed, formatBytes, formatPercent, formatLatency, confidenceBand, formatConfidence, formatEdgeLabel, formatRelativeTime, formatMac, formatDuration, groupAddresses, isMultiHomed, addressSummary, groupDeviceAddresses, deviceIcon } from '@/lib/devices'
 import type { NodeAddress } from '@/types/api'
+
+describe('deviceIcon', () => {
+  it('uses an audio icon for microphone and speaker devices', () => {
+    expect(deviceIcon('audio')).toBe(Mic)
+  })
+})
 
 describe('formatSpeed', () => {
   it('renders Mbps below 1000', () => {
@@ -291,6 +298,15 @@ describe('groupDeviceAddresses', () => {
       addr({ address: '2001:db8::10', family: 'ipv6', prefix_length: 0 }),
     ], [])
     expect(groups.every((group) => group.cidr === '')).toBe(true)
+  })
+
+  it('orders currently observed addresses ahead of older primary addresses', () => {
+    const groups = groupDeviceAddresses([
+      addr({ address: '2001:db8::1', family: 'ipv6', prefix_length: 64, is_primary: true, last_seen: '2026-10-30T10:00:00Z' }),
+      addr({ address: '2001:db8::2', family: 'ipv6', prefix_length: 64, last_seen: '2026-11-01T10:00:00Z' }),
+    ], [])
+
+    expect(groups[0].addresses[0].address).toBe('2001:db8::2')
   })
 
   it('leaves a remote device address without a side', () => {

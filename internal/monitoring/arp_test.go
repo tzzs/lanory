@@ -69,10 +69,12 @@ func TestARPObserverIgnoresIncompleteEntries(t *testing.T) {
 	}
 }
 
-// TestPresenceChangesOfflineIntoSleeping is the behaviour the specification
-// asks for: a device that is present in the neighbour table but does not
-// answer the probe method must not be reported as offline.
-func TestPresenceChangesOfflineIntoSleeping(t *testing.T) {
+// TestPresenceMarksANeverAnsweringDeviceOnline pins the case a Windows PC
+// produces: the firewall drops every echo request, but the host is on the
+// segment and the neighbour table knows it. It is online; only the probe
+// method is missing. Calling it sleeping told the user their working PC was
+// asleep.
+func TestPresenceMarksANeverAnsweringDeviceOnline(t *testing.T) {
 	m := NewStateMachine(nil).WithPresence(&fakePresence{present: true})
 	target := model.ProbeTarget{
 		ID: "probe-1", DeviceID: "dev-1", Target: "192.168.100.116",
@@ -81,9 +83,8 @@ func TestPresenceChangesOfflineIntoSleeping(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		m.Apply(target, false)
 	}
-	state := m.CurrentState("probe-1")
-	if state != model.StateSleeping {
-		t.Errorf("state = %q, want %q: a device in the neighbour table is not offline", state, model.StateSleeping)
+	if got := m.CurrentState("probe-1"); got != model.StateOnline {
+		t.Errorf("state = %q, want %q: a device that never answers ICMP but is present is online", got, model.StateOnline)
 	}
 
 	// Without the cross-check the same history means offline.
@@ -93,6 +94,25 @@ func TestPresenceChangesOfflineIntoSleeping(t *testing.T) {
 	}
 	if got := m2.CurrentState("probe-1"); got != model.StateOffline {
 		t.Errorf("state without the cross-check = %q, want %q", got, model.StateOffline)
+	}
+}
+
+// TestPresenceKeepsAnAnsweredDeviceSleeping covers the other side of the same
+// evidence: the device answered within the window and then went quiet while
+// still present, which is the power saving pattern, not a missing probe method.
+func TestPresenceKeepsAnAnsweredDeviceSleeping(t *testing.T) {
+	m := NewStateMachine(nil).WithPresence(&fakePresence{present: true})
+	target := model.ProbeTarget{
+		ID: "probe-1", DeviceID: "dev-1", Target: "192.168.100.197",
+		Protocol: model.ProbeICMP, FailureThreshold: 3, RecoverConfirm: 1,
+	}
+	// One answer, then a run of failures long enough to cross the threshold.
+	m.Apply(target, true)
+	for i := 0; i < 3; i++ {
+		m.Apply(target, false)
+	}
+	if got := m.CurrentState("probe-1"); got != model.StateSleeping {
+		t.Errorf("state = %q, want %q: a device that answered and then went quiet is sleeping", got, model.StateSleeping)
 	}
 }
 

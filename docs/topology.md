@@ -22,8 +22,14 @@ Lanory keeps two representations and never mixes them up:
    port Y of the router". Each row carries its evidence, confidence, status and
    whether the user confirmed or locked it.
 2. **Rendered nodes** (`TopologyNode`) — what the UI draws. A node is either a
-   device or a logical network (`br-lan`, `eth0` WAN). Network nodes carry an
+   device or a logical network (for example the `eth0` WAN). Network nodes carry an
    interface and a `NetworkStatus` (CIDR, gateway, device count) and no device.
+
+Bridge interfaces (`br-lan`) are deliberately not rendered as network nodes. A
+bridge is the router's own LAN side, already represented by the router node; a
+second node for it reads as another box on the network. The bridge still exists
+as an interface and as `bridge_membership` edges, so port membership and the
+addresses carried by `br-lan` remain visible in device details.
 
 The builder (`internal/topology`) derives the rendered graph from stored rows
 every time it is requested. It writes nothing. Layout positions are separate

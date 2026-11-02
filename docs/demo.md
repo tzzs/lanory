@@ -100,7 +100,7 @@ administered.
 | client-mac | desktop | 192.0.2.222 | eth1 | online |
 | Watch | smartwatch | 192.0.2.197 | eth1 | sleeping |
 | smart-lamp | iot | 192.0.2.159 | eth1 | online |
-| Unknown 04:67:61 | unknown | 192.0.2.228 | eth1 | offline |
+| Unknown 192.0.2.228 | unknown | 192.0.2.228 | eth1 | offline |
 | iot-sensor | iot | 192.0.2.231 | eth1 | online |
 | Unknown b4:fa:48 | unknown | link-local IPv6 only | eth1 | unknown |
 | NAS | nas | 192.0.2.50 | eth2 | online (manual) |

@@ -29,6 +29,7 @@ export type DeviceType =
   | 'iot'
   | 'printer'
   | 'camera'
+  | 'audio'
   | 'vm'
   | 'container'
   | 'network_fiber'
@@ -81,6 +82,11 @@ export type JobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancel
 // Entities
 // ---------------------------------------------------------------------------
 
+export interface Reason {
+  code: string
+  params?: Record<string, string>
+}
+
 export interface Device {
   id: string
   name: string
@@ -95,6 +101,7 @@ export interface Device {
   type_source?: DiscoverySource
   state: DeviceState
   state_reason?: string
+  state_reason_code?: Reason
   last_state_change: string
   primary_ipv4?: string
   primary_ipv6?: string
@@ -211,6 +218,7 @@ export interface ProbeTarget {
   recover_confirm: number
   state: DeviceState
   state_reason?: string
+  state_reason_code?: Reason
   consecutive_failures: number
   consecutive_successes: number
   last_result?: ProbeRunStatus
@@ -241,6 +249,7 @@ export interface NetworkEvent {
   old_value?: string
   new_value?: string
   message?: string
+  reason_code?: Reason
   evidence?: string
   timestamp: string
 }
@@ -290,6 +299,7 @@ export interface InterfaceStatus {
   role: InterfaceRole
   status: EdgeStatus
   reason?: string
+  reason_code?: Reason
 }
 
 export interface NetworkStatus {
@@ -307,6 +317,8 @@ export interface Anomaly {
   severity: 'info' | 'warning' | 'critical'
   title: string
   detail: string
+  reason_code?: Reason
+  detail_reason_code?: Reason
   since: string
 }
 
@@ -355,6 +367,7 @@ export interface NodeAddress {
   interface?: string
   side: InterfaceRole
   is_primary?: boolean
+  last_seen?: string
 }
 
 export interface Topology {

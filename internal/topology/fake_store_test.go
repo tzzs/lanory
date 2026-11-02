@@ -1,6 +1,8 @@
 package topology
 
 import (
+	"time"
+
 	"github.com/lanory/lanory/internal/database"
 	"github.com/lanory/lanory/internal/model"
 )
@@ -31,6 +33,10 @@ func (f *fakeStore) ListAllInterfaces() ([]model.NetworkInterface, error) {
 }
 
 func (f *fakeStore) ListAddresses(deviceID string) ([]model.DeviceAddress, error) {
+	return f.addresses[deviceID], nil
+}
+
+func (f *fakeStore) ListActiveAddresses(deviceID string, _ time.Time) ([]model.DeviceAddress, error) {
 	return f.addresses[deviceID], nil
 }
 

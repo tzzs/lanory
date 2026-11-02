@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/lanory/lanory/internal/database"
+	"github.com/lanory/lanory/internal/discovery/parsers"
 	"github.com/lanory/lanory/internal/model"
 )
 
@@ -84,6 +85,9 @@ func listInterfaces(store *database.Store, deviceID string) ([]model.NetworkInte
 		if err != nil {
 			return nil, err
 		}
+		if skipInterfaceName(iface.Name) {
+			continue
+		}
 		out = append(out, *iface)
 	}
 	return out, rows.Err()
@@ -104,9 +108,23 @@ func listAllInterfaces(store *database.Store) ([]model.NetworkInterface, error) 
 		if err != nil {
 			return nil, err
 		}
+		if skipInterfaceName(iface.Name) {
+			continue
+		}
 		out = append(out, *iface)
 	}
 	return out, rows.Err()
+}
+
+// skipInterfaceName reports whether a stored interface is a software device
+// that must not be presented as a network port.
+//
+// The collector already ignores these, but rows written by an older build stay
+// in the database. Filtering on read removes them without a migration, and the
+// rule is the same one the collector and the link observer use, so a Docker
+// bridge (br-<12 hex>) cannot reappear as a second "br-" node.
+func skipInterfaceName(name string) bool {
+	return parsers.LooksVirtualByName(name)
 }
 
 // getInterface returns one interface by ID.
@@ -211,7 +229,7 @@ func deviceDetail(store *database.Store, id string) (*model.DeviceDetail, error)
 	}
 	detail := &model.DeviceDetail{Device: d}
 
-	if detail.Addresses, err = store.ListAddresses(id); err != nil {
+	if detail.Addresses, err = store.ListCurrentAddresses(id, database.Now()); err != nil {
 		return nil, err
 	}
 	if detail.Identities, err = store.ListIdentities(id); err != nil {

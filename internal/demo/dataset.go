@@ -204,7 +204,7 @@ var demoDevices = []demoDevice{
 		NeighborState: "reachable",
 	},
 	{
-		ID: "dev-mac-0467617f7f24", Name: "Unknown 04:67:61",
+		ID: "dev-mac-0467617f7f24", Name: "Unknown 192.0.2.228",
 		MAC: "04:11:22:33:44:24", IPv4: "192.0.2.228", Iface: "eth1",
 		State: "offline", StateReason: "3 consecutive failed probes",
 		Description:   "Static IP device missing from the DHCP lease file (demo)",

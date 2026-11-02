@@ -221,6 +221,15 @@ def check_luci_apk(path: str) -> None:
         else:
             fail(f"{name}: does not depend on {needed}; the LuCI pages break without it")
 
+    menu_path = "usr/share/luci/menu.d/luci-app-lanory.json"
+    if menu_path in names:
+        menu = json.loads(tar.extractfile(menu_path).read().decode())
+        title = menu.get("admin/services/lanory", {}).get("title")
+        if title == "Lanory Network Topology":
+            ok(f"{name}: menu title uses the translatable English source string")
+        else:
+            fail(f"{name}: unexpected menu title {title!r}")
+
     required_files = [
         "usr/share/rpcd/acl.d/luci-app-lanory.json",
         "usr/share/luci/menu.d/luci-app-lanory.json",
@@ -228,12 +237,22 @@ def check_luci_apk(path: str) -> None:
         "usr/lib/lua/luci/model/cbi/lanory.lua",
         "usr/lib/lua/luci/view/lanory/overview.htm",
         "usr/lib/lua/luci/view/lanory/style.htm",
+        "usr/lib/lua/luci/i18n/lanory.zh-cn.lmo",
     ]
     for required in required_files:
         if required in names:
             ok(f"{name}: ships {required}")
         else:
             fail(f"{name}: does not ship {required}")
+
+    catalog_path = "usr/lib/lua/luci/i18n/lanory.zh-cn.lmo"
+    if catalog_path in names:
+        catalog = tar.extractfile(catalog_path).read()
+        payload_offset = int.from_bytes(catalog[-4:], "big") if len(catalog) >= 4 else -1
+        if len(catalog) >= 20 and payload_offset == len(catalog) - 20 and payload_offset % 4 == 0:
+            ok(f"{name}: LuCI translation catalog has an aligned index")
+        else:
+            fail(f"{name}: LuCI translation catalog has an invalid LMO layout")
 
     # A file whose directory was never registered is rejected with "no dirent in
     # archive". A directory may be recorded with or without a trailing slash

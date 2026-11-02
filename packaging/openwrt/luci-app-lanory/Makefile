@@ -19,7 +19,7 @@ LUCI_DEPENDS:=+luci-base +luci-lua-runtime +curl +lanory
 LUCI_PKGARCH:=all
 
 PKG_NAME:=luci-app-lanory
-PKG_VERSION:=0.1.0
+PKG_VERSION:=0.1.2
 PKG_RELEASE:=1
 PKG_LICENSE:=MIT
 

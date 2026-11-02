@@ -118,7 +118,8 @@ func TestBuildDeviceNodes(t *testing.T) {
 		t.Fatalf("Build: %v", err)
 	}
 
-	// Four devices plus one network node (br-lan).
+	// Four device nodes and no network node: br-lan is the router's own LAN
+	// side, and none of the other interfaces carries an address in this fixture.
 	var devices, networks int
 	for _, n := range g.Nodes {
 		switch n.Kind {
@@ -131,9 +132,11 @@ func TestBuildDeviceNodes(t *testing.T) {
 	if devices != 4 {
 		t.Fatalf("expected 4 device nodes, got %d", devices)
 	}
-	// br-lan and eth0 (which carries the WAN address) become network nodes.
-	if networks < 1 {
-		t.Fatalf("expected at least 1 network node, got %d", networks)
+	if networks != 0 {
+		t.Fatalf("expected no network nodes, got %d", networks)
+	}
+	if n := nodeByID(g, networkNodeID("br-lan")); n != nil {
+		t.Fatal("br-lan must not become a network node")
 	}
 
 	if n := nodeByID(g, deviceNodeID(router)); n == nil {
@@ -495,8 +498,13 @@ func TestEmptyStore(t *testing.T) {
 	}
 }
 
-// The bridge interface becomes a network node carrying its subnet.
-func TestNetworkNodeForBridge(t *testing.T) {
+// A bridge never becomes a network node, while a non-bridge interface that
+// carries an address still does.
+//
+// br-lan is the router's own LAN side: drawing it as a second box produced a
+// card with no parent that fell into the "other networks" pile. eth0 is a plain
+// routed interface, so it is still worth its own node.
+func TestBridgeIsNotANetworkNode(t *testing.T) {
 	const router = "router-1"
 	interfaces := routerInterfaces(router)
 	// Attach the LAN address to br-lan.
@@ -527,20 +535,24 @@ func TestNetworkNodeForBridge(t *testing.T) {
 		t.Fatalf("Build: %v", err)
 	}
 
-	net := nodeByID(g, networkNodeID("br-lan"))
+	if n := nodeByID(g, networkNodeID("br-lan")); n != nil {
+		t.Fatalf("br-lan must not become a network node, got %+v", n)
+	}
+
+	net := nodeByID(g, networkNodeID("eth0"))
 	if net == nil {
-		t.Fatalf("expected a br-lan network node, got %v", g.Nodes)
+		t.Fatalf("expected an eth0 network node, got %v", g.Nodes)
 	}
 	if net.Kind != NodeKindNetwork {
-		t.Fatalf("br-lan node kind = %q", net.Kind)
+		t.Fatalf("eth0 node kind = %q", net.Kind)
 	}
 	if net.Network == nil {
 		t.Fatal("the network payload is missing")
 	}
-	if net.Network.CIDR != "192.168.100.1/24" {
+	if net.Network.CIDR != "192.168.1.4/24" {
 		t.Errorf("cidr = %q", net.Network.CIDR)
 	}
-	if net.Network.GatewayIP != "192.168.100.1" {
+	if net.Network.GatewayIP != "192.168.1.4" {
 		t.Errorf("gateway = %q", net.Network.GatewayIP)
 	}
 }

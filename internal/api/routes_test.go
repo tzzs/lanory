@@ -133,13 +133,30 @@ func TestOverviewRoute(t *testing.T) {
 	}
 
 	// No-carrier must surface as an anomaly, because that is the whole point.
+	// Both of its lines carry a reason code: a translated title with an
+	// English detail underneath is exactly what the UI must never show.
 	var sawAnomaly bool
 	for _, an := range got.Anomalies {
 		if an.Severity == "" || an.Title == "" {
 			t.Errorf("anomaly %q must have a severity and a title", an.ID)
 		}
+		if an.ReasonCode == nil || an.ReasonCode.Code == "" {
+			t.Errorf("anomaly %q must carry a reason code for its title", an.ID)
+		}
+		if an.DetailReasonCode == nil || an.DetailReasonCode.Code == "" {
+			t.Errorf("anomaly %q must carry a reason code for its detail", an.ID)
+		}
 		if an.ID == "anom-link-if-eth3" {
 			sawAnomaly = true
+			if an.ReasonCode.Code != model.ReasonAnomalyNoCarrier {
+				t.Errorf("anomaly code = %q, want %q", an.ReasonCode.Code, model.ReasonAnomalyNoCarrier)
+			}
+			if an.DetailReasonCode.Code != model.ReasonAnomalyNoCarrierDetail {
+				t.Errorf("anomaly detail code = %q, want %q", an.DetailReasonCode.Code, model.ReasonAnomalyNoCarrierDetail)
+			}
+			if an.ReasonCode.Params["interface"] != "eth3" {
+				t.Errorf("anomaly interface param = %q, want eth3", an.ReasonCode.Params["interface"])
+			}
 		}
 	}
 	if !sawAnomaly {
@@ -667,6 +684,17 @@ func TestSettingsRoutes(t *testing.T) {
 		t.Errorf("discovery.interval = %q, want 10m", got.Settings["discovery.interval"])
 	}
 
+	// The About card reads these from the settings payload. They are derived
+	// facts, not settings, and an empty value renders as a dash in the UI.
+	for _, key := range []string{"database.schema_version", "database.size_bytes", "devices.total"} {
+		if got.Settings[key] == "" {
+			t.Errorf("%s is missing from the settings payload", key)
+		}
+	}
+	// They are read-only: writing one is a client error, not a silent no-op.
+	rec = do(t, app, http.MethodPatch, "/api/v1/settings", `{"database.schema_version":"99"}`)
+	assertError(t, rec, http.StatusBadRequest)
+
 	// Patching a known key works.
 	rec = do(t, app, http.MethodPatch, "/api/v1/settings", `{"discovery.enabled":false}`)
 	assertStatus(t, rec, http.StatusOK)
@@ -977,6 +1005,50 @@ func TestUnknownFieldsRejected(t *testing.T) {
 	e := assertError(t, rec, http.StatusBadRequest)
 	if !strings.Contains(e.Error, "device_id") {
 		t.Errorf("error should name the unknown field, got %q", e.Error)
+	}
+}
+
+// TestInterfaceListsSkipContainerBridges pins that Docker's bridge is not
+// presented as a second "br-" interface next to the real LAN bridge.
+//
+// Docker names its bridge br-<12 hex chars>; it is a software bridge whose
+// members are veth pairs, so it carries no household traffic and must not
+// appear in the overview or as an edge endpoint. A stored row from an older
+// collector build is filtered on read, so the fix does not need a migration.
+func TestInterfaceListsSkipContainerBridges(t *testing.T) {
+	app := newTestApp(t)
+	store := app.Store()
+
+	_ = upsertInterface(store, &model.NetworkInterface{
+		ID: "if-docker", DeviceID: "dev-router", Name: "br-a2c6ac12c0e1",
+		Type: model.InterfaceTypeBridge, Role: model.InterfaceRoleUnknown,
+		AdminState: model.AdminUp, OperState: model.OperUp, Carrier: true,
+		MTU: 1500, LastSeen: database.Now(),
+	})
+
+	all, err := listAllInterfaces(store)
+	if err != nil {
+		t.Fatalf("listAllInterfaces: %v", err)
+	}
+	names := map[string]bool{}
+	for _, i := range all {
+		names[i.Name] = true
+	}
+	if names["br-a2c6ac12c0e1"] {
+		t.Error("the container bridge was listed as a network interface")
+	}
+	if !names["br-lan"] {
+		t.Error("the real LAN bridge was filtered out with it")
+	}
+
+	perDevice, err := listInterfaces(store, "dev-router")
+	if err != nil {
+		t.Fatalf("listInterfaces: %v", err)
+	}
+	for _, i := range perDevice {
+		if i.Name == "br-a2c6ac12c0e1" {
+			t.Error("the container bridge was listed on the router's device page")
+		}
 	}
 }
 

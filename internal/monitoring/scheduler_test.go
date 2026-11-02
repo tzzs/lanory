@@ -35,28 +35,28 @@ type fakeSetter struct {
 	unknown []string
 }
 
-func (f *fakeSetter) SetOnline(id, reason string) error {
+func (f *fakeSetter) SetOnline(id, reason string, code *model.Reason) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.online = append(f.online, id)
 	return nil
 }
 
-func (f *fakeSetter) SetOffline(id, reason string) error {
+func (f *fakeSetter) SetOffline(id, reason string, code *model.Reason) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.offline = append(f.offline, id)
 	return nil
 }
 
-func (f *fakeSetter) SetUnknown(id, reason string) error {
+func (f *fakeSetter) SetUnknown(id, reason string, code *model.Reason) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.unknown = append(f.unknown, id)
 	return nil
 }
 
-func (f *fakeSetter) MarkSleeping(id, reason string) error {
+func (f *fakeSetter) MarkSleeping(id, reason string, code *model.Reason) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.sleep = append(f.sleep, id)

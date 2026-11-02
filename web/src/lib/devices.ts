@@ -26,6 +26,7 @@ import {
   Cpu,
   Printer,
   Video,
+  Mic,
   Container,
   Box,
   HelpCircle,
@@ -55,6 +56,7 @@ export const DEVICE_ICONS: Record<DeviceType, LucideIcon> = {
   iot: Cpu,
   printer: Printer,
   camera: Video,
+  audio: Mic,
   vm: Boxes,
   container: Container,
   network_fiber: Cable,
@@ -122,7 +124,7 @@ export function sourceLabel(source: DiscoverySource | undefined): string {
 export const DEVICE_TYPE_OPTIONS: DeviceType[] = [
   'internet', 'modem_ont', 'router', 'firewall', 'switch', 'wireless_ap', 'mesh_node',
   'nas', 'server', 'desktop', 'laptop', 'smartphone', 'tablet', 'smartwatch', 'smart_tv',
-  'iot', 'printer', 'camera', 'vm', 'container', 'network_fiber', 'generic_node', 'unknown',
+  'iot', 'printer', 'camera', 'audio', 'vm', 'container', 'network_fiber', 'generic_node', 'unknown',
 ]
 
 export const DEVICE_STATE_OPTIONS: DeviceState[] = ['online', 'offline', 'sleeping', 'unknown']
@@ -295,7 +297,12 @@ export function groupAddresses(addresses: NodeAddress[] | undefined): AddressGro
   }
   const groups = [...byKey.values()]
   for (const group of groups) {
-    group.addresses.sort((a, b) => Number(!!b.is_primary) - Number(!!a.is_primary) || a.address.localeCompare(b.address))
+    group.addresses.sort(
+      (a, b) =>
+        (b.last_seen ?? '').localeCompare(a.last_seen ?? '') ||
+        Number(!!b.is_primary) - Number(!!a.is_primary) ||
+        a.address.localeCompare(b.address),
+    )
   }
   groups.sort((a, b) => (SIDE_ORDER[a.side] ?? 5) - (SIDE_ORDER[b.side] ?? 5) || a.cidr.localeCompare(b.cidr))
   return groups
@@ -351,6 +358,7 @@ export function groupDeviceAddresses(
       cidr: subnetOfAddress(a.address, a.prefix_length),
       side: (a.interface_id && roleByIface.get(a.interface_id)) || 'unknown',
       is_primary: a.is_primary,
+      last_seen: a.last_seen,
     }))
   return groupAddresses(mapped)
 }

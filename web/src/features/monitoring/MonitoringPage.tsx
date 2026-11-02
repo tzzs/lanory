@@ -1,5 +1,5 @@
 import { Activity, Play } from 'lucide-react'
-import { t } from '@/i18n'
+import { t, translateReason } from '@/i18n'
 import { useMonitoring, useRunProbe } from '@/hooks/useApi'
 import {
   Card,
@@ -43,7 +43,7 @@ function InterfaceCard({ status }: { status: InterfaceStatus }) {
             </p>
           </div>
         </div>
-        <Badge tone={up ? 'success' : 'danger'}>{up ? 'UP' : 'NO-CARRIER'}</Badge>
+        <Badge tone={up ? 'success' : 'danger'}>{up ? t('interface.up') : t('interface.no_carrier')}</Badge>
       </div>
 
       <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
@@ -110,7 +110,7 @@ function ProbeRow({ status }: { status: ProbeStatus }) {
       <TD className="font-mono text-xs">{formatLatency(avg_latency_ms || probe.last_latency_ms)}</TD>
       <TD className="font-mono text-xs">{formatPercent(loss_pct)}</TD>
       <TD className="text-xs text-muted">
-        {probe.last_error || (probe.state_reason ? probe.state_reason : '—')}
+        {probe.last_error || translateReason(probe.state_reason_code, probe.state_reason || '—')}
       </TD>
       <TD className="text-xs text-muted">{probe.last_run_at ? formatRelativeTime(probe.last_run_at) : '—'}</TD>
       <TD>

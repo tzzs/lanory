@@ -131,7 +131,21 @@ func (a *App) anomalies(interfaces []model.InterfaceStatus, counts model.DeviceC
 				Severity: "warning",
 				Title:    is.Interface.Name + " has no carrier",
 				Detail:   "The interface is administratively " + string(is.Interface.AdminState) + " but the physical link is down.",
-				Since:    is.Interface.LastSeen,
+				ReasonCode: &model.Reason{
+					Code: model.ReasonAnomalyNoCarrier,
+					Params: map[string]string{
+						"interface":   is.Interface.Name,
+						"admin_state": string(is.Interface.AdminState),
+					},
+				},
+				DetailReasonCode: &model.Reason{
+					Code: model.ReasonAnomalyNoCarrierDetail,
+					Params: map[string]string{
+						"interface":   is.Interface.Name,
+						"admin_state": string(is.Interface.AdminState),
+					},
+				},
+				Since: is.Interface.LastSeen,
 			})
 		}
 	}
@@ -141,7 +155,15 @@ func (a *App) anomalies(interfaces []model.InterfaceStatus, counts model.DeviceC
 			Severity: "warning",
 			Title:    strconv.Itoa(counts.Offline) + " device(s) offline",
 			Detail:   "Devices that failed several consecutive reachability checks.",
-			Since:    now,
+			ReasonCode: &model.Reason{
+				Code:   model.ReasonAnomalyDevicesOffline,
+				Params: map[string]string{"count": strconv.Itoa(counts.Offline)},
+			},
+			DetailReasonCode: &model.Reason{
+				Code:   model.ReasonAnomalyDevicesOfflineDetail,
+				Params: map[string]string{"count": strconv.Itoa(counts.Offline)},
+			},
+			Since: now,
 		})
 	}
 	if counts.Unknown > 0 {
@@ -150,7 +172,15 @@ func (a *App) anomalies(interfaces []model.InterfaceStatus, counts model.DeviceC
 			Severity: "info",
 			Title:    strconv.Itoa(counts.Unknown) + " device(s) have unknown state",
 			Detail:   "Not enough evidence to say whether these devices are reachable. Enable monitoring to collect it.",
-			Since:    now,
+			ReasonCode: &model.Reason{
+				Code:   model.ReasonAnomalyDevicesUnknown,
+				Params: map[string]string{"count": strconv.Itoa(counts.Unknown)},
+			},
+			DetailReasonCode: &model.Reason{
+				Code:   model.ReasonAnomalyDevicesUnknownDetail,
+				Params: map[string]string{"count": strconv.Itoa(counts.Unknown)},
+			},
+			Since: now,
 		})
 	}
 	return out
@@ -460,6 +490,7 @@ func (a *App) handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 		TypeSource:       model.SourceManual,
 		State:            model.StateUnknown,
 		StateReason:      "not yet probed",
+		StateReasonCode:  &model.Reason{Code: model.ReasonNotYetProbed, Params: map[string]string{}},
 		LastStateChange:  now,
 		PrimaryIPv4:      ipv4,
 		PrimaryIPv6:      ipv6,
