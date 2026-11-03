@@ -30,7 +30,7 @@ luci.http.header("Cache-Control", "no-store")
  <div class="ln-host-heading">
   <h2><%=tr("Lanory · 网绘", "Lanory")%></h2>
   <div class="ln-host-actions">
-   <a id="ln-standalone" target="_blank" rel="opener" referrerpolicy="origin"><%=tr("独立窗口 ↗", "Open standalone ↗")%></a>
+   <a id="ln-standalone" target="_blank" rel="noopener noreferrer"><%=tr("独立窗口 ↗", "Open standalone ↗")%></a>
    <a href="<%=luci.dispatcher.build_url('admin','services','lanory','config')%>"><%=tr("服务设置", "Service settings")%></a>
   </div>
  </div>
@@ -54,11 +54,34 @@ luci.http.header("Cache-Control", "no-store")
   return;
  }
  var session;
- var standaloneWindow;
  var ready = false;
  standalone.addEventListener('click', function (event) {
   event.preventDefault();
-  standaloneWindow = window.open(standalone.href, '_blank');
+  if (!window.crypto || !window.crypto.getRandomValues) {
+   window.open(standalone.href, '_blank', 'noopener');
+   return;
+  }
+  var bytes = new Uint8Array(16);
+  window.crypto.getRandomValues(bytes);
+  var nonce = Array.prototype.map.call(bytes, function (value) { return value.toString(16).padStart(2, '0'); }).join('');
+  var child = window.open('about:blank', '_blank');
+  if (!child) return;
+  child.opener = null;
+  var timeout = setTimeout(function () { child.close(); }, 10000);
+  var url = new URL(standalone.href);
+  url.hash = 'lanory-auth=' + nonce;
+  var launchOrigin = origin;
+  var sessionRequest = requestSession();
+  child.location.replace(url.href);
+  sessionRequest.then(function (sessionData) {
+   var attempts = 0;
+   var send = function () {
+    if (child.closed || attempts++ >= 20) { clearTimeout(timeout); return; }
+    child.postMessage({ type: 'lanory:standalone-session', nonce: nonce, token: sessionData.token }, launchOrigin);
+    setTimeout(send, 250);
+   };
+   send();
+  }).catch(function () { clearTimeout(timeout); child.close(); showError(); });
  });
  function requestSession() {
   if (!session) session = fetch(<%=js(luci.dispatcher.build_url('admin','services','lanory','session'))%>, {
@@ -93,9 +116,7 @@ luci.http.header("Cache-Control", "no-store")
  // frame's app content should scroll, never the surrounding LuCI viewport.
  for (var ancestor = host.parentElement; ancestor; ancestor = ancestor.parentElement) ancestor.scrollTop = 0;
  window.addEventListener('message', function (event) {
-  var fromFrame = event.source === frame.contentWindow;
-  var fromStandalone = standaloneWindow && event.source === standaloneWindow && !standaloneWindow.closed;
-  if ((!fromFrame && !fromStandalone) || event.origin !== origin || !event.data) return;
+  if (event.source !== frame.contentWindow || event.origin !== origin || !event.data) return;
   if (event.data.type === 'lanory:ready') {
    // The app asked for its bootstrap. Answer with the host context first, then the
    // credential: the app applies the language and theme as a default, and only
@@ -104,11 +125,6 @@ luci.http.header("Cache-Control", "no-store")
    requestSession().then(function (data) {
     frame.contentWindow.postMessage({ type: 'lanory:session', token: data.token }, origin);
     ready = true; status.hidden = true; resize();
-   }).catch(showError);
-  } else if (event.data.type === 'lanory:standalone-ready') {
-   if (event.source !== standaloneWindow || !standaloneWindow || standaloneWindow.closed) return;
-   requestSession().then(function (data) {
-    if (standaloneWindow && !standaloneWindow.closed) standaloneWindow.postMessage({ type: 'lanory:standalone-session', token: data.token }, origin);
    }).catch(showError);
   } else if (event.data.type === 'lanory:route') {
    var path = route(event.data.path);
