@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { isEmbedded, trustedParentOrigin, notifyParentRoute, initializeEmbeddedSession } from './embed'
+import { isEmbedded, trustedParentOrigin, notifyParentRoute, initializeEmbeddedSession, initializeStandaloneSession } from './embed'
 import { readToken, setSessionToken, writeToken } from './api'
 import { useUIStore } from '@/stores/ui'
 import { getLanguage, setLanguage } from '@/i18n'
@@ -47,6 +47,30 @@ describe('embedded entry', () => {
   })
 })
 
+
+describe('standalone LuCI session handshake', () => {
+  it('requests credentials from the LuCI opener and keeps them in memory', async () => {
+    const opener = { postMessage: vi.fn() }
+    vi.stubGlobal('opener', opener)
+    vi.spyOn(document, 'referrer', 'get').mockReturnValue('http://localhost/cgi-bin/luci/admin/services/lanory')
+    const ready = initializeStandaloneSession()
+    expect(opener.postMessage).toHaveBeenCalledWith({ type: 'lanory:standalone-ready' }, 'http://localhost')
+    window.dispatchEvent(new MessageEvent('message', { source: window, origin: 'http://localhost', data: { type: 'lanory:standalone-session', token: 'spoofed-token' } }))
+    expect(readToken()).toBeNull()
+    window.dispatchEvent(new MessageEvent('message', { source: opener as unknown as Window, origin: 'http://evil.example', data: { type: 'lanory:standalone-session', token: 'spoofed-token' } }))
+    expect(readToken()).toBeNull()
+    window.dispatchEvent(new MessageEvent('message', { source: opener as unknown as Window, origin: 'http://localhost', data: { type: 'lanory:standalone-session', token: 'luci-token' } }))
+    await ready
+    expect(readToken()).toBe('luci-token')
+    expect(localStorage.getItem('lanory.token')).toBeNull()
+  })
+
+  it('leaves direct standalone visits on the regular token login path', async () => {
+    vi.stubGlobal('opener', null)
+    await initializeStandaloneSession()
+    expect(readToken()).toBeNull()
+  })
+})
 
 describe('LuCI session handshake', () => {
   it('ignores other windows and origins before accepting the actual parent', async () => {

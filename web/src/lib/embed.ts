@@ -180,6 +180,33 @@ function listenForHostContext(origin: string): void {
   window.addEventListener('message', hostContextListener)
 }
 
+/** Requests a LuCI credential only when this page was opened by a same-router LuCI page. */
+export function initializeStandaloneSession(): Promise<void> {
+  if (isEmbedded() || !window.opener) return Promise.resolve()
+  const origin = trustedParentOrigin(document.referrer, window.location.origin)
+  if (!origin) return Promise.resolve()
+
+  return new Promise((resolve) => {
+    const finish = () => {
+      window.clearTimeout(timeout)
+      window.removeEventListener('message', receive)
+      resolve()
+    }
+    const receive = (event: MessageEvent) => {
+      if (event.source !== window.opener || event.origin !== origin) return
+      const data: unknown = event.data
+      if (typeof data !== 'object' || data === null) return
+      const message = data as { type?: unknown; token?: unknown }
+      if (message.type !== 'lanory:standalone-session' || typeof message.token !== 'string' || !message.token) return
+      setSessionToken(message.token)
+      finish()
+    }
+    const timeout = window.setTimeout(finish, 3000)
+    window.addEventListener('message', receive)
+    window.opener.postMessage({ type: 'lanory:standalone-ready' }, origin)
+  })
+}
+
 export function initializeEmbeddedSession(): Promise<void> {
   if (!isEmbedded()) return Promise.resolve()
   const origin = trustedParentOrigin(document.referrer, window.location.origin)

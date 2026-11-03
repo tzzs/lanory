@@ -2,7 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './app/App'
 import './index.css'
-import { initializeEmbeddedSession } from '@/lib/embed'
+import { initializeEmbeddedSession, initializeStandaloneSession } from '@/lib/embed'
 import { getLanguage, setLanguage, t } from '@/i18n'
 import { useUIStore } from '@/stores/ui'
 
@@ -19,7 +19,7 @@ const root = document.getElementById('root')
 if (!root) throw new Error('missing #root element')
 
 const appRoot = createRoot(root)
-void initializeEmbeddedSession().then(() => {
+void initializeEmbeddedSession().then(initializeStandaloneSession).then(() => {
   appRoot.render(<StrictMode><App /></StrictMode>)
 }).catch(() => {
   appRoot.render(

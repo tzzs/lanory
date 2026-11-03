@@ -30,7 +30,7 @@ luci.http.header("Cache-Control", "no-store")
  <div class="ln-host-heading">
   <h2><%=tr("Lanory · 网绘", "Lanory")%></h2>
   <div class="ln-host-actions">
-   <a id="ln-standalone" target="_blank" rel="noopener noreferrer"><%=tr("独立窗口 ↗", "Open standalone ↗")%></a>
+   <a id="ln-standalone" target="_blank" rel="opener" referrerpolicy="origin"><%=tr("独立窗口 ↗", "Open standalone ↗")%></a>
    <a href="<%=luci.dispatcher.build_url('admin','services','lanory','config')%>"><%=tr("服务设置", "Service settings")%></a>
   </div>
  </div>
@@ -54,7 +54,26 @@ luci.http.header("Cache-Control", "no-store")
   return;
  }
  var session;
+ var standaloneWindow;
  var ready = false;
+ standalone.addEventListener('click', function (event) {
+  event.preventDefault();
+  standaloneWindow = window.open(standalone.href, '_blank');
+ });
+ function requestSession() {
+  if (!session) session = fetch(<%=js(luci.dispatcher.build_url('admin','services','lanory','session'))%>, {
+   method: 'POST', credentials: 'same-origin', cache: 'no-store',
+   headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+   body: new URLSearchParams({ token: <%=js(luci.dispatcher.context.authtoken or '')%> }).toString()
+  }).then(function (response) {
+   if (!response.ok || !(response.headers.get('content-type') || '').includes('application/json')) throw new Error('session');
+   return response.json();
+  }).then(function (data) {
+   if (!data.token) throw new Error('credential');
+   return data;
+  });
+  return session;
+ }
  function showError() {
   status.hidden = false;
   resize();
@@ -74,24 +93,22 @@ luci.http.header("Cache-Control", "no-store")
  // frame's app content should scroll, never the surrounding LuCI viewport.
  for (var ancestor = host.parentElement; ancestor; ancestor = ancestor.parentElement) ancestor.scrollTop = 0;
  window.addEventListener('message', function (event) {
-  if (event.source !== frame.contentWindow || event.origin !== origin || !event.data) return;
+  var fromFrame = event.source === frame.contentWindow;
+  var fromStandalone = standaloneWindow && event.source === standaloneWindow && !standaloneWindow.closed;
+  if ((!fromFrame && !fromStandalone) || event.origin !== origin || !event.data) return;
   if (event.data.type === 'lanory:ready') {
    // The app asked for its bootstrap. Answer with the host context first, then the
    // credential: the app applies the language and theme as a default, and only
    // until the user chooses its own, so sending them every time is harmless.
    frame.contentWindow.postMessage(<%=js(host_context)%>, origin);
-   if (!session) session = fetch(<%=js(luci.dispatcher.build_url('admin','services','lanory','session'))%>, {
-    method: 'POST', credentials: 'same-origin', cache: 'no-store',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ token: <%=js(luci.dispatcher.context.authtoken or '')%> }).toString()
-   }).then(function (response) {
-    if (!response.ok || !(response.headers.get('content-type') || '').includes('application/json')) throw new Error('session');
-    return response.json();
-   });
-   session.then(function (data) {
-    if (!data.token) throw new Error('credential');
+   requestSession().then(function (data) {
     frame.contentWindow.postMessage({ type: 'lanory:session', token: data.token }, origin);
     ready = true; status.hidden = true; resize();
+   }).catch(showError);
+  } else if (event.data.type === 'lanory:standalone-ready') {
+   if (event.source !== standaloneWindow || !standaloneWindow || standaloneWindow.closed) return;
+   requestSession().then(function (data) {
+    if (standaloneWindow && !standaloneWindow.closed) standaloneWindow.postMessage({ type: 'lanory:standalone-session', token: data.token }, origin);
    }).catch(showError);
   } else if (event.data.type === 'lanory:route') {
    var path = route(event.data.path);
