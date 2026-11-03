@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DeviceInspector } from '@/features/topology/DeviceInspector'
@@ -53,6 +53,57 @@ describe('DeviceInspector', () => {
     useDeviceMock.mockReturnValue({ data: detail, isLoading: false, isError: false })
     useTopologyMock.mockReturnValue({ data: null })
     useUIStore.setState({ selectedDeviceId: device.id })
+  })
+
+  it('shows the empty panel when no device is selected', () => {
+    useUIStore.setState({ selectedDeviceId: null })
+    renderInspector()
+    expect(screen.getByText('Select a node')).toBeTruthy()
+    expect(useDeviceMock).not.toHaveBeenCalled()
+  })
+
+  it('shows a loading state while device details are being fetched', () => {
+    useDeviceMock.mockReturnValue({ data: undefined, isLoading: true, isError: false })
+    renderInspector()
+    expect(document.querySelector('aside .animate-pulse')).toBeTruthy()
+  })
+
+  it('shows an error state and closes it when requested', async () => {
+    useDeviceMock.mockReturnValue({ data: undefined, isLoading: false, isError: true })
+    renderInspector()
+    expect(screen.getByText('Something went wrong')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(useUIStore.getState().selectedDeviceId).toBeNull()
+  })
+
+  it('shows the no-address message and expands the complete address list', async () => {
+    useDeviceMock.mockReturnValue({
+      data: { ...detail, addresses: [], device: { ...device, is_manual: true, manufacturer: 'Lanory', model: 'Router X', hostname: 'router.local', state_reason: 'offline', state_reason_code: 'probe_failed' } },
+      isLoading: false,
+      isError: false,
+    })
+    renderInspector()
+    expect(screen.getByText('No address')).toBeTruthy()
+    expect(screen.getByText('Manual')).toBeTruthy()
+    expect(screen.getByText('Router X')).toBeTruthy()
+    expect(screen.getByText('router.local')).toBeTruthy()
+    expect(screen.getByText('offline')).toBeTruthy()
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: 'View device details' })).toBeTruthy()
+    cleanup()
+
+    useDeviceMock.mockReturnValue({
+      data: { ...detail, addresses: [...detail.addresses, { ...detail.addresses[0], id: 'a3', address: '2001:db8::1', family: 'ipv6' }] },
+      isLoading: false,
+      isError: false,
+    })
+    useUIStore.setState({ selectedDeviceId: device.id })
+    const { unmount } = renderInspector()
+    fireEvent.click(screen.getByRole('button', { name: /Show all 3 addresses/ }))
+    expect(screen.getByText('2001:db8::1')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /Show fewer addresses/ }))
+    expect(screen.queryByText('2001:db8::1')).toBeNull()
+    unmount()
   })
 
   it('uses the shared address groups to show subnet labels in detail', () => {

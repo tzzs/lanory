@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { isEmbedded, trustedParentOrigin, notifyParentRoute, initializeEmbeddedSession } from './embed'
+import { isEmbedded, trustedParentOrigin, notifyParentRoute, initializeEmbeddedSession, initializeStandaloneSession } from './embed'
 import { readToken, setSessionToken, writeToken } from './api'
 import { useUIStore } from '@/stores/ui'
 import { getLanguage, setLanguage } from '@/i18n'
@@ -47,6 +47,30 @@ describe('embedded entry', () => {
   })
 })
 
+
+describe('standalone LuCI session handshake', () => {
+  it('accepts a same-router nonce-bound credential and removes the nonce from the URL', async () => {
+    history.replaceState(null, '', '/#lanory-auth=0123456789abcdef0123456789abcdef')
+    vi.spyOn(document, 'referrer', 'get').mockReturnValue('http://localhost/cgi-bin/luci/admin/services/lanory')
+    const ready = initializeStandaloneSession()
+    window.dispatchEvent(new MessageEvent('message', { source: window, origin: 'http://localhost', data: { type: 'lanory:standalone-session', nonce: '0123456789abcdef0123456789abcdef', token: 'wrong' } }))
+    expect(readToken()).toBeNull()
+    window.dispatchEvent(new MessageEvent('message', { source: window, origin: 'http://evil.example', data: { type: 'lanory:standalone-session', nonce: '0123456789abcdef0123456789abcdef', token: 'wrong' } }))
+    expect(readToken()).toBeNull()
+    const hostWindow = {} as Window
+    window.dispatchEvent(new MessageEvent('message', { source: hostWindow, origin: 'http://localhost', data: { type: 'lanory:standalone-session', nonce: '0123456789abcdef0123456789abcdef', token: 'luci-token' } }))
+    await ready
+    expect(readToken()).toBe('luci-token')
+    expect(location.hash).toBe('')
+    expect(localStorage.getItem('lanory.token')).toBeNull()
+  })
+
+  it('leaves direct standalone visits on the regular token login path', async () => {
+    history.replaceState(null, '', '/')
+    await initializeStandaloneSession()
+    expect(readToken()).toBeNull()
+  })
+})
 
 describe('LuCI session handshake', () => {
   it('ignores other windows and origins before accepting the actual parent', async () => {

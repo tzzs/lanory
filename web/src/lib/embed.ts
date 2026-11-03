@@ -180,6 +180,34 @@ function listenForHostContext(origin: string): void {
   window.addEventListener('message', hostContextListener)
 }
 
+/** Accepts a nonce-bound credential from a same-router LuCI page. */
+export function initializeStandaloneSession(): Promise<void> {
+  if (isEmbedded()) return Promise.resolve()
+  const nonce = new URLSearchParams(window.location.hash.slice(1)).get('lanory-auth')
+  const origin = trustedParentOrigin(document.referrer, window.location.origin)
+  if (!nonce || !/^[0-9a-f]{32}$/.test(nonce) || !origin) return Promise.resolve()
+
+  return new Promise((resolve) => {
+    const finish = () => {
+      window.clearTimeout(timeout)
+      window.removeEventListener('message', receive)
+      history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
+      resolve()
+    }
+    const receive = (event: MessageEvent) => {
+      if (event.origin !== origin || !event.source || event.source === window) return
+      const data: unknown = event.data
+      if (typeof data !== 'object' || data === null) return
+      const message = data as { type?: unknown; nonce?: unknown; token?: unknown }
+      if (message.type !== 'lanory:standalone-session' || message.nonce !== nonce || typeof message.token !== 'string' || !message.token) return
+      setSessionToken(message.token)
+      finish()
+    }
+    const timeout = window.setTimeout(finish, 3000)
+    window.addEventListener('message', receive)
+  })
+}
+
 export function initializeEmbeddedSession(): Promise<void> {
   if (!isEmbedded()) return Promise.resolve()
   const origin = trustedParentOrigin(document.referrer, window.location.origin)

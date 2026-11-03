@@ -1,6 +1,6 @@
 <div align="center">
 
-# Lanory · 网绘
+# Lanory 网绘
 
 **家的网络，一图看清。**
 **See your home network at a glance.**
@@ -56,10 +56,11 @@ Internet
 | ✅ | 可达性监控，带失败阈值（连续失败 N 次才判定离线） | 已实现 |
 | ✅ | 探测历史、设备状态历史、网络事件记录 | 已实现 |
 | ✅ | SSE 实时推送 | 已实现 |
-| ✅ | 可安装的 `.ipk` + `.apk`（x86_64 / aarch64 / armv7 / i386，**不支持 MIPS**） | 已在参考路由器上**实际安装验证**；格式校验通过，支持签名（`make apk-sign`） |
+| ✅ | 可安装的 `.ipk` + `.apk`（x86_64 / aarch64 / armv7 / i386，**不支持 MIPS**） | 已由直接打包器构建并通过格式校验；支持签名（`make apk-sign`）；SDK 和设备验证边界见 [OpenWrt 打包说明](packaging/openwrt/README.md#status-of-this-directory) |
 | ✅ | Demo 模式：不需要路由器即可预览完整界面 | 已实现 |
 | ✅ | 中英文界面 | 已实现 |
-| ⚠️ | LLDP、mDNS、SSDP 采集器 | 已实现，默认关闭，未在真实组播网络验证 |
+| ⚠️ | LLDP、mDNS 采集器 | 已实现，默认关闭，未在真实组播网络验证 |
+| ❌ | SSDP 采集器 | 尚未实现，仅预留配置项 |
 | ⚠️ | 通用路由器适配器 | 已实现（不提供客户端枚举） |
 | ⚠️ | 小米路由器适配器 | 已实现，能力探测；仅在模拟设备上验证 |
 | ❌ | TP-Link / ASUS / 华为 / SNMP 适配器 | 注册表已预留，未实现 |
@@ -97,15 +98,15 @@ make release     # dist/lanory-linux-{amd64,arm64,armv7,386}
 make packages    # dist/packages/*.ipk + *.apk，全程不涉及 SDK
 make package-check
 
-# 生成的服务 APK 文件名如下：
-#   x86_64-lanory-0.1.0.apk
-#   aarch64_generic-lanory-0.1.0.apk
-#   arm_cortex-a7_neon-vfpv4-lanory-0.1.0.apk
-#   i386_pentium4-lanory-0.1.0.apk
+# 生成的服务 APK 文件名如下（版本号来自 Makefile）：
+#   x86_64-lanory-<version>.apk
+#   aarch64_generic-lanory-<version>.apk
+#   arm_cortex-a7_neon-vfpv4-lanory-<version>.apk
+#   i386_pentium4-lanory-<version>.apk
 
 # OpenWrt 25.x / iStoreOS 路由器：挑与 `uname -m` 匹配的文件
-scp dist/packages/aarch64_generic-lanory-0.1.0.apk root@192.168.100.1:/tmp/
-ssh root@192.168.100.1 'apk add --allow-untrusted /tmp/aarch64_generic-lanory-0.1.0.apk'
+scp dist/packages/aarch64_generic-lanory-<version>.apk root@192.168.100.1:/tmp/
+ssh root@192.168.100.1 'apk add --allow-untrusted /tmp/aarch64_generic-lanory-<version>.apk'
 ssh root@192.168.100.1 'logread -e lanory | grep token'   # 访问令牌
 ```
 
@@ -113,11 +114,11 @@ ssh root@192.168.100.1 'logread -e lanory | grep token'   # 访问令牌
 是旧版 OpenWrt 或兼容路径，不是 OpenWrt 25.x / iStoreOS 的默认路径。
 
 兼容路径下，直接打包器生成的文件名是
-`lanory_0.1.0_aarch64_generic.ipk`（其他架构同样替换架构名）：
+`lanory_<version>_aarch64_generic.ipk`（其他架构同样替换架构名）：
 
 ```sh
-scp dist/packages/lanory_0.1.0_aarch64_generic.ipk root@192.168.100.1:/tmp/
-ssh root@192.168.100.1 'opkg install /tmp/lanory_0.1.0_aarch64_generic.ipk'
+scp dist/packages/lanory_<version>_aarch64_generic.ipk root@192.168.100.1:/tmp/
+ssh root@192.168.100.1 'opkg install /tmp/lanory_<version>_aarch64_generic.ipk'
 ```
 
 如果你希望由 buildroot 从源码编译（feed 风格、可复现、由 SDK 签名），
@@ -178,7 +179,7 @@ br-lan）、拓扑连线、带历史的探测目标，以及一条事件时间�
 make web-dev      # 终端 1：Vite 开发服务器 :5173，把 /api 代理到 :8787
 make run          # 终端 2：构建前端并嵌入二进制后运行
 make test         # go test ./...
-make check        # gofmt + go vet + go test
+make check        # go fmt + go vet + go test + apk-check
 cd web && npm test
 ```
 

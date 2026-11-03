@@ -7,7 +7,7 @@ import {
   HelpCircle,
 } from 'lucide-react'
 import { t, translateReason } from '@/i18n'
-import { useOverview, useMonitoring } from '@/hooks/useApi'
+import { useOverview, useMonitoring, useDiscoveryStatus, useStartScan } from '@/hooks/useApi'
 import {
   Card,
   CardHeader,
@@ -40,12 +40,14 @@ function StatTile({
   icon: Icon,
   tone = 'neutral',
   hint,
+  to,
 }: {
   label: string
   value: number | string
   icon: typeof Wifi
   tone?: 'neutral' | 'success' | 'danger' | 'muted'
   hint?: string
+  to: string
 }) {
   const toneClass =
     tone === 'success'
@@ -57,16 +59,18 @@ function StatTile({
           : 'text-fg'
 
   return (
-    <Card className="p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs text-muted">{label}</p>
-          <p className={`mt-1 text-2xl font-semibold tabular-nums ${toneClass}`}>{value}</p>
-          {hint ? <p className="mt-0.5 text-[11px] text-muted">{hint}</p> : null}
+    <Link to={to} className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60">
+      <Card className="p-4 transition-colors hover:border-accent/50">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs text-muted">{label}</p>
+            <p className={`mt-1 text-2xl font-semibold tabular-nums ${toneClass}`}>{value}</p>
+            {hint ? <p className="mt-0.5 text-[11px] text-muted">{hint}</p> : null}
+          </div>
+          <Icon size={18} strokeWidth={1.75} className="shrink-0 text-muted" aria-hidden="true" />
         </div>
-        <Icon size={18} strokeWidth={1.75} className="shrink-0 text-muted" aria-hidden="true" />
-      </div>
-    </Card>
+      </Card>
+    </Link>
   )
 }
 
@@ -147,6 +151,8 @@ function EventMiniRow({ event }: { event: NetworkEvent }) {
 export function OverviewPage() {
   const { data, isLoading, error, refetch } = useOverview()
   const monitoring = useMonitoring()
+  const discovery = useDiscoveryStatus()
+  const startScan = useStartScan()
 
   if (isLoading) {
     return (
@@ -182,19 +188,46 @@ export function OverviewPage() {
 
   return (
     <div className="space-y-5 p-6">
-      <PageHeader title={t('overview.title')} description={t('overview.subtitle')} />
+      <PageHeader
+        title={t('overview.title')}
+        description={t('overview.subtitle')}
+        actions={
+          <Button
+            variant="primary"
+            disabled={startScan.isPending || discovery.data?.running}
+            onClick={() => startScan.mutate({}, { onSuccess: () => void discovery.refetch() })}
+          >
+            {startScan.isPending || discovery.data?.running ? t('discovery.scanning') : t('discovery.scan')}
+          </Button>
+        }
+      />
+      {startScan.error instanceof Error ? (
+        <p role="alert" className="text-xs text-danger">{startScan.error.message}</p>
+      ) : null}
+      {discovery.data?.running ? (
+        <p role="status" className="text-xs text-muted">{t('discovery.scanning')}</p>
+      ) : discovery.data?.last_job?.status === 'completed' ? (
+        <p role="status" className="text-xs text-muted">
+          {t('discovery.last_result', { found: discovery.data.last_job.devices_found, added: discovery.data.last_job.devices_new })}
+        </p>
+      ) : discovery.data?.last_job?.status === 'failed' ? (
+        <p role="alert" className="text-xs text-danger">
+          {discovery.data.last_job.error || t('discovery.failed')}
+        </p>
+      ) : null}
 
       {/* stats */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatTile label={t('overview.total_devices')} value={counts.total} icon={MonitorSmartphone} />
-        <StatTile label={t('overview.online')} value={counts.online} icon={Wifi} tone="success" />
+        <StatTile label={t('overview.total_devices')} value={counts.total} icon={MonitorSmartphone} to="/devices" />
+        <StatTile label={t('overview.online')} value={counts.online} icon={Wifi} tone="success" to="/devices?state=online" />
         <StatTile
           label={t('overview.offline')}
           value={counts.offline}
           icon={WifiOff}
           tone={counts.offline > 0 ? 'danger' : 'neutral'}
+          to="/devices?state=offline"
         />
-        <StatTile label={t('overview.unknown')} value={counts.unknown} icon={HelpCircle} tone="muted" />
+        <StatTile label={t('overview.unknown')} value={counts.unknown} icon={HelpCircle} tone="muted" to="/devices?state=unknown" />
       </div>
 
       {/* mini topology */}

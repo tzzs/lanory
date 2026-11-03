@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { DeviceDetailPanel } from './DeviceDetailPanel'
+import { AddDeviceForm, DeviceDetailPanel } from './DeviceDetailPanel'
 import { useUIStore } from '@/stores/ui'
 import type { Device, DeviceDetail } from '@/types/api'
 
@@ -19,6 +19,7 @@ import type { Device, DeviceDetail } from '@/types/api'
 // stubbed so the component can be rendered without a QueryClientProvider or a
 // backend; only the layout is under test.
 const useDeviceDetail = vi.fn()
+const createDevice = vi.fn()
 
 vi.mock('@/hooks/useApi', () => ({
   useDevice: (...args: unknown[]) => useDeviceDetail(...args),
@@ -26,7 +27,7 @@ vi.mock('@/hooks/useApi', () => ({
   usePatchDevice: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useDeleteDevice: () => ({ mutate: vi.fn(), isPending: false }),
   useMergeDevice: () => ({ mutate: vi.fn(), isPending: false }),
-  useCreateDevice: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useCreateDevice: () => ({ mutateAsync: (...args: unknown[]) => createDevice(...args), isPending: false }),
 }))
 
 const device: Device = {
@@ -82,7 +83,9 @@ function renderPanel(onClose: () => void) {
 
 describe('DeviceDetailPanel', () => {
   beforeEach(() => {
+    createDevice.mockReset()
     useDeviceDetail.mockReset()
+    createDevice.mockReset().mockResolvedValue({ id: 'new-device' })
     useDeviceDetail.mockReturnValue({ data: detail, isLoading: false, isError: false })
     useUIStore.setState({ selectedDeviceId: device.id })
   })
@@ -132,6 +135,27 @@ describe('DeviceDetailPanel', () => {
     const classes = panelElement().className.split(/\s+/)
     expect(classes).toContain('fixed')
     expect(classes).toContain('lg:static')
+  })
+
+  it('renders the add form, validates required names and submits a trimmed device', async () => {
+    const onDone = vi.fn()
+    render(
+      <MemoryRouter>
+        <AddDeviceForm onDone={onDone} />
+      </MemoryRouter>,
+    )
+    fireEvent.submit(document.querySelector('form') as HTMLFormElement)
+    expect(await screen.findByRole('alert')).toBeTruthy()
+    fireEvent.change(screen.getByText('Name *').nextElementSibling as HTMLInputElement, { target: { value: '  Guest AP  ' } })
+    fireEvent.change(screen.getByText('Hostname').nextElementSibling as HTMLInputElement, { target: { value: 'guest.local' } })
+    fireEvent.change(screen.getByText('IPv4').nextElementSibling as HTMLInputElement, { target: { value: '192.168.1.99' } })
+    fireEvent.submit(document.querySelector('form') as HTMLFormElement)
+    await waitFor(() => expect(createDevice).toHaveBeenCalledWith({
+      name: 'Guest AP', type: 'unknown', hostname: 'guest.local', ipv4: '192.168.1.99',
+      ipv6: undefined, mac: undefined, manufacturer: undefined, model: undefined, description: undefined,
+      parent_device_id: undefined, connection_type: 'physical_link',
+    }))
+    expect(onDone).toHaveBeenCalledOnce()
   })
 
   it('shows a compact history with an explicit way to reveal all events', () => {

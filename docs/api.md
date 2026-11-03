@@ -373,8 +373,7 @@ Two things a client must do regardless:
   buffer, not a guaranteed exactly-once delivery. Today the stream also replays
   the whole retained buffer into the new subscription, so a reconnect can re-send
   events at or below the `Last-Event-ID` you sent. Treat any `seq` you have
-  already handled as a no-op. This is a known defect, recorded in
-  `.sdd/briefs/task-12-report.md`.
+  already handled as a no-op.
 - **Detect gaps.** A `seq` that jumps by more than one means the buffer dropped
   events: the client missed them and should refetch the state it cares about
   (`GET /api/v1/devices`, `/api/v1/topology`) rather than assume it is current.

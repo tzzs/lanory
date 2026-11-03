@@ -1,9 +1,15 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { MonitoringPage } from './MonitoringPage'
 import type { MonitoringStatus, ProbeStatus, ProbeTarget } from '@/types/api'
+
+const { useMonitoringMock, useRunProbeMock, runProbeMutate } = vi.hoisted(() => ({ useMonitoringMock: vi.fn(), useRunProbeMock: vi.fn(), runProbeMutate: vi.fn() }))
+vi.mock('@/hooks/useApi', () => ({
+  useMonitoring: () => useMonitoringMock(),
+  useRunProbe: () => useRunProbeMock(),
+}))
 
 /**
  * The monitoring page must survive a null `recent`.
@@ -47,8 +53,8 @@ function renderWithData(data: MonitoringStatus) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   })
-  // Seed the cache so the page renders synchronously from the same key it uses.
-  client.setQueryData(['monitoring', 'status'], data)
+  useMonitoringMock.mockReturnValue({ data, isLoading: false, isError: false, error: null, refetch: vi.fn() })
+  useRunProbeMock.mockReturnValue({ mutate: runProbeMutate, isPending: false })
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter>
@@ -62,6 +68,9 @@ describe('MonitoringPage with probes that have no results', () => {
   let errorSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
+    useMonitoringMock.mockReset()
+    runProbeMutate.mockReset()
+    useRunProbeMock.mockReset().mockReturnValue({ mutate: runProbeMutate, isPending: false })
     // A render error is reported through console.error; fail loudly on it so a
     // regression shows up as a failure rather than a quietly empty tree.
     errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -69,6 +78,45 @@ describe('MonitoringPage with probes that have no results', () => {
 
   afterEach(() => {
     errorSpy.mockRestore()
+  })
+
+  it('shows loading and retryable error states', async () => {
+    const refetch = vi.fn()
+    useMonitoringMock.mockReturnValueOnce({ data: undefined, isLoading: true })
+    const loading = render(
+      <QueryClientProvider client={new QueryClient()}><MemoryRouter><MonitoringPage /></MemoryRouter></QueryClientProvider>,
+    )
+    expect(loading.container.querySelectorAll('.animate-pulse').length).toBeGreaterThan(0)
+    loading.unmount()
+    useMonitoringMock.mockReturnValueOnce({ data: undefined, isLoading: false, isError: true, error: new Error('offline'), refetch })
+    render(<QueryClientProvider client={new QueryClient()}><MemoryRouter><MonitoringPage /></MemoryRouter></QueryClientProvider>)
+    expect(screen.getByText('offline')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /retry/i }))
+    expect(refetch).toHaveBeenCalledOnce()
+  })
+
+  it('renders interface state, counters, probe runs, and a retry action', async () => {
+    useRunProbeMock.mockReturnValue({ mutate: runProbeMutate, isPending: false })
+    const networkProbe = probe('p1', 'Gateway')
+    networkProbe.port = 443
+    networkProbe.last_error = 'timeout'
+    networkProbe.last_run_at = '2026-01-01T00:00:00Z'
+    const iface = {
+      id: 'eth0', name: 'eth0', type: 'bridge', role: 'wan', carrier: false, oper_state: 'no-carrier',
+      speed_mbps: 0, mtu: 1500, rx_bytes: 1024, tx_bytes: 2048, rx_errors: 1, tx_errors: 2,
+      rx_dropped: 1, tx_dropped: 0,
+    }
+    const view = renderWithData({
+      ...status([{ probe: networkProbe, recent: null, loss_pct: 10, avg_latency_ms: 0 }]),
+      interfaces: [{ interface: iface, role: 'wan' } as never],
+    })
+    expect(screen.getByText('NO-CARRIER')).toBeTruthy()
+    expect(screen.getByText('timeout')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /run now/i }))
+    expect(runProbeMutate).toHaveBeenCalledWith('p1')
+    view.unmount()
+    renderWithData(status([]))
+    expect(screen.getByText('No probe targets configured')).toBeTruthy()
   })
 
   it('renders when every probe has recent: null', () => {

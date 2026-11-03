@@ -145,6 +145,7 @@ func (e *Engine) Resolve(ing Ingest) (*model.Device, bool, error) {
 		changed = true
 	}
 	if ing.TypeHint != "" && ing.TypeHint != model.DeviceTypeUnknown &&
+		dev.TypeSource != model.SourceManual &&
 		dev.Type == model.DeviceTypeUnknown && !dev.IsLocked {
 		dev.Type = ing.TypeHint
 		dev.TypeSource = ing.Source

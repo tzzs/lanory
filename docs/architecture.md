@@ -87,32 +87,26 @@ hardware or a real build system — which, for packaging, it has not been.
 | REST + SSE API | `internal/api` | implemented | route tests |
 | Static frontend embedding | `internal/api` | implemented | SPA fallback tests |
 | Frontend | `web/` | implemented | typecheck + unit tests |
-| Demo Mode | `internal/demo` | implemented | 18 tests incl. idempotency |
+| Demo Mode | `internal/demo` | implemented | 25 tests incl. idempotency |
 | Generic router adapter | `internal/adapters/generic` | implemented | HTTP test server |
 | Xiaomi router adapter | `internal/adapters/xiaomi` | implemented | fake device; **no real hardware** |
 | Adapter registry | `internal/adapters/registry` | implemented | isolation tests |
-| OpenWrt package | `packaging/openwrt` | **built and installed** | signed APK verified on the reference router |
+| OpenWrt package | `packaging/openwrt` | direct `.ipk`/`.apk` packages built and format-checked | OpenWrt SDK build, device installation and runtime are not verified; see `packaging/openwrt/README.md` |
 | LuCI companion | `packaging/openwrt/luci-app-lanory` | **built** | `make packages-luci`; ACL + menu.d verified, never rendered by a real LuCI |
 | systemd unit | `packaging/linux` | **configured, unverified** | no Linux host |
 | CI | `.github/workflows/ci.yml` | configured, never run on GitHub | — |
 
 Two further honest notes:
 
-- Large parts of this tree were developed by several agents in parallel. The
-  `internal/api` package currently works around a defect in
-  `internal/database`: four interface queries (`ListInterfaces`,
-  `ListAllInterfaces`, `GetInterface`, `GetInterfaceByName`) build their SQL
-  without the `SELECT` keyword and fail with `near "id": syntax error`. The API
-  layer reads interfaces through the store's `*sql.DB` with a correct query
-  instead of editing another package; `internal/demo` does the same behind a
-  feature probe. When the store is fixed, both workarounds delegate again. This
-  is documented in `internal/api/ifaces.go` and
-  `internal/demo/store_compat.go`.
-- `network_events.edge_id` and `probe_targets.device_id` are declared
-  `NOT NULL DEFAULT ''` with a foreign key. SQLite implements `ON DELETE SET
-  NULL` as an `UPDATE ... SET x = NULL`, which the `NOT NULL` constraint rejects,
-  so deleting a device that still has events or probes fails. Demo Mode works
-  around it by ordering its deletes; a schema fix is the real answer.
+- `internal/api/ifaces.go` and `internal/demo/store_compat.go` retain compatibility
+  paths that query interfaces directly through `store.DB()`. The store's current
+  interface queries include the `SELECT` keyword; these paths are not evidence of
+  a current SQL defect.
+- Migrations `0002_event_foreign_keys.sql` and
+  `0003_probe_device_nullable.sql` rebuild the event and probe tables with nullable
+  foreign-key columns. This allows SQLite's `ON DELETE SET NULL` action to work;
+  the original schema defect is retained in migration history, not in the current
+  schema.
 
 ## Data flow
 
@@ -349,13 +343,10 @@ dishonest, so none is published.
 
 ### What the measurements exposed
 
-Writing these tests found a schema bug rather than confirming the code was fine.
-`network_events.device_id` was declared `NOT NULL DEFAULT ''` together with
-`ON DELETE SET NULL`. SQLite therefore could not satisfy the foreign key when a
-device was deleted: the delete failed and the device's history was lost, which is
-exactly when history matters most. Migration `0002_event_foreign_keys.sql`
-rebuilds the table with nullable reference columns, and
-`TestHistorySurvivesDeviceDeletion` guards the behaviour.
+The original schema declared `network_events.device_id` as `NOT NULL DEFAULT ''`
+with `ON DELETE SET NULL`, which SQLite could not satisfy when a device was
+deleted. Migration `0002_event_foreign_keys.sql` rebuilds the table with nullable
+reference columns, and `TestHistorySurvivesDeviceDeletion` guards the behaviour.
 
 ## How a device state is decided
 

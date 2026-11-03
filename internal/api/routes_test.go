@@ -714,6 +714,40 @@ func TestSettingsRoutes(t *testing.T) {
 	assertError(t, rec, http.StatusBadRequest)
 }
 
+func TestDeviceTypePatchMarksManualSource(t *testing.T) {
+	app := newTestApp(t)
+
+	if _, err := app.store.UpdateDevice("dev-win", map[string]any{"type_source": model.SourceDHCP}); err != nil {
+		t.Fatal(err)
+	}
+
+	rec := do(t, app, http.MethodPatch, "/api/v1/devices/dev-win", `{"type":"printer"}`)
+	assertStatus(t, rec, http.StatusOK)
+
+	var patched model.Device
+	if err := json.Unmarshal(rec.Body.Bytes(), &patched); err != nil {
+		t.Fatal(err)
+	}
+	if patched.Type != model.DeviceTypePrinter {
+		t.Errorf("type = %q, want printer", patched.Type)
+	}
+	if patched.TypeSource != model.SourceManual {
+		t.Errorf("type_source = %q, want manual after user confirms a type", patched.TypeSource)
+	}
+
+	rec = do(t, app, http.MethodPatch, "/api/v1/devices/dev-win", `{"type":"unknown"}`)
+	assertStatus(t, rec, http.StatusOK)
+	if err := json.Unmarshal(rec.Body.Bytes(), &patched); err != nil {
+		t.Fatal(err)
+	}
+	if patched.Type != model.DeviceTypeUnknown {
+		t.Errorf("type = %q, want unknown after clearing manual classification", patched.Type)
+	}
+	if patched.TypeSource != "" {
+		t.Errorf("type_source = %q, want empty after clearing manual classification", patched.TypeSource)
+	}
+}
+
 // TestDeviceLifecycle checks create/patch/merge/delete of devices.
 func TestDeviceLifecycle(t *testing.T) {
 	app := newTestApp(t)

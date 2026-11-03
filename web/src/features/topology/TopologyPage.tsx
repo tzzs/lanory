@@ -19,7 +19,7 @@ import {
 import '@xyflow/react/dist/style.css'
 import { LayoutGrid, Save, Maximize2, Plus, Link2, RefreshCw, Eye } from 'lucide-react'
 import { t } from '@/i18n'
-import { useTopology, useSaveLayout, useCreateEdge, useMonitoring } from '@/hooks/useApi'
+import { useTopology, useSaveLayout, useCreateEdge, useMonitoring, useStartScan } from '@/hooks/useApi'
 import { useUIStore } from '@/stores/ui'
 import { Button, Card, Badge, Modal, Select, Input, EmptyState, ErrorState, Skeleton, Field } from '@/components/ui'
 import { LanoryNode } from '@/features/topology/LanoryNode'
@@ -62,6 +62,7 @@ function TopologyCanvas() {
   const { data, isLoading, isError, error, refetch } = useTopology()
   const saveLayout = useSaveLayout()
   const monitoring = useMonitoring()
+  const startScan = useStartScan()
   const colorMode = useResolvedColorMode()
   const selectDevice = useUIStore((s) => s.selectDevice)
   const selectEdge = useUIStore((s) => s.selectEdge)
@@ -243,9 +244,13 @@ function TopologyCanvas() {
             title={t('topology.empty')}
             description={t('discovery.scan')}
             action={
-              <Button variant="primary" onClick={() => void refetch()}>
+              <Button
+                variant="primary"
+                disabled={startScan.isPending}
+                onClick={() => startScan.mutate({})}
+              >
                 <RefreshCw size={14} aria-hidden="true" />
-                {t('app.refresh')}
+                {startScan.isPending ? t('discovery.scanning') : t('discovery.scan')}
               </Button>
             }
           />

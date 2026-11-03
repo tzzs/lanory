@@ -131,7 +131,7 @@ export function AddDeviceForm({
           <Select className="" value={type} onChange={(e) => setType(e.target.value as DeviceType)}>
             {DEVICE_TYPE_OPTIONS.map((option) => (
               <option key={option} value={option}>
-                {deviceTypeLabel(option)}
+                {option === 'unknown' ? t('device.auto_type') : deviceTypeLabel(option)}
               </option>
             ))}
           </Select>

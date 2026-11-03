@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Plus, Search, X } from 'lucide-react'
 import { t } from '@/i18n'
 import { useDevices, useDevice, useCreateDevice } from '@/hooks/useApi'
@@ -40,7 +40,7 @@ import type { Device } from '@/types/api'
 /* Filters                                                                    */
 /* -------------------------------------------------------------------------- */
 
-function DeviceFilters() {
+function DeviceFilters({ onStateChange }: { onStateChange: (state: string) => void }) {
   const filters = useUIStore((s) => s.deviceFilters)
   const setFilter = useUIStore((s) => s.setDeviceFilter)
   const reset = useUIStore((s) => s.resetDeviceFilters)
@@ -83,7 +83,11 @@ function DeviceFilters() {
         <Select
           className="w-auto min-w-[120px]"
           value={filters.state}
-          onChange={(e) => setFilter('state', e.target.value as typeof filters.state)}
+          onChange={(e) => {
+            const state = e.target.value as typeof filters.state
+            setFilter('state', state)
+            onStateChange(state)
+          }}
           aria-label={t('devices.filter_state')}
         >
           <option value="">{t('devices.filter_state')}</option>
@@ -115,7 +119,7 @@ function DeviceFilters() {
         />
 
         {dirty ? (
-          <Button variant="ghost" size="sm" onClick={reset}>
+          <Button variant="ghost" size="sm" onClick={() => { reset(); onStateChange('') }}>
             <X size={13} aria-hidden="true" />
             {t('app.cancel')}
           </Button>
@@ -173,7 +177,15 @@ function DeviceRow({ device, onSelect }: { device: Device; onSelect: (id: string
 export function DevicesPage() {
   const { id: routeId } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const filters = useUIStore((s) => s.deviceFilters)
+  const setDeviceFilter = useUIStore((s) => s.setDeviceFilter)
+  const urlState = searchParams.get('state')
+  const validURLState = DEVICE_STATE_OPTIONS.find((state) => state === urlState) ?? ''
+
+  useEffect(() => {
+    if (filters.state !== validURLState) setDeviceFilter('state', validURLState)
+  }, [filters.state, setDeviceFilter, validURLState])
   const selectDevice = useUIStore((s) => s.selectDevice)
   const setSelectedDevice = useUIStore((s) => s.setSelectedDevice)
   const detailPanelOpen = useUIStore((s) => s.detailPanelOpen)
@@ -250,7 +262,14 @@ export function DevicesPage() {
           }
         />
 
-        <DeviceFilters />
+        <DeviceFilters
+          onStateChange={(state) => {
+            const next = new URLSearchParams(searchParams)
+            if (state) next.set('state', state)
+            else next.delete('state')
+            setSearchParams(next, { replace: true })
+          }}
+        />
 
         <Card className="min-h-0 flex-1 overflow-auto" aria-busy={isFetching || undefined}>
           {/* The table's DOM has to outlive its data. The list is re-fetched on
