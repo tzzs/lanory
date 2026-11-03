@@ -429,6 +429,8 @@ const zhCN: Dict = {
   // ---- discovery ----
   'discovery.scan': '执行扫描',
   'discovery.scanning': '扫描中…',
+  'discovery.last_result': '最近扫描发现 {found} 台设备，新增 {added} 台',
+  'discovery.failed': '扫描失败',
   'discovery.cancel': '取消扫描',
   'discovery.status': '发现状态',
   'discovery.last_run': '最近运行',
@@ -829,6 +831,8 @@ const en: Dict = {
 
   'discovery.scan': 'Run scan',
   'discovery.scanning': 'Scanning…',
+  'discovery.last_result': 'Last scan found {found} device(s), including {added} new',
+  'discovery.failed': 'Scan failed',
   'discovery.cancel': 'Cancel scan',
   'discovery.status': 'Discovery status',
   'discovery.last_run': 'Last run',

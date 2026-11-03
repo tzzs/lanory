@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { TopologyPage } from './TopologyPage'
 import { useUIStore } from '@/stores/ui'
@@ -82,8 +82,10 @@ const useTopology = vi.fn()
 const useSaveLayout = vi.fn()
 const useCreateEdge = vi.fn()
 const useMonitoring = vi.fn()
+const useStartScan = vi.fn()
 
 vi.mock('@/hooks/useApi', () => ({
+  useStartScan: (...args: unknown[]) => useStartScan(...args),
   useTopology: (...args: unknown[]) => useTopology(...args),
   useSaveLayout: (...args: unknown[]) => useSaveLayout(...args),
   useCreateEdge: (...args: unknown[]) => useCreateEdge(...args),
@@ -161,6 +163,8 @@ describe('TopologyPage', () => {
     useCreateEdge.mockReturnValue({ mutate: vi.fn(), isPending: false })
     useMonitoring.mockReset()
     useMonitoring.mockReturnValue({ data: { interfaces: [] } })
+    useStartScan.mockReset()
+    useStartScan.mockReturnValue({ mutate: vi.fn(), isPending: false })
     useUIStore.setState({ theme: 'light' })
     setSystemDark(false)
     document.documentElement.classList.remove('dark')
@@ -173,6 +177,15 @@ describe('TopologyPage', () => {
   /* ------------------------------------------------------------------ */
   /* 11.1 dark theme controls                                          */
   /* ------------------------------------------------------------------ */
+
+  it('starts discovery from the empty topology state', () => {
+    useTopology.mockReturnValue({ data: { nodes: [], edges: [], layout: [], generated_at: '' }, isLoading: false, isError: false, error: null, refetch: vi.fn() })
+    const mutate = vi.fn()
+    useStartScan.mockReturnValue({ mutate, isPending: false })
+    renderPage()
+    fireEvent.click(screen.getByRole('button', { name: t('discovery.scan') }))
+    expect(mutate).toHaveBeenCalledWith({})
+  })
 
   it('passes the resolved dark mode to React Flow when the theme is dark', () => {
     useUIStore.setState({ theme: 'dark' })

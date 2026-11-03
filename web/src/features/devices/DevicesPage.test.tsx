@@ -76,10 +76,10 @@ vi.mock('@/lib/api', () => ({
   api: { devices: vi.fn(), device: vi.fn() },
 }))
 
-function renderPage(queryClient: QueryClient) {
+function renderPage(queryClient: QueryClient, initialEntry = '/devices') {
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[initialEntry]}>
         <DevicesPage />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -211,6 +211,13 @@ describe('DevicesPage table focus', () => {
     await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy())
     // Nothing to preserve yet, so the card owns the whole message.
     expect(screen.queryByRole('button', { name: 'Alpha' })).toBeNull()
+  })
+
+  it('applies a state filter provided by the URL', async () => {
+    devicesMock.mockResolvedValue(firstPage)
+    renderPage(newQueryClient(), '/devices?state=offline')
+    await waitFor(() => expect(devicesMock).toHaveBeenCalledWith(expect.objectContaining({ state: 'offline' })))
+    expect(screen.getByLabelText(t('devices.filter_state'))).toHaveProperty('value', 'offline')
   })
 
   it('filters devices by query, state, and source controls', async () => {
