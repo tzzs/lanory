@@ -213,6 +213,16 @@ describe('DevicesPage table focus', () => {
     expect(screen.queryByRole('button', { name: 'Alpha' })).toBeNull()
   })
 
+  it('filters devices by query, state, and source controls', async () => {
+    devicesMock.mockResolvedValue(firstPage)
+    renderPage(newQueryClient())
+    await waitFor(() => expect(screen.getByText('Alpha')).toBeTruthy())
+    fireEvent.change(screen.getByLabelText(t('app.search')), { target: { value: 'Beta' } })
+    await waitFor(() => expect(devicesMock).toHaveBeenCalledWith(expect.objectContaining({ query: 'Beta' })))
+    fireEvent.change(screen.getByLabelText(t('devices.filter_state')), { target: { value: 'offline' } })
+    await waitFor(() => expect(devicesMock).toHaveBeenCalledWith(expect.objectContaining({ state: 'offline' })))
+  })
+
   it('gives each row a stable key so a refresh reuses the DOM node', async () => {
     devicesMock.mockResolvedValue(firstPage)
     const queryClient = newQueryClient()

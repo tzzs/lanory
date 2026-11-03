@@ -246,6 +246,6 @@ rearranges; nothing is lost that matters.
 | hide offline in the graph | implemented (UI) | `web/src/features/topology/graph.test.ts` |
 | tree layout | implemented | `layout_test.go` |
 | persisted positions, pinning | implemented | layout tests |
-| auto-layout endpoint | **not implemented** (`501`) | route test asserts the 501 |
+| auto-layout endpoint | implemented in the full engine; store-only fallback returns `501` | `docs/api.md` describes both wiring cases |
 | VLAN breakout view | not implemented | — |
 | cross-subnet topology | not implemented | — |

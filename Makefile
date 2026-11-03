@@ -12,6 +12,10 @@ LDFLAGS     := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT)
 WEB_DIR     := web
 PKG_DIR     := packaging/openwrt
 
+# A repository-local config.yaml is optional: the binary refuses an explicit
+# --config path that does not exist, so only pass it when the file is there.
+LOCAL_CONFIG := $(if $(wildcard config.yaml),--config config.yaml,)
+
 .PHONY: all build test test-race bench lint fmt vet clean web web-dev install uninstall \
         packages packages-luci packages-all apk-sign apk-keygen apk-sdk apk-check package-check check run dev demo
 
@@ -77,16 +81,16 @@ web-dev:
 
 ## run: build everything and run the service
 run: web build
-	./bin/$(BINARY) --config config.yaml
+	./bin/$(BINARY) $(LOCAL_CONFIG)
 
 ## dev: run backend and frontend concurrently (requires two terminals or a process manager)
 dev:
 	@echo "terminal 1: make web-dev"
-	@echo "terminal 2: $(GO) run ./cmd/lanory --config config.yaml --web-dir $(WEB_DIR)/dist"
+	@echo "terminal 2: $(GO) run ./cmd/lanory $(LOCAL_CONFIG) --web-dir $(WEB_DIR)/dist"
 
 ## demo: run the service against the built-in sample network
 demo: web build
-	./bin/$(BINARY) --demo --config config.yaml
+	./bin/$(BINARY) --demo $(LOCAL_CONFIG)
 
 ## release: cross-compile the release binaries for the supported targets
 release: webapp

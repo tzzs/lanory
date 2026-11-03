@@ -1,6 +1,6 @@
 <div align="center">
 
-# Lanory · 网绘
+# Lanory 网绘
 
 **See your home network at a glance.**
 **家的网络，一图看清。**
@@ -58,10 +58,11 @@ Internet
 | ✅ | Probe history, device state history, network event log | implemented |
 | ✅ | Realtime updates over SSE | implemented |
 | ✅ | Cross-compiles for linux **amd64 / arm64 / 386 / armv7**, statically linked | built and verified |
-| ✅ | Installable `.ipk` + `.apk` for x86_64 / aarch64 / armv7 / i386 (**not MIPS**) | built and **installed on the reference router**; format-verified, signable (`make apk-sign`) |
+| ✅ | Installable `.ipk` + `.apk` for x86_64 / aarch64 / armv7 / i386 (**not MIPS**) | built by the direct packager and format-verified; signable (`make apk-sign`); see [verification limits](packaging/openwrt/README.md#status-of-this-directory) for SDK and device testing |
 | ✅ | Demo Mode: the whole UI without a router | implemented |
 | ✅ | Chinese and English UI | implemented |
-| ⚠️ | LLDP, mDNS, SSDP collectors | implemented, opt-in, not exercised against a real multicast network yet |
+| ⚠️ | LLDP and mDNS collectors | implemented, opt-in, not exercised against a real multicast network yet |
+| ❌ | SSDP collector | not implemented; configuration name reserved |
 | ⚠️ | Generic router adapter | implemented (no client enumeration) |
 | ⚠️ | Xiaomi router adapter | implemented, capability detection; verified with a fake device only |
 | ❌ | TP-Link / ASUS / Huawei / SNMP adapters | reserved in the registry, not implemented |
@@ -103,15 +104,15 @@ make release     # dist/lanory-linux-{amd64,arm64,armv7,386}
 make packages    # dist/packages/*.ipk + *.apk, no SDK involved
 make package-check
 
-# the generated service APK names are:
-#   x86_64-lanory-0.1.0.apk
-#   aarch64_generic-lanory-0.1.0.apk
-#   arm_cortex-a7_neon-vfpv4-lanory-0.1.0.apk
-#   i386_pentium4-lanory-0.1.0.apk
+# the generated service APK names are (the version comes from the Makefile):
+#   x86_64-lanory-<version>.apk
+#   aarch64_generic-lanory-<version>.apk
+#   arm_cortex-a7_neon-vfpv4-lanory-<version>.apk
+#   i386_pentium4-lanory-<version>.apk
 
 # on an OpenWrt 25.x / iStoreOS router: pick the file matching `uname -m`
-scp dist/packages/aarch64_generic-lanory-0.1.0.apk root@192.168.100.1:/tmp/
-ssh root@192.168.100.1 'apk add --allow-untrusted /tmp/aarch64_generic-lanory-0.1.0.apk'
+scp dist/packages/aarch64_generic-lanory-<version>.apk root@192.168.100.1:/tmp/
+ssh root@192.168.100.1 'apk add --allow-untrusted /tmp/aarch64_generic-lanory-<version>.apk'
 ssh root@192.168.100.1 'logread -e lanory | grep token'   # the access token
 ```
 
@@ -120,12 +121,12 @@ Then open `http://192.168.100.1:8787/` and paste the token. The `.ipk` plus
 default path for OpenWrt 25.x / iStoreOS.
 
 For that compatibility path, the direct packager generates
-`lanory_0.1.0_aarch64_generic.ipk` (and the corresponding architecture name for
+`lanory_<version>_aarch64_generic.ipk` (and the corresponding architecture name for
 the other targets):
 
 ```sh
-scp dist/packages/lanory_0.1.0_aarch64_generic.ipk root@192.168.100.1:/tmp/
-ssh root@192.168.100.1 'opkg install /tmp/lanory_0.1.0_aarch64_generic.ipk'
+scp dist/packages/lanory_<version>_aarch64_generic.ipk root@192.168.100.1:/tmp/
+ssh root@192.168.100.1 'opkg install /tmp/lanory_<version>_aarch64_generic.ipk'
 ```
 
 If you would rather have the buildroot compile the Go source (feed-style,
@@ -191,7 +192,7 @@ Requirements: Go 1.26+, Node 22+ (frontend only).
 make web-dev      # terminal 1: Vite dev server on :5173, proxies /api to :8787
 make run          # terminal 2: build the frontend into the binary and run it
 make test         # go test ./...
-make check        # gofmt + go vet + go test
+make check        # go fmt + go vet + go test + apk-check
 cd web && npm test
 ```
 

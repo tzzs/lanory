@@ -75,7 +75,7 @@ sqlite3 /tmp/lanory.db "DELETE FROM app_settings WHERE key LIKE 'discovery.%';"
 ```sh
 make test                 # go test ./...
 make test-race            # race detector (slower, catches real bugs)
-make check                # gofmt + go vet + go test
+make check                # go fmt + go vet + go test + apk-check
 cd web && npm test        # vitest
 cd web && npm run typecheck
 ```
@@ -104,13 +104,11 @@ go test ./internal/demo -v
 
 - **`internal/model` is the contract.** Changing a JSON tag there changes the API;
   update `docs/api.md` and `web/src/types/api.ts` in the same commit.
-- **`internal/database` owns all SQL.** No other package writes a query, except
-  the interface workarounds in `internal/api/ifaces.go` and
-  `internal/demo/store_compat.go`: they read interfaces through `store.DB()`
-  with their own `SELECT` statement. They were workarounds for a defect in the
-  store's interface queries, which has since been fixed (`interfaceColumns`
-  now includes the `SELECT`), so the workarounds are redundant but harmless —
-  they keep working if the store ever regresses. Leave them in place.
+- **`internal/database` owns persistence queries.** The compatibility paths in
+  `internal/api/ifaces.go` and `internal/demo/store_compat.go` read interfaces
+  through `store.DB()` with their own `SELECT` statement. The store's current
+  interface queries include `SELECT`; these paths remain separate compatibility
+  code, not a workaround for a current SQL defect.
 - **Collectors report, they do not decide.** A collector returns
   `discovery.Result`; merging and topology belong to other packages.
 - **Every exported symbol has a doc comment.** "Exported" includes package-level

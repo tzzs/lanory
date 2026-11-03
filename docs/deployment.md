@@ -71,8 +71,8 @@ Short version, on the device:
 
 ```sh
 # OpenWrt 25.x / iStoreOS: use the generated APK for the target architecture
-scp dist/packages/aarch64_generic-lanory-0.1.0.apk root@192.168.100.1:/tmp/
-ssh root@192.168.100.1 'apk add --allow-untrusted /tmp/aarch64_generic-lanory-0.1.0.apk'
+scp dist/packages/aarch64_generic-lanory-<version>.apk root@192.168.100.1:/tmp/
+ssh root@192.168.100.1 'apk add --allow-untrusted /tmp/aarch64_generic-lanory-<version>.apk'
 ssh root@192.168.100.1 "uci set lanory.main.enabled='1' && \
   uci set lanory.main.listen='0.0.0.0' && \
   uci set lanory.main.port='8787' && \
@@ -83,10 +83,11 @@ ssh root@192.168.100.1 "uci set lanory.main.enabled='1' && \
 ```
 
 Then <http://192.168.100.1:8787/>. The direct packager names service APKs as
-`<openwrt-arch>-lanory-0.1.0.apk`, for example
-`aarch64_generic-lanory-0.1.0.apk`. On older OpenWrt releases, the compatibility
-package is `lanory_0.1.0_aarch64_generic.ipk` and is installed with
-`opkg install`; this is not the default path for OpenWrt 25.x / iStoreOS.
+`<openwrt-arch>-lanory-<version>.apk`, for example
+`aarch64_generic-lanory-<version>.apk`; the version is the one in the Makefile.
+On older OpenWrt releases, the compatibility package is
+`lanory_<version>_aarch64_generic.ipk` and is installed with `opkg install`; this
+is not the default path for OpenWrt 25.x / iStoreOS.
 
 Paths:
 
@@ -98,9 +99,11 @@ Paths:
 | `/etc/lanory/token` | optional auth token, mode 0600, exported as `LANORY_AUTH_TOKEN` |
 | `/var/lib/lanory/lanory.db` | SQLite database, preserved on upgrade and uninstall |
 
-> **Status:** the package is complete but was **not built or installed** in the
-> environment that produced this repository. Verify the SDK version against your
-> OpenWrt 25.12 / iStoreOS 25.12.5 release before deploying.
+> **Status:** the direct packager produces `.ipk` and `.apk` archives and
+> `make package-check` validates their structure and packaged binaries. The
+> OpenWrt SDK build and installation on a real device remain unverified. Verify
+> the SDK version against your OpenWrt 25.12 / iStoreOS 25.12.5 release before
+> deploying.
 
 ## Generic Linux
 
@@ -295,7 +298,7 @@ is no downgrade path: keep the backup you made before upgrading.
 
 ## Resource usage
 
-Observed on the development machine with the Demo Mode dataset (13 devices, 14
+Observed on the development machine with the Demo Mode dataset (13 devices, 12
 edges, 53 probe results), not measured on a router:
 
 - binary: ~14 MiB stripped (`-ldflags "-s -w"`), arm64/mips smaller;
@@ -358,9 +361,9 @@ requires a proxy in front of the listener.
 | Go code builds and its tests pass | **yes** — run `make check` |
 | the binary cross-compiles for amd64/arm64/armv7/386 | **yes** — `make release`, verified with `file` (static, correct ELF arch, frontend embedded) |
 | the binary runs on the target architecture | **no** — no Linux host or router in the build environment |
-| the OpenWrt APK builds | **no** — no OpenWrt SDK available |
+| direct-packager `.ipk`/`.apk` archives build and pass format checks | **yes** — `make packages` and `make package-check` |
+| the OpenWrt SDK buildroot produces the package | **no** — no OpenWrt SDK available |
 | Demo Mode works end to end | **yes** — `internal/demo` tests + CI integration job |
-| the OpenWrt package builds | **no** — no SDK available |
 | the package installs on iStoreOS 25.12.5 | **no** |
 | the systemd unit passes `systemd-analyze verify` | **no** |
 | resource usage on a router | **no** — desktop estimate only |

@@ -32,7 +32,7 @@ type Dict = Record<string, string>
 
 const zhCN: Dict = {
   // ---- app shell ----
-  'app.name': 'Lanory Network · 网绘',
+  'app.name': 'Lanory Network 网绘',
   'app.slogan': '家的网络，一图看清。',
   'app.slogan_en': 'See your home network at a glance.',
   'app.loading': '加载中…',

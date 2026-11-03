@@ -72,13 +72,16 @@ individual device cards.
 
 ### 3. CI enforces it end to end
 
-The `integration` job builds the real binary with the real frontend, starts it in
-Demo Mode and runs `scripts/ci/assert_demo_mode.py`, which fails unless:
+The `integration` job builds the real binary with the real frontend, seeds
+Demo-tagged rows into a database with `TestSeedForCI`, then starts the service with
+Demo Mode disabled. `scripts/ci/assert_demo_mode.py` checks that:
 
-- `health.demo_mode` and `overview.demo_mode` are `true`;
 - every device in `/devices` lists `demo` in `discovery_sources`;
 - every edge in `/topology` has `discovery_source == "demo"`;
 - the device count is non-zero and the topology has edges and events.
+
+This job verifies persisted Demo data and API visibility; it does not assert that
+`health.demo_mode` or `overview.demo_mode` is true.
 
 ## The dataset
 
@@ -124,7 +127,7 @@ Three states are represented on purpose, because they exercise different UI:
 
 Exact match with `fixtures/easepi-r1/expected.yaml`; a test asserts it.
 
-### Edges (14)
+### Edges (12)
 
 ```
 Internet ─ upstream router ─ optical modem ─ [eth0] EASEPi R1
@@ -142,9 +145,11 @@ Internet ─ upstream router ─ optical modem ─ [eth0] EASEPi R1
 - `user_defined` at 1.00 for the NAS the user attached;
 - `logical_network` at 0.30, **unverified**, for the devices behind the Xiaomi
   router — because layer 2 cannot prove that hop;
-- `bridge_membership` at 0.95 for `eth1`/`eth2` in `br-lan`;
-- one deliberately unverified edge (upstream → modem) with 0.60 confidence, so the
+- one deliberately unverified edge (upstream → modem) with 0.50 confidence, so the
   dashed-line rendering is visible.
+
+Bridge membership is not an edge in the sample data: `eth1`/`eth2` carry a
+`bridge_id`, and the topology derives the bridge relationship from that field.
 
 ### Probes and history
 
@@ -174,10 +179,9 @@ foreign keys):
 
 ### Why events carry an edge
 
-`network_events.edge_id` is `NOT NULL DEFAULT ''` **and** has a foreign key to
-`topology_edges`, so a row with an empty `edge_id` is rejected by SQLite. Every
-demo event therefore references a real demo edge, which is also the honest thing
-to record: the event says what changed on that relation.
+`network_events.edge_id` is nullable and references `topology_edges`; deleting an
+edge can therefore set the reference to `NULL`. Demo events are still associated
+with a real demo edge when one exists, which records the relation that changed.
 
 ## Idempotency
 
@@ -228,10 +232,9 @@ demo.IsDemo(store)   // reads app_settings.demo_mode
 Real devices, probes attached to real devices, and real events are left alone —
 `TestResetClearsEverything` asserts that a device discovered by `dhcp` survives.
 
-There is no REST endpoint for reseeding in this tree; the CLI flag
-`--demo --demo-reseed` is the intended surface and lives in `cmd/lanory`, which is
-owned by a different package. Until it exists, Demo Mode reseeds only by starting
-against a fresh database path.
+There is no REST endpoint or `--demo-reseed` CLI flag for reseeding. To load the
+sample data into a fresh database, start the service with `--demo`; reseeding an
+existing database through a supported command is not currently exposed.
 
 ## API surface
 
@@ -274,18 +277,15 @@ that rejects a row. An empty result is never an error.
 | `internal/demo/doc.go` | package documentation and the honesty rules |
 | `internal/demo/dataset.go` | constants, devices, interfaces, edges, probes, events |
 | `internal/demo/load.go` | `Load`, `Reset`, `IsDemo`, `Seed`, settings |
-| `internal/demo/store_compat.go` | interface reads, including the workaround for a store defect |
-| `internal/demo/demo_test.go` | 15 behaviour tests |
+| `internal/demo/store_compat.go` | interface reads, including the compatibility path |
+| `internal/demo/demo_test.go` | behavior tests |
 | `internal/demo/fixtures_test.go` | 3 tests tying the dataset to `fixtures/easepi-r1` |
 
-### The store workaround
+### Interface query compatibility
 
-`internal/database` builds four interface queries without the `SELECT` keyword, so
-`Store.GetInterface` and friends fail with `near "id": syntax error`. That file
-belongs to another package, so `internal/demo` goes through `store.DB()` with the
-correct statement, behind a one-time probe
-(`preferStoreInterfaceQueries`). If the store is fixed, the probe succeeds and the
-helpers delegate. This is documented in `docs/development.md`.
+`internal/demo/store_compat.go` can read interfaces through `store.DB()` when
+needed, while the store's current interface queries include the `SELECT` keyword.
+This path is compatibility code rather than evidence of a current SQL defect.
 
 ## Limits
 

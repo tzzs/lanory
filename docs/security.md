@@ -229,9 +229,10 @@ to mislead a user. The rule is simple and enforced:
 
 **Every row Demo Mode writes carries `model.SourceDemo`**, and
 `/api/v1/health` plus `/api/v1/overview` report `demo_mode: true`. The UI must
-show a banner and badge devices when that flag is set. The CI integration job runs
-the binary in Demo Mode and asserts the flag and the source on every device and
-edge (`scripts/ci/assert_demo_mode.py`).
+show a banner and badge devices when that flag is set. The CI integration job
+seeds demo-tagged rows into a database, starts the binary with Demo Mode disabled,
+and checks that device and edge rows retain their demo source tags
+(`scripts/ci/assert_demo_mode.py`).
 
 Demo data also never contains an address from a real network: it is derived from
 `fixtures/easepi-r1/`, the sanitized snapshot. `fixtures/private/` is git-ignored
@@ -261,7 +262,7 @@ Being explicit about what is missing is part of the security posture:
 | no account system, one shared token | no per-user audit | reverse proxy with per-user auth |
 | no login page; the token lives in `localStorage` | XSS in the UI would expose it | there is no user-generated HTML; the token is only used same-origin |
 | no encryption at rest | physical access reads the inventory | encrypted volume |
-| SSE token in the query string | may appear in proxy access logs | use `Authorization` where the client supports it, or a proxy that does not log query strings |
+| no SSE replay pruning at `Last-Event-ID` | reconnects may replay older buffered events | clients should de-duplicate events by ID; track the replay issue in the API contract |
 | no audit log of who changed what | a shared token cannot attribute changes | reverse proxy logs |
 | Demo Mode can be enabled on a real deployment | a user could confuse simulated with real data | the flag is always reported; the UI banner is mandatory |
 | no automatic security updates | a router may run an old build | subscribe to releases; the package has no updater by design |
