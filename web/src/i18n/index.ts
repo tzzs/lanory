@@ -207,6 +207,7 @@ const zhCN: Dict = {
   // ---- device detail ----
   'device.name': '名称',
   'device.type': '设备类型',
+  'device.auto_type': '自动识别',
   'device.ip': 'IP 地址',
   'device.mac': 'MAC 地址',
   'device.interface': '关联接口',
@@ -618,6 +619,7 @@ const en: Dict = {
 
   'device.name': 'Name',
   'device.type': 'Type',
+  'device.auto_type': 'Automatic',
   'device.ip': 'IP address',
   'device.mac': 'MAC address',
   'device.interface': 'Interface',

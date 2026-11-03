@@ -487,7 +487,6 @@ func (a *App) handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 		Model:            strings.TrimSpace(body.Model),
 		Description:      strings.TrimSpace(body.Description),
 		IsManual:         true,
-		TypeSource:       model.SourceManual,
 		State:            model.StateUnknown,
 		StateReason:      "not yet probed",
 		StateReasonCode:  &model.Reason{Code: model.ReasonNotYetProbed, Params: map[string]string{}},
@@ -500,6 +499,9 @@ func (a *App) handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:        now,
 		UpdatedAt:        now,
 		DiscoverySources: []model.DiscoverySource{model.SourceManual},
+	}
+	if devType != model.DeviceTypeUnknown {
+		dev.TypeSource = model.SourceManual
 	}
 	if err := a.store.UpsertDevice(dev); err != nil {
 		internalError(w, err)
@@ -675,6 +677,11 @@ func (a *App) handlePatchDevice(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		patch["type"] = string(t)
+		if t == model.DeviceTypeUnknown {
+			patch["type_source"] = ""
+		} else {
+			patch["type_source"] = model.SourceManual
+		}
 	}
 	if body.Hostname != nil {
 		h := strings.TrimSpace(*body.Hostname)

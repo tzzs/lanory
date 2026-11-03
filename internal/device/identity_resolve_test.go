@@ -211,6 +211,38 @@ func TestCandHasMACFailsClosedOnLookupError(t *testing.T) {
 	}
 }
 
+func TestResolveInfersTypeAfterManualClassificationIsCleared(t *testing.T) {
+	eng, store := newIdentityEngine(t)
+
+	dev, _, err := eng.Resolve(arpIngest("aa:bb:cc:dd:ee:01", "192.168.1.31", ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.UpdateDevice(dev.ID, map[string]any{
+		"type":        model.DeviceTypeUnknown,
+		"type_source": "",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, _, err := eng.Resolve(Ingest{
+		MAC:        "aa:bb:cc:dd:ee:01",
+		Hostname:   "iphone",
+		TypeHint:   model.DeviceTypeSmartphone,
+		Source:     model.SourceDHCP,
+		ObservedAt: time.Date(2026, 10, 30, 12, 1, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Type != model.DeviceTypeSmartphone {
+		t.Errorf("type = %q, want inferred smartphone after clearing manual classification", got.Type)
+	}
+	if got.TypeSource != model.SourceDHCP {
+		t.Errorf("type_source = %q, want dhcp", got.TypeSource)
+	}
+}
+
 // A device the user marked as manual keeps its name even when that name looks
 // like a generated placeholder.
 func TestResolveKeepsManualDeviceName(t *testing.T) {
